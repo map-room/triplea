@@ -6,28 +6,59 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
-import java.util.Set;
+import org.triplea.ai.sidecar.dto.DecisionPlan;
+import org.triplea.ai.sidecar.dto.DecisionRequest;
+import org.triplea.ai.sidecar.dto.OffensiveRequest;
+import org.triplea.ai.sidecar.dto.RetreatPlan;
+import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
+import org.triplea.ai.sidecar.dto.ScramblePlan;
+import org.triplea.ai.sidecar.dto.ScrambleRequest;
+import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
+import org.triplea.ai.sidecar.dto.SelectCasualtiesRequest;
+import org.triplea.ai.sidecar.exec.DecisionExecutor;
+import org.triplea.ai.sidecar.exec.RetreatQueryExecutor;
+import org.triplea.ai.sidecar.exec.ScrambleExecutor;
+import org.triplea.ai.sidecar.exec.SelectCasualtiesExecutor;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionRegistry;
-import org.triplea.ai.sidecar.wire.DecisionRequest;
-import org.triplea.ai.sidecar.wire.DecisionResponse;
 
+/**
+ * Dispatches {@code POST /session/{id}/decision} calls to a kind-specific {@link
+ * DecisionExecutor}.
+ *
+ * <p>The request body is deserialised through the polymorphic {@link DecisionRequest} sealed
+ * interface (Jackson discriminator {@code kind}). The concrete request type drives a pattern
+ * switch that picks the matching executor; the returned {@link DecisionPlan} is serialised
+ * back as the 200 response body. Offensive kinds (purchase/combat-move/noncombat-move/place)
+ * are parked on this endpoint and return 501 — they will be implemented in Phase 3.
+ */
 public final class DecisionHandler implements HttpHandler {
-  private static final Set<String> KNOWN_KINDS =
-      Set.of(
-          "purchase",
-          "combat-move",
-          "noncombat-move",
-          "place",
-          "select-casualties",
-          "retreat-or-press",
-          "scramble",
-          "kamikaze");
 
   private final SessionRegistry registry;
+  private final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
+      selectCasualtiesExecutor;
+  private final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor;
+  private final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor;
 
+  /** Production constructor — wires the real Phase-2 executors. */
   public DecisionHandler(final SessionRegistry registry) {
+    this(
+        registry,
+        new SelectCasualtiesExecutor(),
+        new RetreatQueryExecutor(),
+        new ScrambleExecutor());
+  }
+
+  /** Test constructor — accepts executor stubs so handler logic can be exercised in isolation. */
+  public DecisionHandler(
+      final SessionRegistry registry,
+      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> selectCasualtiesExecutor,
+      final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
+      final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor) {
     this.registry = registry;
+    this.selectCasualtiesExecutor = selectCasualtiesExecutor;
+    this.retreatQueryExecutor = retreatQueryExecutor;
+    this.scrambleExecutor = scrambleExecutor;
   }
 
   @Override
@@ -47,24 +78,54 @@ public final class DecisionHandler implements HttpHandler {
       writeJson(exchange, 404, JsonBodies.errorBody("not-found", "unknown session"));
       return;
     }
+
     final String body =
         new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-    final DecisionRequest req;
+    final DecisionRequest request;
     try {
-      req = JsonBodies.readValue(body, DecisionRequest.class);
+      request = JsonBodies.readValue(body, DecisionRequest.class);
     } catch (final IOException e) {
-      writeJson(exchange, 400, JsonBodies.errorBody("bad-request", "invalid JSON body"));
+      writeJson(
+          exchange, 400, JsonBodies.errorBody("bad-request", "invalid decision request body"));
       return;
     }
-    if (req.kind() == null || !KNOWN_KINDS.contains(req.kind())) {
-      writeJson(exchange, 400, JsonBodies.errorBody("bad-request", "unknown kind: " + req.kind()));
+    if (request == null) {
+      writeJson(exchange, 400, JsonBodies.errorBody("bad-request", "empty decision request"));
       return;
     }
-    writeJson(
-        exchange,
-        501,
-        JsonBodies.writeValue(
-            DecisionResponse.error("not-implemented: " + req.kind())));
+
+    try {
+      switch (request) {
+        case SelectCasualtiesRequest sc -> {
+          final SelectCasualtiesPlan plan = selectCasualtiesExecutor.execute(session.get(), sc);
+          writeJson(exchange, 200, JsonBodies.writeValue(plan));
+        }
+        case RetreatQueryRequest rq -> {
+          final RetreatPlan plan = retreatQueryExecutor.execute(session.get(), rq);
+          writeJson(exchange, 200, JsonBodies.writeValue(plan));
+        }
+        case ScrambleRequest sr -> {
+          final ScramblePlan plan = scrambleExecutor.execute(session.get(), sr);
+          writeJson(exchange, 200, JsonBodies.writeValue(plan));
+        }
+        case OffensiveRequest ignored -> writeJson(
+            exchange,
+            501,
+            JsonBodies.errorBody(
+                "not-implemented",
+                "offensive decision kinds are not yet implemented in the Phase-2 sidecar"));
+      }
+    } catch (final IllegalArgumentException e) {
+      writeJson(
+          exchange,
+          400,
+          JsonBodies.errorBody("bad-request", String.valueOf(e.getMessage())));
+    } catch (final RuntimeException e) {
+      writeJson(
+          exchange,
+          500,
+          JsonBodies.errorBody("internal-error", String.valueOf(e.getMessage())));
+    }
   }
 
   private static void writeJson(final HttpExchange ex, final int status, final String body)

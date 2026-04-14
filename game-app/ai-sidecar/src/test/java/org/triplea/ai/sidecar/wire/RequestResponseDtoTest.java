@@ -25,30 +25,6 @@ class RequestResponseDtoTest {
   }
 
   @Test
-  void decisionRequestWithKindAndState() throws Exception {
-    final String body =
-        "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-            + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}}";
-    final DecisionRequest r = om.readValue(body, DecisionRequest.class);
-    assertEquals("purchase", r.kind());
-    assertEquals("Germans", r.state().currentPlayer());
-  }
-
-  @Test
-  void decisionResponsePendingSerializes() throws Exception {
-    final String json = om.writeValueAsString(DecisionResponse.pending("j-7781"));
-    assertTrue(json.contains("\"status\":\"pending\""));
-    assertTrue(json.contains("\"jobId\":\"j-7781\""));
-  }
-
-  @Test
-  void decisionResponseErrorSerializes() throws Exception {
-    final String json = om.writeValueAsString(DecisionResponse.error("not-implemented"));
-    assertTrue(json.contains("\"status\":\"error\""));
-    assertTrue(json.contains("\"error\":\"not-implemented\""));
-  }
-
-  @Test
   void sessionUpdateRequestWrapsState() throws Exception {
     final String body =
         "{\"state\":{\"territories\":[],\"players\":[],\"round\":2,\"phase\":\"purchase\","
