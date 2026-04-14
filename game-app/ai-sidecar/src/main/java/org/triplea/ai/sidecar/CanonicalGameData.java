@@ -15,7 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 public final class CanonicalGameData {
-  private static final String XML_RESOURCE = "ww2_g40_balanced.xml";
+  private static final String XML_RESOURCE = "ww2global40_2nd_edition.xml";
 
   private final GameData template;
   private final byte[] serialized;
