@@ -14,12 +14,14 @@ import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
+import org.triplea.java.collections.IntegerMap;
 
 /**
  * Applies a {@link WireState} onto a session's cloned {@link GameData}, mutating it to reflect
@@ -51,6 +53,9 @@ public final class WireStateApplier {
   /**
    * Mutates {@code gameData} in place so it matches {@code wire}. Round / phase / currentPlayer
    * are treated as read-only metadata: a mismatch logs a warning but does not throw.
+   *
+   * <p>Callers must not invoke {@code apply()} concurrently on the same {@code (gameData,
+   * unitIdMap)} pair; serialise per-session.
    *
    * @throws IllegalArgumentException if the wire references a territory, player, unit type, or
    *     resource that does not exist on the canonical map — those indicate a caller bug, not a
@@ -108,6 +113,9 @@ public final class WireStateApplier {
     // Build the desired unit set, resolving Map-Room unit IDs to stable TripleA UUIDs.
     final List<Unit> desired = new ArrayList<>(wt.units().size());
     final Set<UUID> desiredIds = new HashSet<>();
+    // Accumulated hit-count changes for units that already exist on the territory. New units
+    // are still mutated directly below (pre-add, before any listeners can observe them).
+    final IntegerMap<Unit> existingUnitHitDeltas = new IntegerMap<>();
     for (final WireUnit wu : wt.units()) {
       final UUID uuid =
           unitIdMap.computeIfAbsent(wu.unitId(), k -> UUID.randomUUID());
@@ -121,13 +129,24 @@ public final class WireStateApplier {
       final Unit unit;
       if (existing != null) {
         unit = existing;
+        if (wu.hitsTaken() != unit.getHits()) {
+          // Route through ChangeFactory.unitsHit so game-data listeners fire. The IntegerMap
+          // value is the absolute new hit count (ChangeFactory.unitsHit sets, not adds).
+          existingUnitHitDeltas.put(unit, wu.hitsTaken());
+        }
       } else {
         unit = new Unit(uuid, type, wireOwner, gameData);
-      }
-      if (wu.hitsTaken() != unit.getHits()) {
-        unit.setHits(wu.hitsTaken());
+        if (wu.hitsTaken() != unit.getHits()) {
+          // Safe: unit is not yet attached to any territory, no listeners to bypass.
+          unit.setHits(wu.hitsTaken());
+        }
       }
       desired.add(unit);
+    }
+    if (!existingUnitHitDeltas.isEmpty()) {
+      out.add(
+          ChangeFactory.unitsHit(
+              existingUnitHitDeltas, Collections.singletonList(territory)));
     }
 
     // Remove any live units not in the wire set.
