@@ -4,20 +4,16 @@ import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
-import games.strategy.engine.player.PlayerBridge;
 import games.strategy.triplea.ai.pro.ProAi;
-import games.strategy.triplea.delegate.battle.BattleDelegate;
 import games.strategy.triplea.delegate.battle.BattleTracker;
 import games.strategy.triplea.delegate.battle.IBattle;
 import games.strategy.triplea.delegate.data.CasualtyDetails;
 import games.strategy.triplea.delegate.data.CasualtyList;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
 import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
@@ -51,19 +47,6 @@ import org.triplea.ai.sidecar.wire.WireUnit;
 public final class SelectCasualtiesExecutor
     implements DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> {
 
-  private static final Field PENDING_BATTLES_FIELD;
-
-  static {
-    try {
-      PENDING_BATTLES_FIELD = BattleTracker.class.getDeclaredField("pendingBattles");
-      PENDING_BATTLES_FIELD.setAccessible(true);
-    } catch (final NoSuchFieldException e) {
-      throw new ExceptionInInitializerError(
-          "BattleTracker.pendingBattles field not found — TripleA internal API has drifted: "
-              + e.getMessage());
-    }
-  }
-
   @Override
   public SelectCasualtiesPlan execute(
       final Session session, final SelectCasualtiesRequest request) {
@@ -80,7 +63,7 @@ public final class SelectCasualtiesExecutor
       throw new IllegalArgumentException("Unknown battle territory: " + b.territory());
     }
 
-    ensureProAiInitialized(session, defender);
+    ExecutorSupport.ensureProAiInitialized(session, defender);
 
     // Resolve the wire-side unit lists to live Unit instances in the cloned game data. We
     // derive them from the territory (and the id map populated by WireStateApplier) rather
@@ -103,7 +86,7 @@ public final class SelectCasualtiesExecutor
     // friendlyUnits (from hit player's view) become the battle's defenders and enemyUnits
     // become the battle's attackers.
     final UUID battleUuid = UUID.nameUUIDFromBytes(b.battleId().getBytes());
-    ensureBattleDelegate(data);
+    ExecutorSupport.ensureBattleDelegate(data);
     final BattleTracker tracker = data.getBattleDelegate().getBattleTracker();
     final List<Unit> battleAttackers = new ArrayList<>(enemyUnits);
     final List<Unit> battleDefenders = new ArrayList<>(friendlyUnits);
@@ -117,7 +100,7 @@ public final class SelectCasualtiesExecutor
             battleAttackers,
             battleDefenders,
             b.isAmphibious());
-    addPendingBattle(tracker, synthetic);
+    ExecutorSupport.addPendingBattle(tracker, synthetic);
 
     final CasualtyDetails details;
     try {
@@ -140,7 +123,7 @@ public final class SelectCasualtiesExecutor
                   battleSite,
                   b.allowMultipleHitsPerUnit());
     } finally {
-      removePendingBattle(tracker, synthetic);
+      ExecutorSupport.removePendingBattle(tracker, synthetic);
     }
 
     final Map<UUID, String> reverseIdMap = reverseIdMap(idMap);
@@ -218,49 +201,6 @@ public final class SelectCasualtiesExecutor
           "defaultCasualties size (" + killed.size() + ") != hitCount (" + hitCount + ")");
     }
     return new CasualtyList(killed, new ArrayList<>());
-  }
-
-  private static void ensureBattleDelegate(final GameData data) {
-    if (data.getDelegateOptional("battle").isPresent()) {
-      return;
-    }
-    // CanonicalGameData.cloneForSession() round-trips GameData via ObjectOutputStream; the
-    // delegate map is transient and cleared by postDeSerialize(), so we re-register a fresh
-    // BattleDelegate on first use. BattleDelegate's BattleTracker is created in its default
-    // constructor, so this is enough to satisfy data.getBattleDelegate() lookups from
-    // AbstractProAi.selectCasualties.
-    final BattleDelegate delegate = new BattleDelegate();
-    delegate.initialize("battle", "Combat");
-    data.addDelegate(delegate);
-  }
-
-  private static void ensureProAiInitialized(final Session session, final GamePlayer player) {
-    final ProAi proAi = session.proAi();
-    if (proAi.getGamePlayer() != null) {
-      return;
-    }
-    final PlayerBridge bridge = new PlayerBridge(new HeadlessGame(session.gameData()));
-    proAi.initialize(bridge, player);
-  }
-
-  @SuppressWarnings("unchecked")
-  private static void addPendingBattle(final BattleTracker tracker, final IBattle battle) {
-    try {
-      final Set<IBattle> set = (Set<IBattle>) PENDING_BATTLES_FIELD.get(tracker);
-      set.add(battle);
-    } catch (final IllegalAccessException e) {
-      throw new IllegalStateException("Cannot reflectively access BattleTracker.pendingBattles", e);
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  private static void removePendingBattle(final BattleTracker tracker, final IBattle battle) {
-    try {
-      final Set<IBattle> set = (Set<IBattle>) PENDING_BATTLES_FIELD.get(tracker);
-      set.remove(battle);
-    } catch (final IllegalAccessException e) {
-      throw new IllegalStateException("Cannot reflectively access BattleTracker.pendingBattles", e);
-    }
   }
 
   private static Map<UUID, String> reverseIdMap(final ConcurrentMap<String, UUID> idMap) {
