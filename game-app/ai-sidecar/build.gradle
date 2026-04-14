@@ -1,5 +1,11 @@
 plugins {
     id("triplea-java-library")
+    id("application")
+}
+
+application {
+    mainClass = "org.triplea.ai.sidecar.SidecarMain"
+    applicationName = "ai-sidecar"
 }
 
 dependencies {
