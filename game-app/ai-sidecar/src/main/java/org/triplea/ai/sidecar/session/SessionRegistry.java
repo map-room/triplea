@@ -27,7 +27,8 @@ public final class SessionRegistry {
     final GameData data = canonical.cloneForSession();
     final ProAi proAi = new ProAi("sidecar-" + key.gameId() + "-" + key.nation(), key.nation());
     final String id = "s-" + UUID.randomUUID();
-    final Session created = new Session(id, key, seed, proAi, data);
+    final Session created =
+        new Session(id, key, seed, proAi, data, new ConcurrentHashMap<>());
     byKey.put(key, created);
     byId.put(id, created);
     return created;
