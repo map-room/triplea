@@ -1,0 +1,30 @@
+package org.triplea.ai.sidecar.http;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
+import org.triplea.ai.sidecar.wire.SessionCreateRequest;
+
+class JsonBodiesTest {
+  @Test
+  void readValueParsesKnownDto() throws Exception {
+    final SessionCreateRequest r =
+        JsonBodies.readValue(
+            "{\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":7}", SessionCreateRequest.class);
+    assertEquals("g-1", r.gameId());
+  }
+
+  @Test
+  void writeValueSerializes() throws Exception {
+    final String s = JsonBodies.writeValue(new SessionCreateRequest("g-1", "Germans", 7));
+    assertTrue(s.contains("\"gameId\":\"g-1\""));
+  }
+
+  @Test
+  void errorEnvelopeShape() throws Exception {
+    final String s = JsonBodies.errorBody("bad-request", "missing gameId");
+    assertTrue(s.contains("\"error\":\"bad-request\""));
+    assertTrue(s.contains("\"message\":\"missing gameId\""));
+  }
+}
