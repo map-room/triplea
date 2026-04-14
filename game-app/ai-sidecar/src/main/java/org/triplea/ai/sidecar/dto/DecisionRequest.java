@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.triplea.ai.sidecar.wire.WireState;
 
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "kind")
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "kind", visible = true)
 @JsonSubTypes({
   @JsonSubTypes.Type(value = SelectCasualtiesRequest.class, name = "select-casualties"),
   @JsonSubTypes.Type(value = RetreatQueryRequest.class, name = "retreat-or-press"),

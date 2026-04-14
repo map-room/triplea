@@ -25,4 +25,14 @@ public final class JsonBodies {
     n.put("message", message);
     return MAPPER.writeValueAsString(n);
   }
+
+  public static String errorBodyWithKind(
+      final String error, final String kind, final String message)
+      throws JsonProcessingException {
+    final ObjectNode n = MAPPER.createObjectNode();
+    n.put("error", error);
+    n.put("kind", kind);
+    n.put("message", message);
+    return MAPPER.writeValueAsString(n);
+  }
 }

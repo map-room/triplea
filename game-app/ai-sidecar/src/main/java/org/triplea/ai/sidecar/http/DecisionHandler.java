@@ -108,11 +108,12 @@ public final class DecisionHandler implements HttpHandler {
           final ScramblePlan plan = scrambleExecutor.execute(session.get(), sr);
           writeJson(exchange, 200, JsonBodies.writeValue(plan));
         }
-        case OffensiveRequest ignored -> writeJson(
+        case OffensiveRequest or -> writeJson(
             exchange,
             501,
-            JsonBodies.errorBody(
+            JsonBodies.errorBodyWithKind(
                 "not-implemented",
+                or.kind(),
                 "offensive decision kinds are not yet implemented in the Phase-2 sidecar"));
       }
     } catch (final IllegalArgumentException e) {

@@ -183,7 +183,12 @@ class DecisionHandlerTest {
               "POST", "/session/" + s.sessionId() + "/decision", offensiveBody(kind));
       h.handle(ex);
       assertEquals(501, ex.responseCode(), "kind=" + kind);
-      assertTrue(ex.responseBodyString().contains("not-implemented"), "kind=" + kind);
+      final String responseBody = ex.responseBodyString();
+      assertTrue(responseBody.contains("not-implemented"), "kind=" + kind);
+      // kind must round-trip in the 501 body so clients can distinguish offensive sub-kinds
+      assertTrue(
+          responseBody.contains("\"kind\":\"" + kind + "\""),
+          "expected kind=" + kind + " in body, got: " + responseBody);
     }
   }
 
