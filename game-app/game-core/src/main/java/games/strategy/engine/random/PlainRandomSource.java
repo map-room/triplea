@@ -10,10 +10,30 @@ import org.apache.commons.math3.random.RandomGenerator;
 /** A source of random numbers that uses a pseudorandom number generator. */
 @ThreadSafe
 public final class PlainRandomSource implements IRandomSource {
+
+  // Spike (#1735): global seed override. When non-null, any PlainRandomSource constructed
+  // uses a MersenneTwister seeded with this value instead of the default entropy-seeded one.
+  // Tests / the HTTP shim can call setSeedOverride(seed) before a /decision call and
+  // clearSeedOverride() afterwards to get byte-identical replay.
+  private static volatile Long seedOverride;
+
+  public static void setSeedOverride(final Long seed) {
+    seedOverride = seed;
+  }
+
+  public static void clearSeedOverride() {
+    seedOverride = null;
+  }
+
   private final Object lock = new Object();
 
   @GuardedBy("lock")
-  private final RandomGenerator random = new MersenneTwister();
+  private final RandomGenerator random;
+
+  public PlainRandomSource() {
+    final Long seed = seedOverride;
+    this.random = (seed == null) ? new MersenneTwister() : new MersenneTwister(seed);
+  }
 
   @Override
   public int[] getRandom(final int max, final int count, final String annotation) {
