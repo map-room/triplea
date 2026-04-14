@@ -1,14 +1,16 @@
+# syntax=docker/dockerfile:1.6
 # Stage 1: build the fat jar with Gradle
 FROM eclipse-temurin:21-jdk AS build
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
-# game-app/game-headed/build.gradle runs `git rev-list --count HEAD` at configuration time.
-# A fresh one-commit repo is enough to satisfy that call without bloating the build context.
-RUN git init -q \
- && git -c user.email=build@local -c user.name=build add -A \
- && git -c user.email=build@local -c user.name=build commit -q -m build
-RUN ./gradlew :game-app:ai-sidecar:installDist --no-daemon
+# --configure-on-demand keeps Gradle from configuring :game-app:game-headed
+# (which runs `git rev-list --count HEAD` at configuration time) since the
+# sidecar doesn't depend on it. BuildKit cache mounts persist Gradle's
+# user home and project cache across builds on the same host.
+RUN --mount=type=cache,target=/root/.gradle \
+    --mount=type=cache,target=/src/.gradle \
+    ./gradlew :game-app:ai-sidecar:installDist \
+        --no-daemon --parallel --configure-on-demand
 
 # Stage 2: runtime
 FROM eclipse-temurin:21-jre
