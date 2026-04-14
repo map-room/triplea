@@ -26,7 +26,7 @@ class DecisionHandlerTest {
 
   private static String bodyFor(final String kind) {
     return "{\"kind\":\"" + kind + "\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-        + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\",\"battleContext\":null}}";
+        + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}}";
   }
 
   @Test

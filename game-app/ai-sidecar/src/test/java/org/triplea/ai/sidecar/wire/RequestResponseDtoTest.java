@@ -28,7 +28,7 @@ class RequestResponseDtoTest {
   void decisionRequestWithKindAndState() throws Exception {
     final String body =
         "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-            + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\",\"battleContext\":null}}";
+            + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}}";
     final DecisionRequest r = om.readValue(body, DecisionRequest.class);
     assertEquals("purchase", r.kind());
     assertEquals("Germans", r.state().currentPlayer());
@@ -52,9 +52,8 @@ class RequestResponseDtoTest {
   void sessionUpdateRequestWrapsState() throws Exception {
     final String body =
         "{\"state\":{\"territories\":[],\"players\":[],\"round\":2,\"phase\":\"purchase\","
-            + "\"currentPlayer\":\"Germans\",\"battleContext\":null}}";
+            + "\"currentPlayer\":\"Germans\"}}";
     final SessionUpdateRequest r = om.readValue(body, SessionUpdateRequest.class);
     assertEquals(2, r.state().round());
-    assertTrue(r.state().battleContext() == null || r.state().battleContext().isNull());
   }
 }
