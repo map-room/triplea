@@ -29,6 +29,7 @@ dependencyResolutionManagement {
 rootProject.name = "triplea"
 
 include("game-app:ai")
+include("game-app:ai-sidecar")
 include("game-app:domain-data")
 include("game-app:game-core")
 include("game-app:game-headed")

@@ -1,0 +1,13 @@
+plugins {
+    id("triplea-java-library")
+}
+
+dependencies {
+    implementation project(":game-app:game-core")
+    implementation project(":game-app:domain-data")
+    implementation project(":lib:java-extras")
+    implementation project(":lib:xml-reader")
+
+    testImplementation project(":lib:test-common")
+    testImplementation testFixtures(project(":game-app:game-core"))
+}
