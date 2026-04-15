@@ -2,6 +2,7 @@ package org.triplea.ai.sidecar.session;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.triplea.ai.pro.ProAi;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -11,11 +12,19 @@ import org.triplea.ai.sidecar.CanonicalGameData;
 
 public final class SessionRegistry {
   private final CanonicalGameData canonical;
+  private final ProSessionSnapshotStore snapshotStore;
   private final ConcurrentHashMap<SessionKey, Session> byKey = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, Session> byId = new ConcurrentHashMap<>();
 
   public SessionRegistry(final CanonicalGameData canonical) {
+    this(canonical, new ProSessionSnapshotStore(Path.of(
+        System.getProperty("java.io.tmpdir"), "sidecar-snapshots")));
+  }
+
+  public SessionRegistry(
+      final CanonicalGameData canonical, final ProSessionSnapshotStore snapshotStore) {
     this.canonical = canonical;
+    this.snapshotStore = snapshotStore;
   }
 
   public synchronized Session createOrGet(final SessionKey key, final long seed) {
@@ -44,6 +53,10 @@ public final class SessionRegistry {
     return created;
   }
 
+  public ProSessionSnapshotStore snapshotStore() {
+    return snapshotStore;
+  }
+
   public Optional<Session> get(final String sessionId) {
     return Optional.ofNullable(byId.get(sessionId));
   }
@@ -55,6 +68,7 @@ public final class SessionRegistry {
     }
     byKey.remove(removed.key(), removed);
     removed.offensiveExecutor().shutdownNow();
+    snapshotStore.delete(removed.key());
     return true;
   }
 }

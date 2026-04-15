@@ -16,6 +16,7 @@ import games.strategy.triplea.delegate.EndRoundDelegate;
 import games.strategy.triplea.delegate.MoveDelegate;
 import games.strategy.triplea.delegate.PlaceDelegate;
 import games.strategy.triplea.delegate.PoliticsDelegate;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RepairOrder;
+import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.wire.WireStateApplier;
 import org.triplea.java.collections.IntegerMap;
@@ -68,6 +70,22 @@ import org.triplea.java.collections.IntegerMap;
  * from the tail therefore drops the lowest priority rules first.
  */
 public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest, PurchasePlan> {
+
+  private final ProSessionSnapshotStore snapshotStore;
+
+  /** Production constructor — uses the provided snapshot store. */
+  public PurchaseExecutor(final ProSessionSnapshotStore snapshotStore) {
+    this.snapshotStore = snapshotStore;
+  }
+
+  /**
+   * No-arg constructor for tests and contexts where snapshot persistence is not needed. Saves go
+   * to a subdirectory of {@code java.io.tmpdir} and are harmless.
+   */
+  public PurchaseExecutor() {
+    this(new ProSessionSnapshotStore(
+        Path.of(System.getProperty("java.io.tmpdir"), "sidecar-snapshots")));
+  }
 
   @Override
   public PurchasePlan execute(final Session session, final PurchaseRequest request) {
@@ -121,6 +139,10 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
       }
       throw new RuntimeException("PurchaseExecutor failed", cause);
     }
+
+    // Persist stored maps so that combat-move / noncombat-move / place executors can restore them
+    // if the next request arrives after a process restart or session re-use.
+    snapshotStore.save(session.key(), session.proAi().snapshotForSidecar());
 
     final IntegerMap<ProductionRule> captured = recorder.capturedPurchase();
     final IntegerMap<ProductionRule> trimmed = trimToFit(captured, pusToSpend, pus);

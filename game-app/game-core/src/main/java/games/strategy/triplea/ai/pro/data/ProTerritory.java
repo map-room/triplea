@@ -6,6 +6,7 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.Properties;
 import games.strategy.triplea.ai.pro.ProData;
+import games.strategy.triplea.ai.pro.Snapshotted;
 import games.strategy.triplea.ai.pro.util.ProMatches;
 import games.strategy.triplea.ai.pro.util.ProOddsCalculator;
 import games.strategy.triplea.delegate.Matches;
@@ -28,8 +29,8 @@ public class ProTerritory {
   private final ProData proData;
   @Getter private final Territory territory;
   @Getter private final Set<Unit> maxUnits;
-  @Getter private final List<Unit> units;
-  @Getter private final List<Unit> bombers;
+  @Snapshotted @Getter private final List<Unit> units;
+  @Snapshotted @Getter private final List<Unit> bombers;
   @Getter private ProBattleResult maxBattleResult;
   @Getter private double value;
   @Getter private double seaValue;
@@ -39,14 +40,14 @@ public class ProTerritory {
 
   // Amphib variables
   @Getter private final List<Unit> maxAmphibUnits;
-  @Getter private final Map<Unit, List<Unit>> amphibAttackMap;
-  @Getter private final Map<Unit, Territory> transportTerritoryMap;
+  @Snapshotted @Getter private final Map<Unit, List<Unit>> amphibAttackMap;
+  @Snapshotted @Getter private final Map<Unit, Territory> transportTerritoryMap;
   @Getter private boolean needAmphibUnits;
   @Getter private boolean strafing;
   @Getter private final Map<Unit, Boolean> isTransportingMap;
   @Getter private final Set<Unit> maxBombardUnits;
   @Getter private final Map<Unit, Set<Territory>> bombardOptionsMap;
-  @Getter private final Map<Unit, Territory> bombardTerritoryMap;
+  @Snapshotted @Getter private final Map<Unit, Territory> bombardTerritoryMap;
 
   // Determine territory to attack variables
   @Getter private boolean currentlyWins;
