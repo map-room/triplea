@@ -22,6 +22,7 @@ import org.triplea.ai.sidecar.exec.PurchaseExecutor;
 import org.triplea.ai.sidecar.exec.RetreatQueryExecutor;
 import org.triplea.ai.sidecar.exec.ScrambleExecutor;
 import org.triplea.ai.sidecar.exec.SelectCasualtiesExecutor;
+import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionRegistry;
 
@@ -55,7 +56,25 @@ public final class DecisionHandler implements HttpHandler {
         new SelectCasualtiesExecutor(),
         new RetreatQueryExecutor(),
         new ScrambleExecutor(),
-        new PurchaseExecutor());
+        new PurchaseExecutor(registry.snapshotStore()));
+  }
+
+  /**
+   * Test constructor — accepts a snapshot store and executor stubs so handler logic can be
+   * exercised in isolation.
+   */
+  public DecisionHandler(
+      final SessionRegistry registry,
+      final ProSessionSnapshotStore snapshotStore,
+      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> selectCasualtiesExecutor,
+      final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
+      final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor) {
+    this(
+        registry,
+        selectCasualtiesExecutor,
+        retreatQueryExecutor,
+        scrambleExecutor,
+        new PurchaseExecutor(snapshotStore));
   }
 
   /** Test constructor — accepts executor stubs so handler logic can be exercised in isolation. */

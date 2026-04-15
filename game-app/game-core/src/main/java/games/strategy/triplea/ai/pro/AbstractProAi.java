@@ -12,9 +12,14 @@ import games.strategy.engine.framework.GameDataManager;
 import games.strategy.engine.framework.GameDataUtils;
 import games.strategy.triplea.Properties;
 import games.strategy.triplea.ai.AbstractAi;
+import games.strategy.triplea.ai.pro.data.PlaceTerritorySnapshot;
 import games.strategy.triplea.ai.pro.data.ProBattleResult;
+import games.strategy.triplea.ai.pro.data.ProPlaceTerritory;
 import games.strategy.triplea.ai.pro.data.ProPurchaseTerritory;
+import games.strategy.triplea.ai.pro.data.ProSessionSnapshot;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
+import games.strategy.triplea.ai.pro.data.ProTerritorySnapshot;
+import games.strategy.triplea.ai.pro.data.PurchaseTerritorySnapshot;
 import games.strategy.triplea.ai.pro.logging.ProLogUi;
 import games.strategy.triplea.ai.pro.logging.ProLogger;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
@@ -42,6 +47,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -279,6 +285,234 @@ public abstract class AbstractProAi extends AbstractAi {
       final GameData data,
       final GamePlayer player) {
     purchase(purchaseForBid, pusToSpend, purchaseDelegate, data, player);
+  }
+
+  /**
+   * Projects the three stored ProAi maps into a {@link ProSessionSnapshot} for persistence across
+   * HTTP request boundaries.
+   *
+   * <p>Called by the sidecar's {@code PurchaseExecutor} immediately after {@link
+   * #invokePurchaseForSidecar} returns. Unit references are encoded as UUID strings; territory
+   * references are encoded as territory names. The {@code unitIdMap} parameter is the sidecar's
+   * wire-ID → UUID mapping at purchase time; it is stored in the snapshot so that subsequent
+   * executors can pre-populate the session's live {@code unitIdMap} before
+   * {@code WireStateApplier.apply()} runs, ensuring UUID references in the snapshot remain
+   * resolvable after a process restart.
+   *
+   * <p>Null stored maps are projected as empty maps in the snapshot.
+   *
+   * @param wireToUuid the sidecar's wire-unit-ID → UUID mapping at snapshot time (Map Room unit
+   *     IDs → serialised Java {@link UUID} strings)
+   */
+  public ProSessionSnapshot snapshotForSidecar(final Map<String, String> wireToUuid) {
+    final Map<String, ProTerritorySnapshot> combatSnap =
+        projectTerritoryMap(storedCombatMoveMap);
+    final Map<String, ProTerritorySnapshot> factorySnap =
+        projectTerritoryMap(storedFactoryMoveMap);
+    final Map<String, PurchaseTerritorySnapshot> purchaseSnap =
+        projectPurchaseMap(storedPurchaseTerritories);
+    return new ProSessionSnapshot(combatSnap, factorySnap, purchaseSnap, wireToUuid);
+  }
+
+  private static Map<String, ProTerritorySnapshot> projectTerritoryMap(
+      final Map<Territory, ProTerritory> src) {
+    if (src == null) {
+      return new HashMap<>();
+    }
+    final Map<String, ProTerritorySnapshot> out = new HashMap<>();
+    for (final Map.Entry<Territory, ProTerritory> e : src.entrySet()) {
+      out.put(e.getKey().getName(), projectTerritory(e.getValue()));
+    }
+    return out;
+  }
+
+  private static ProTerritorySnapshot projectTerritory(final ProTerritory pt) {
+    final List<String> unitIds = new ArrayList<>();
+    for (final Unit u : pt.getUnits()) {
+      unitIds.add(u.getId().toString());
+    }
+    final List<String> bomberIds = new ArrayList<>();
+    for (final Unit u : pt.getBombers()) {
+      bomberIds.add(u.getId().toString());
+    }
+    final Map<String, List<String>> amphibSnap = new HashMap<>();
+    for (final Map.Entry<Unit, List<Unit>> e : pt.getAmphibAttackMap().entrySet()) {
+      final List<String> carried = new ArrayList<>();
+      for (final Unit u : e.getValue()) {
+        carried.add(u.getId().toString());
+      }
+      amphibSnap.put(e.getKey().getId().toString(), carried);
+    }
+    final Map<String, String> transportTerritorySnap = new HashMap<>();
+    for (final Map.Entry<Unit, Territory> e : pt.getTransportTerritoryMap().entrySet()) {
+      transportTerritorySnap.put(e.getKey().getId().toString(), e.getValue().getName());
+    }
+    final Map<String, String> bombardSnap = new HashMap<>();
+    for (final Map.Entry<Unit, Territory> e : pt.getBombardTerritoryMap().entrySet()) {
+      bombardSnap.put(e.getKey().getId().toString(), e.getValue().getName());
+    }
+    return new ProTerritorySnapshot(unitIds, bomberIds, amphibSnap, transportTerritorySnap, bombardSnap);
+  }
+
+  private static Map<String, PurchaseTerritorySnapshot> projectPurchaseMap(
+      final Map<Territory, ProPurchaseTerritory> src) {
+    if (src == null) {
+      return new HashMap<>();
+    }
+    final Map<String, PurchaseTerritorySnapshot> out = new HashMap<>();
+    for (final Map.Entry<Territory, ProPurchaseTerritory> e : src.entrySet()) {
+      final List<PlaceTerritorySnapshot> places = new ArrayList<>();
+      for (final ProPlaceTerritory ppt : e.getValue().getCanPlaceTerritories()) {
+        final List<String> typeNames = new ArrayList<>();
+        for (final Unit u : ppt.getPlaceUnits()) {
+          typeNames.add(u.getType().getName());
+        }
+        places.add(new PlaceTerritorySnapshot(ppt.getTerritory().getName(), typeNames));
+      }
+      out.put(e.getKey().getName(), new PurchaseTerritorySnapshot(places));
+    }
+    return out;
+  }
+
+  /**
+   * Restores {@code storedCombatMoveMap} from a snapshot. No-op if the map is already populated
+   * (purchase ran in the same JVM request). Call this before dispatching a {@code combat-move}
+   * decision; do NOT combine with the other restore methods — each phase clears its own map,
+   * and a unified restore would re-populate stale entries for already-consumed phases.
+   *
+   * <p><b>Dead-unit resilience:</b> transport UUIDs absent from {@code data.getUnits()} (e.g.
+   * transport sunk mid-turn) are dropped silently rather than throwing.
+   */
+  public void restoreCombatMoveMapFromSnapshot(
+      final ProSessionSnapshot snap, final GameData data) {
+    if (storedCombatMoveMap == null && !snap.combatMoveMap().isEmpty()) {
+      storedCombatMoveMap = restoreTerritoryMap(snap.combatMoveMap(), data);
+    }
+  }
+
+  /**
+   * Restores {@code storedFactoryMoveMap} from a snapshot. No-op if already populated. Call this
+   * before dispatching a {@code noncombat-move} decision; do NOT combine with the other restore
+   * methods.
+   */
+  public void restoreFactoryMoveMapFromSnapshot(
+      final ProSessionSnapshot snap, final GameData data) {
+    if (storedFactoryMoveMap == null && !snap.factoryMoveMap().isEmpty()) {
+      storedFactoryMoveMap = restoreTerritoryMap(snap.factoryMoveMap(), data);
+    }
+  }
+
+  /**
+   * Restores {@code storedPurchaseTerritories} from a snapshot. No-op if already populated. Call
+   * this before dispatching a {@code place} decision; do NOT combine with the other restore
+   * methods.
+   */
+  public void restorePurchaseTerritoriesFromSnapshot(
+      final ProSessionSnapshot snap, final GameData data) {
+    if (storedPurchaseTerritories == null && !snap.purchaseTerritories().isEmpty()) {
+      storedPurchaseTerritories = restorePurchaseMap(snap.purchaseTerritories(), data);
+    }
+  }
+
+  private static Map<Territory, ProTerritory> restoreTerritoryMap(
+      final Map<String, ProTerritorySnapshot> snap, final GameData data) {
+    final Map<Territory, ProTerritory> out = new HashMap<>();
+    for (final Map.Entry<String, ProTerritorySnapshot> e : snap.entrySet()) {
+      final Territory t = data.getMap().getTerritoryOrNull(e.getKey());
+      if (t == null) {
+        continue;
+      }
+      final ProTerritory pt = new ProTerritory(t, null);
+      final ProTerritorySnapshot s = e.getValue();
+      for (final String uid : s.unitIds()) {
+        final Unit u = data.getUnits().get(UUID.fromString(uid));
+        if (u != null) {
+          pt.addUnit(u);
+        }
+      }
+      for (final String uid : s.bomberIds()) {
+        final Unit u = data.getUnits().get(UUID.fromString(uid));
+        if (u != null) {
+          pt.getBombers().add(u);
+        }
+      }
+      for (final Map.Entry<String, List<String>> ae : s.amphibAttackMap().entrySet()) {
+        final Unit transport = data.getUnits().get(UUID.fromString(ae.getKey()));
+        if (transport == null) {
+          // dead transport — drop silently (see ProMoveUtils.calculateAmphibRoutes NPE risk)
+          continue;
+        }
+        final List<Unit> carried = new ArrayList<>();
+        for (final String uid : ae.getValue()) {
+          final Unit u = data.getUnits().get(UUID.fromString(uid));
+          if (u != null) {
+            carried.add(u);
+          }
+        }
+        pt.getAmphibAttackMap().put(transport, carried);
+        if (s.transportTerritoryMap().containsKey(ae.getKey())) {
+          final Territory origin =
+              data.getMap().getTerritoryOrNull(s.transportTerritoryMap().get(ae.getKey()));
+          if (origin != null) {
+            pt.getTransportTerritoryMap().put(transport, origin);
+          }
+        }
+      }
+      for (final Map.Entry<String, String> be : s.bombardTerritoryMap().entrySet()) {
+        final Unit u = data.getUnits().get(UUID.fromString(be.getKey()));
+        final Territory target = data.getMap().getTerritoryOrNull(be.getValue());
+        if (u != null && target != null) {
+          pt.getBombardTerritoryMap().put(u, target);
+        }
+      }
+      out.put(t, pt);
+    }
+    return out;
+  }
+
+  private static Map<Territory, ProPurchaseTerritory> restorePurchaseMap(
+      final Map<String, PurchaseTerritorySnapshot> snap, final GameData data) {
+    final Map<Territory, ProPurchaseTerritory> out = new HashMap<>();
+    for (final Map.Entry<String, PurchaseTerritorySnapshot> e : snap.entrySet()) {
+      final Territory prodTerritory = data.getMap().getTerritoryOrNull(e.getKey());
+      if (prodTerritory == null) {
+        continue;
+      }
+      // Reconstruct a minimal ProPurchaseTerritory. unitProduction=0 is intentional: the
+      // only field ProPurchaseAi.place() reads is canPlaceTerritories — unitProduction is
+      // only accessed by getRemainingUnitProduction(), which is called on a fresh
+      // placeNonConstructionTerritories list, not on the stored one.
+      final ProPurchaseTerritory ppt =
+          new ProPurchaseTerritory(
+              prodTerritory, data, data.getPlayerList().getNullPlayer(), 0);
+      // Clear the auto-populated canPlaceTerritories (constructed from the live map) and
+      // replace with the snapshotted list, which carries the placeUnits from purchase.
+      ppt.getCanPlaceTerritories().clear();
+      for (final PlaceTerritorySnapshot pts : e.getValue().canPlaceTerritories()) {
+        final Territory placeT = data.getMap().getTerritoryOrNull(pts.territoryName());
+        if (placeT == null) {
+          continue;
+        }
+        final ProPlaceTerritory placeTerritory = new ProPlaceTerritory(placeT);
+        for (final String typeName : pts.placeUnitTypes()) {
+          final Optional<games.strategy.engine.data.UnitType> maybeType =
+              data.getUnitTypeList().getUnitType(typeName);
+          if (maybeType.isEmpty()) {
+            continue;
+          }
+          // Create a temp scratch unit of the right type. Using createTemp (isTemp=true) so the
+          // scratch unit is NOT registered in GameData.getUnits(), avoiding pollution of the live
+          // unit list. Owner is not consulted by ProPurchaseAi.place() — only getType().equals()
+          // is used for matching.
+          final Unit scratch =
+              maybeType.get().createTemp(1, data.getPlayerList().getNullPlayer()).get(0);
+          placeTerritory.getPlaceUnits().add(scratch);
+        }
+        ppt.getCanPlaceTerritories().add(placeTerritory);
+      }
+      out.put(prodTerritory, ppt);
+    }
+    return out;
   }
 
   private GameData copyData(GameData data) {

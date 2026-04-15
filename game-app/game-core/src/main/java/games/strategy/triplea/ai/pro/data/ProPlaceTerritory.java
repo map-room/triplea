@@ -2,6 +2,7 @@ package games.strategy.triplea.ai.pro.data;
 
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.triplea.ai.pro.Snapshotted;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.EqualsAndHashCode;
@@ -13,15 +14,15 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ProPlaceTerritory {
-  private final Territory territory;
-  private final List<Unit> placeUnits = new ArrayList<>();
+  @Snapshotted private final Territory territory;
+  @Snapshotted private final List<Unit> placeUnits = new ArrayList<>();
   private List<Unit> defendingUnits = new ArrayList<>();
   private ProBattleResult minBattleResult = new ProBattleResult();
   private double defenseValue = 0;
   private double strategicValue = 0;
   private boolean canHold = true;
 
-  ProPlaceTerritory(final Territory territory) {
+  public ProPlaceTerritory(final Territory territory) {
     this.territory = territory;
   }
 

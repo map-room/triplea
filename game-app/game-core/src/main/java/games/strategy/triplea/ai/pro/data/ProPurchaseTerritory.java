@@ -4,6 +4,7 @@ import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.triplea.Properties;
+import games.strategy.triplea.ai.pro.Snapshotted;
 import games.strategy.triplea.ai.pro.util.ProMatches;
 import games.strategy.triplea.delegate.Matches;
 import java.util.ArrayList;
@@ -20,7 +21,7 @@ public class ProPurchaseTerritory {
 
   private final Territory territory;
   @Setter private int unitProduction;
-  private final List<ProPlaceTerritory> canPlaceTerritories;
+  @Snapshotted private final List<ProPlaceTerritory> canPlaceTerritories;
 
   public ProPurchaseTerritory(
       final Territory territory,
