@@ -8,7 +8,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import org.triplea.ai.sidecar.dto.DecisionPlan;
 import org.triplea.ai.sidecar.dto.DecisionRequest;
-import org.triplea.ai.sidecar.dto.OffensiveRequest;
+import org.triplea.ai.sidecar.dto.OtherOffensiveRequest;
+import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RetreatPlan;
 import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
 import org.triplea.ai.sidecar.dto.ScramblePlan;
@@ -111,10 +112,14 @@ public final class DecisionHandler implements HttpHandler {
           final ScramblePlan plan = scrambleExecutor.execute(session.get(), sr);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
-        case OffensiveRequest or -> writeJson(
+        case PurchaseRequest pr -> writeJson(
             exchange,
             501,
-            JsonBodies.errorBodyWithKind("not-implemented", or.kind()));
+            JsonBodies.errorBodyWithKind("not-implemented", pr.kind()));
+        case OtherOffensiveRequest oo -> writeJson(
+            exchange,
+            501,
+            JsonBodies.errorBodyWithKind("not-implemented", oo.kind()));
       }
     } catch (final IllegalArgumentException e) {
       writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));
