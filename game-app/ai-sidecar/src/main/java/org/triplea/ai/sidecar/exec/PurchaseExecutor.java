@@ -18,6 +18,7 @@ import games.strategy.triplea.delegate.PlaceDelegate;
 import games.strategy.triplea.delegate.PoliticsDelegate;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -142,7 +143,12 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
 
     // Persist stored maps so that combat-move / noncombat-move / place executors can restore them
     // if the next request arrives after a process restart or session re-use.
-    snapshotStore.save(session.key(), session.proAi().snapshotForSidecar());
+    // Serialize the session's unitIdMap (wireId → UUID) into the snapshot so that subsequent
+    // executors can pre-populate it before WireStateApplier.apply() runs, ensuring the same
+    // UUIDs are assigned to the same wire unit IDs after a restart.
+    final Map<String, String> wireToUuid = new HashMap<>();
+    session.unitIdMap().forEach((wireId, uuid) -> wireToUuid.put(wireId, uuid.toString()));
+    snapshotStore.save(session.key(), session.proAi().snapshotForSidecar(wireToUuid));
 
     final IntegerMap<ProductionRule> captured = recorder.capturedPurchase();
     final IntegerMap<ProductionRule> trimmed = trimToFit(captured, pusToSpend, pus);

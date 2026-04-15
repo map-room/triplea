@@ -78,6 +78,23 @@ public final class ProSessionSnapshotStore {
     }
   }
 
+  /**
+   * Pre-populates {@code liveUnitIdMap} with the wire-ID → UUID entries stored in
+   * {@code snapshot.unitIdMap()}, using {@link java.util.concurrent.ConcurrentMap#putIfAbsent} to
+   * avoid overwriting any mappings that were already assigned in the current JVM session.
+   *
+   * <p>This must be called BEFORE {@code WireStateApplier.apply()} in each offensive executor so
+   * that {@code computeIfAbsent} inside the applier finds the pre-seeded UUIDs and creates
+   * {@code Unit} objects with the same identity as the snapshot's UUID references.
+   */
+  public static void restoreUnitIdMap(
+      final games.strategy.triplea.ai.pro.data.ProSessionSnapshot snapshot,
+      final java.util.concurrent.ConcurrentMap<String, java.util.UUID> liveUnitIdMap) {
+    for (final java.util.Map.Entry<String, String> e : snapshot.unitIdMap().entrySet()) {
+      liveUnitIdMap.putIfAbsent(e.getKey(), java.util.UUID.fromString(e.getValue()));
+    }
+  }
+
   /** Deletes the snapshot file for {@code key}. No-op if the file does not exist. */
   public void delete(final SessionKey key) {
     try {

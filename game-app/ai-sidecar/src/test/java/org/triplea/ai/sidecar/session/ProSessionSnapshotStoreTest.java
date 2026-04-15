@@ -1,5 +1,6 @@
 package org.triplea.ai.sidecar.session;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -8,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -16,7 +19,7 @@ class ProSessionSnapshotStoreTest {
   @TempDir Path dir;
 
   private static ProSessionSnapshot emptySnapshot() {
-    return new ProSessionSnapshot(Map.of(), Map.of(), Map.of());
+    return new ProSessionSnapshot(Map.of(), Map.of(), Map.of(), Map.of());
   }
 
   @Test
@@ -52,6 +55,34 @@ class ProSessionSnapshotStoreTest {
     assertTrue(store.load(key).isEmpty(), "load should return empty after delete");
     // No file left for this key
     assertFalse(Files.exists(dir.resolve("g-1_Germans.json")));
+  }
+
+  @Test
+  void restoreUnitIdMapPrePopulatesLiveMap() {
+    final UUID fixedUuid = UUID.fromString("11111111-2222-3333-4444-555555555555");
+    final ProSessionSnapshot snap = new ProSessionSnapshot(
+        Map.of(), Map.of(), Map.of(), Map.of("unit-abc", fixedUuid.toString()));
+
+    final ConcurrentHashMap<String, UUID> live = new ConcurrentHashMap<>();
+    ProSessionSnapshotStore.restoreUnitIdMap(snap, live);
+
+    assertEquals(fixedUuid, live.get("unit-abc"), "pre-populated UUID should match snapshot");
+  }
+
+  @Test
+  void restoreUnitIdMapDoesNotOverwriteExistingEntry() {
+    final UUID existingUuid = UUID.randomUUID();
+    final UUID snapshotUuid = UUID.fromString("11111111-2222-3333-4444-555555555555");
+    final ProSessionSnapshot snap = new ProSessionSnapshot(
+        Map.of(), Map.of(), Map.of(), Map.of("unit-abc", snapshotUuid.toString()));
+
+    final ConcurrentHashMap<String, UUID> live = new ConcurrentHashMap<>();
+    live.put("unit-abc", existingUuid); // already populated in current session
+
+    ProSessionSnapshotStore.restoreUnitIdMap(snap, live);
+
+    assertEquals(existingUuid, live.get("unit-abc"),
+        "putIfAbsent must not overwrite existing mapping");
   }
 
   @Test

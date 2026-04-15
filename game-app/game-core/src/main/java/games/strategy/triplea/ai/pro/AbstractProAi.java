@@ -293,18 +293,25 @@ public abstract class AbstractProAi extends AbstractAi {
    *
    * <p>Called by the sidecar's {@code PurchaseExecutor} immediately after {@link
    * #invokePurchaseForSidecar} returns. Unit references are encoded as UUID strings; territory
-   * references are encoded as territory names.
+   * references are encoded as territory names. The {@code unitIdMap} parameter is the sidecar's
+   * wire-ID → UUID mapping at purchase time; it is stored in the snapshot so that subsequent
+   * executors can pre-populate the session's live {@code unitIdMap} before
+   * {@code WireStateApplier.apply()} runs, ensuring UUID references in the snapshot remain
+   * resolvable after a process restart.
    *
    * <p>Null stored maps are projected as empty maps in the snapshot.
+   *
+   * @param wireToUuid the sidecar's wire-unit-ID → UUID mapping at snapshot time (Map Room unit
+   *     IDs → serialised Java {@link UUID} strings)
    */
-  public ProSessionSnapshot snapshotForSidecar() {
+  public ProSessionSnapshot snapshotForSidecar(final Map<String, String> wireToUuid) {
     final Map<String, ProTerritorySnapshot> combatSnap =
         projectTerritoryMap(storedCombatMoveMap);
     final Map<String, ProTerritorySnapshot> factorySnap =
         projectTerritoryMap(storedFactoryMoveMap);
     final Map<String, PurchaseTerritorySnapshot> purchaseSnap =
         projectPurchaseMap(storedPurchaseTerritories);
-    return new ProSessionSnapshot(combatSnap, factorySnap, purchaseSnap);
+    return new ProSessionSnapshot(combatSnap, factorySnap, purchaseSnap, wireToUuid);
   }
 
   private static Map<String, ProTerritorySnapshot> projectTerritoryMap(
@@ -368,24 +375,40 @@ public abstract class AbstractProAi extends AbstractAi {
   }
 
   /**
-   * Restores the three stored ProAi maps from a {@link ProSessionSnapshot}, rebuilding live
-   * {@link Territory} and {@link Unit} references from {@code data}.
+   * Restores {@code storedCombatMoveMap} from a snapshot. No-op if the map is already populated
+   * (purchase ran in the same JVM request). Call this before dispatching a {@code combat-move}
+   * decision; do NOT combine with the other restore methods — each phase clears its own map,
+   * and a unified restore would re-populate stale entries for already-consumed phases.
    *
-   * <p>Called by the sidecar's offensive executors (combat-move, noncombat-move, place) before
-   * dispatching to ProAi. This is a no-op if the stored maps are already populated (i.e. the
-   * purchase ran in the same JVM request as the subsequent phase).
-   *
-   * <p><b>Dead-unit resilience:</b> if a UUID in {@code amphibAttackMap} does not resolve to a
-   * live unit in {@code data} (e.g. the transport was sunk mid-turn), the entry is silently
-   * dropped rather than throwing. All other missing-UUID references are also dropped silently.
+   * <p><b>Dead-unit resilience:</b> transport UUIDs absent from {@code data.getUnits()} (e.g.
+   * transport sunk mid-turn) are dropped silently rather than throwing.
    */
-  public void restoreFromSnapshot(final ProSessionSnapshot snap, final GameData data) {
+  public void restoreCombatMoveMapFromSnapshot(
+      final ProSessionSnapshot snap, final GameData data) {
     if (storedCombatMoveMap == null && !snap.combatMoveMap().isEmpty()) {
       storedCombatMoveMap = restoreTerritoryMap(snap.combatMoveMap(), data);
     }
+  }
+
+  /**
+   * Restores {@code storedFactoryMoveMap} from a snapshot. No-op if already populated. Call this
+   * before dispatching a {@code noncombat-move} decision; do NOT combine with the other restore
+   * methods.
+   */
+  public void restoreFactoryMoveMapFromSnapshot(
+      final ProSessionSnapshot snap, final GameData data) {
     if (storedFactoryMoveMap == null && !snap.factoryMoveMap().isEmpty()) {
       storedFactoryMoveMap = restoreTerritoryMap(snap.factoryMoveMap(), data);
     }
+  }
+
+  /**
+   * Restores {@code storedPurchaseTerritories} from a snapshot. No-op if already populated. Call
+   * this before dispatching a {@code place} decision; do NOT combine with the other restore
+   * methods.
+   */
+  public void restorePurchaseTerritoriesFromSnapshot(
+      final ProSessionSnapshot snap, final GameData data) {
     if (storedPurchaseTerritories == null && !snap.purchaseTerritories().isEmpty()) {
       storedPurchaseTerritories = restorePurchaseMap(snap.purchaseTerritories(), data);
     }
@@ -477,9 +500,12 @@ public abstract class AbstractProAi extends AbstractAi {
           if (maybeType.isEmpty()) {
             continue;
           }
-          // Create a scratch unit of the right type. Owner is not consulted by
-          // ProPurchaseAi.place() — only getType().equals() is used for matching.
-          final Unit scratch = maybeType.get().create(data.getPlayerList().getNullPlayer());
+          // Create a temp scratch unit of the right type. Using createTemp (isTemp=true) so the
+          // scratch unit is NOT registered in GameData.getUnits(), avoiding pollution of the live
+          // unit list. Owner is not consulted by ProPurchaseAi.place() — only getType().equals()
+          // is used for matching.
+          final Unit scratch =
+              maybeType.get().createTemp(1, data.getPlayerList().getNullPlayer()).get(0);
           placeTerritory.getPlaceUnits().add(scratch);
         }
         ppt.getCanPlaceTerritories().add(placeTerritory);
