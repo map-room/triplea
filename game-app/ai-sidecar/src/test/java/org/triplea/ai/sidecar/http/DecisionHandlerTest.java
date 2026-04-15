@@ -75,6 +75,7 @@ class DecisionHandlerTest {
 
   // ---------------------------------------------------------------------
   // Happy paths — stub executors assert they were called and return a plan
+  // Response must be wrapped: {"status":"ready","plan":{...}}
   // ---------------------------------------------------------------------
 
   @Test
@@ -103,6 +104,10 @@ class DecisionHandlerTest {
 
     assertEquals(200, ex.responseCode());
     final String body = ex.responseBodyString();
+    // Envelope fields
+    assertTrue(body.contains("\"status\":\"ready\""), body);
+    assertTrue(body.contains("\"plan\":{"), body);
+    // Plan contents nested under "plan"
     assertTrue(body.contains("\"kind\":\"select-casualties\""), body);
     assertTrue(body.contains("\"killed\":[\"u1\"]"), body);
     assertTrue(body.contains("\"damaged\":[\"u2\"]"), body);
@@ -129,8 +134,11 @@ class DecisionHandlerTest {
     h.handle(ex);
 
     assertEquals(200, ex.responseCode());
-    assertTrue(ex.responseBodyString().contains("\"kind\":\"retreat-or-press\""));
-    assertTrue(ex.responseBodyString().contains("\"retreatTo\":\"Libya\""));
+    final String body = ex.responseBodyString();
+    assertTrue(body.contains("\"status\":\"ready\""), body);
+    assertTrue(body.contains("\"plan\":{"), body);
+    assertTrue(body.contains("\"kind\":\"retreat-or-press\""), body);
+    assertTrue(body.contains("\"retreatTo\":\"Libya\""), body);
   }
 
   @Test
@@ -153,12 +161,16 @@ class DecisionHandlerTest {
     h.handle(ex);
 
     assertEquals(200, ex.responseCode());
-    assertTrue(ex.responseBodyString().contains("\"kind\":\"scramble\""));
-    assertTrue(ex.responseBodyString().contains("u7"));
+    final String body = ex.responseBodyString();
+    assertTrue(body.contains("\"status\":\"ready\""), body);
+    assertTrue(body.contains("\"plan\":{"), body);
+    assertTrue(body.contains("\"kind\":\"scramble\""), body);
+    assertTrue(body.contains("u7"), body);
   }
 
   // ---------------------------------------------------------------------
   // Offensive kinds → 501
+  // Response must be: {"status":"error","error":"not-implemented","kind":"<kind>"}
   // ---------------------------------------------------------------------
 
   @Test
@@ -184,7 +196,8 @@ class DecisionHandlerTest {
       h.handle(ex);
       assertEquals(501, ex.responseCode(), "kind=" + kind);
       final String responseBody = ex.responseBodyString();
-      assertTrue(responseBody.contains("not-implemented"), "kind=" + kind);
+      assertTrue(responseBody.contains("\"status\":\"error\""), "kind=" + kind + "; body=" + responseBody);
+      assertTrue(responseBody.contains("\"error\":\"not-implemented\""), "kind=" + kind + "; body=" + responseBody);
       // kind must round-trip in the 501 body so clients can distinguish offensive sub-kinds
       assertTrue(
           responseBody.contains("\"kind\":\"" + kind + "\""),
@@ -193,7 +206,7 @@ class DecisionHandlerTest {
   }
 
   // ---------------------------------------------------------------------
-  // Error paths
+  // Error paths — all must have {"status":"error","error":"<code>"}
   // ---------------------------------------------------------------------
 
   @Test
@@ -208,6 +221,9 @@ class DecisionHandlerTest {
         new FakeHttpExchange("POST", "/session/unknown/decision", SELECT_CASUALTIES_BODY);
     h.handle(ex);
     assertEquals(404, ex.responseCode());
+    final String body = ex.responseBodyString();
+    assertTrue(body.contains("\"status\":\"error\""), body);
+    assertTrue(body.contains("\"error\":\"unknown-session\""), body);
   }
 
   @Test
@@ -225,6 +241,9 @@ class DecisionHandlerTest {
             "POST", "/session/" + s.sessionId() + "/decision", "{not-json");
     h.handle(ex);
     assertEquals(400, ex.responseCode());
+    final String body = ex.responseBodyString();
+    assertTrue(body.contains("\"status\":\"error\""), body);
+    assertTrue(body.contains("\"error\":\"bad-request\""), body);
   }
 
   @Test
@@ -242,6 +261,8 @@ class DecisionHandlerTest {
         new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", body);
     h.handle(ex);
     assertEquals(400, ex.responseCode());
+    final String responseBody = ex.responseBodyString();
+    assertTrue(responseBody.contains("\"status\":\"error\""), responseBody);
   }
 
   @Test
@@ -275,5 +296,8 @@ class DecisionHandlerTest {
         new FakeHttpExchange("GET", "/session/" + s.sessionId() + "/decision", null);
     h.handle(ex);
     assertEquals(405, ex.responseCode());
+    final String body = ex.responseBodyString();
+    assertTrue(body.contains("\"status\":\"error\""), body);
+    assertTrue(body.contains("\"error\":\"method-not-allowed\""), body);
   }
 }

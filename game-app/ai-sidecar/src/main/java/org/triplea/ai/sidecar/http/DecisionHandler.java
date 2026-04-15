@@ -28,9 +28,11 @@ import org.triplea.ai.sidecar.session.SessionRegistry;
  *
  * <p>The request body is deserialised through the polymorphic {@link DecisionRequest} sealed
  * interface (Jackson discriminator {@code kind}). The concrete request type drives a pattern
- * switch that picks the matching executor; the returned {@link DecisionPlan} is serialised
- * back as the 200 response body. Offensive kinds (purchase/combat-move/noncombat-move/place)
- * are parked on this endpoint and return 501 — they will be implemented in Phase 3.
+ * switch that picks the matching executor; the returned {@link DecisionPlan} is wrapped in a
+ * {@code {"status":"ready","plan":{...}}} envelope and sent as the 200 response body.
+ *
+ * <p>Offensive kinds (purchase/combat-move/noncombat-move/place) return 501 with a
+ * {@code {"status":"error","error":"not-implemented","kind":"<kind>"}} body.
  */
 public final class DecisionHandler implements HttpHandler {
 
@@ -64,18 +66,18 @@ public final class DecisionHandler implements HttpHandler {
   @Override
   public void handle(final HttpExchange exchange) throws IOException {
     if (!"POST".equals(exchange.getRequestMethod())) {
-      writeJson(exchange, 405, JsonBodies.errorBody("method-not-allowed", "POST required"));
+      writeJson(exchange, 405, JsonBodies.errorBody("method-not-allowed"));
       return;
     }
     final Optional<SessionPathRouter.Match> match =
         SessionPathRouter.match(exchange.getRequestURI().getPath());
     if (match.isEmpty() || !"decision".equals(match.get().subpath())) {
-      writeJson(exchange, 404, JsonBodies.errorBody("not-found", "unknown path"));
+      writeJson(exchange, 404, JsonBodies.errorBody("not-found"));
       return;
     }
     final Optional<Session> session = registry.get(match.get().sessionId());
     if (session.isEmpty()) {
-      writeJson(exchange, 404, JsonBodies.errorBody("not-found", "unknown session"));
+      writeJson(exchange, 404, JsonBodies.errorBody("unknown-session"));
       return;
     }
 
@@ -85,12 +87,11 @@ public final class DecisionHandler implements HttpHandler {
     try {
       request = JsonBodies.readValue(body, DecisionRequest.class);
     } catch (final IOException e) {
-      writeJson(
-          exchange, 400, JsonBodies.errorBody("bad-request", "invalid decision request body"));
+      writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));
       return;
     }
     if (request == null) {
-      writeJson(exchange, 400, JsonBodies.errorBody("bad-request", "empty decision request"));
+      writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));
       return;
     }
 
@@ -98,34 +99,25 @@ public final class DecisionHandler implements HttpHandler {
       switch (request) {
         case SelectCasualtiesRequest sc -> {
           final SelectCasualtiesPlan plan = selectCasualtiesExecutor.execute(session.get(), sc);
-          writeJson(exchange, 200, JsonBodies.writeValue(plan));
+          writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
         case RetreatQueryRequest rq -> {
           final RetreatPlan plan = retreatQueryExecutor.execute(session.get(), rq);
-          writeJson(exchange, 200, JsonBodies.writeValue(plan));
+          writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
         case ScrambleRequest sr -> {
           final ScramblePlan plan = scrambleExecutor.execute(session.get(), sr);
-          writeJson(exchange, 200, JsonBodies.writeValue(plan));
+          writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
         case OffensiveRequest or -> writeJson(
             exchange,
             501,
-            JsonBodies.errorBodyWithKind(
-                "not-implemented",
-                or.kind(),
-                "offensive decision kinds are not yet implemented in the Phase-2 sidecar"));
+            JsonBodies.errorBodyWithKind("not-implemented", or.kind()));
       }
     } catch (final IllegalArgumentException e) {
-      writeJson(
-          exchange,
-          400,
-          JsonBodies.errorBody("bad-request", String.valueOf(e.getMessage())));
+      writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));
     } catch (final RuntimeException e) {
-      writeJson(
-          exchange,
-          500,
-          JsonBodies.errorBody("internal-error", String.valueOf(e.getMessage())));
+      writeJson(exchange, 500, JsonBodies.errorBody("internal"));
     }
   }
 

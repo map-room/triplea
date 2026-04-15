@@ -27,4 +27,11 @@ class JsonBodiesTest {
     assertTrue(s.contains("\"error\":\"bad-request\""));
     assertTrue(s.contains("\"message\":\"missing gameId\""));
   }
+
+  @Test
+  void decisionErrorEnvelopeShape() throws Exception {
+    final String s = JsonBodies.errorBody("bad-request");
+    assertTrue(s.contains("\"status\":\"error\""));
+    assertTrue(s.contains("\"error\":\"bad-request\""));
+  }
 }

@@ -155,7 +155,9 @@ class Phase2DefensiveDecisionsIntegrationTest {
     final HttpResponse<String> resp = postDecision(body);
     assertEquals(200, resp.statusCode(), "selectCasualties must return 200; body=" + resp.body());
 
-    final JsonNode plan = MAPPER.readTree(resp.body());
+    final JsonNode envelope = MAPPER.readTree(resp.body());
+    assertEquals("ready", envelope.path("status").asText(), "envelope status must be 'ready'");
+    final JsonNode plan = envelope.path("plan");
     assertTrue(plan.has("killed"), "Response must have 'killed' field");
     assertTrue(plan.has("damaged"), "Response must have 'damaged' field");
     assertTrue(plan.get("killed").isArray(), "'killed' must be an array");
@@ -218,7 +220,9 @@ class Phase2DefensiveDecisionsIntegrationTest {
     final HttpResponse<String> resp = postDecision(body);
     assertEquals(200, resp.statusCode(), "retreatQuery must return 200; body=" + resp.body());
 
-    final JsonNode plan = MAPPER.readTree(resp.body());
+    final JsonNode envelope = MAPPER.readTree(resp.body());
+    assertEquals("ready", envelope.path("status").asText(), "envelope status must be 'ready'");
+    final JsonNode plan = envelope.path("plan");
     assertTrue(plan.has("retreatTo"), "Response must have 'retreatTo' field");
 
     // retreatTo is null (press) or one of the legal retreat territories.
@@ -287,7 +291,9 @@ class Phase2DefensiveDecisionsIntegrationTest {
     final HttpResponse<String> resp = postDecision(body);
     assertEquals(200, resp.statusCode(), "scramble must return 200; body=" + resp.body());
 
-    final JsonNode plan = MAPPER.readTree(resp.body());
+    final JsonNode envelope = MAPPER.readTree(resp.body());
+    assertEquals("ready", envelope.path("status").asText(), "envelope status must be 'ready'");
+    final JsonNode plan = envelope.path("plan");
     assertTrue(plan.has("scramblers"), "Response must have 'scramblers' field");
     assertTrue(plan.get("scramblers").isObject(), "'scramblers' must be an object/map");
 
