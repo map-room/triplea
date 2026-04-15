@@ -11,6 +11,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.dto.PurchasePlan;
+import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RetreatPlan;
 import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
 import org.triplea.ai.sidecar.dto.ScramblePlan;
@@ -70,7 +72,8 @@ class DecisionHandlerTest {
       final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> sc,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> rq,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> sr) {
-    return new DecisionHandler(registry, sc, rq, sr);
+    return new DecisionHandler(
+        registry, sc, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of()));
   }
 
   // ---------------------------------------------------------------------
@@ -175,7 +178,9 @@ class DecisionHandlerTest {
 
   @Test
   void offensiveKinds_return501() throws Exception {
-    for (final String kind : new String[] {"purchase", "combat-move", "noncombat-move", "place"}) {
+    // purchase is now wired to PurchaseExecutor (returns 200); only remaining offensive
+    // kinds that are still unimplemented return 501.
+    for (final String kind : new String[] {"combat-move", "noncombat-move", "place"}) {
       final SessionRegistry registry = newRegistry();
       final Session s = newSession(registry);
       final DecisionHandler h =
