@@ -21,8 +21,7 @@ class WireStateRoundTripTest {
           + "],"
           + "\"round\":3,"
           + "\"phase\":\"combat-move\","
-          + "\"currentPlayer\":\"Germans\","
-          + "\"battleContext\":null"
+          + "\"currentPlayer\":\"Germans\""
           + "}";
 
   @Test

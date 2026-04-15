@@ -44,7 +44,13 @@ public final class CanonicalGameData {
 
   public GameData cloneForSession() {
     try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(serialized))) {
-      return (GameData) ois.readObject();
+      final GameData data = (GameData) ois.readObject();
+      // GameData has transient listener lists / delegate maps wiped by the default
+      // readObject; postDeSerialize() re-initializes them. Normally GameDataManager does
+      // this after loading a save; we must do the same here or any Change that fires
+      // territory listeners (e.g. RemoveUnits / OwnerChange) will NPE.
+      data.postDeSerialize();
+      return data;
     } catch (final IOException | ClassNotFoundException e) {
       throw new IllegalStateException("Failed to clone canonical GameData", e);
     }

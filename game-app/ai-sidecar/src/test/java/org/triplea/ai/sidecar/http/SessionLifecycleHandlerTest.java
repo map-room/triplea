@@ -21,7 +21,7 @@ class SessionLifecycleHandlerTest {
 
   private static final String UPDATE_BODY =
       "{\"state\":{\"territories\":[],\"players\":[],\"round\":1,\"phase\":\"purchase\","
-          + "\"currentPlayer\":\"Germans\",\"battleContext\":null}}";
+          + "\"currentPlayer\":\"Germans\"}}";
 
   @Test
   void updateReturns204ForKnownSession() throws Exception {

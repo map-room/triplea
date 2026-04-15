@@ -18,10 +18,10 @@ import org.triplea.ai.sidecar.http.HttpService;
 class SidecarIntegrationTest {
   private static final String UPDATE_BODY =
       "{\"state\":{\"territories\":[],\"players\":[],\"round\":1,\"phase\":\"purchase\","
-          + "\"currentPlayer\":\"Germans\",\"battleContext\":null}}";
+          + "\"currentPlayer\":\"Germans\"}}";
   private static final String DECISION_BODY =
       "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-          + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\",\"battleContext\":null}}";
+          + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}}";
 
   @BeforeAll
   static void initPrefs() {
