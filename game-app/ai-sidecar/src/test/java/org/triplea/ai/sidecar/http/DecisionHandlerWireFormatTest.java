@@ -16,6 +16,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.dto.PurchaseOrder;
+import org.triplea.ai.sidecar.dto.PurchasePlan;
+import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RetreatPlan;
 import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
 import org.triplea.ai.sidecar.dto.ScramblePlan;
@@ -92,7 +95,11 @@ class DecisionHandlerWireFormatTest {
       final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> sc,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> rq,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> sr) {
-    return new DecisionHandler(registry, sc, rq, sr);
+    // Default purchase stub: returns an empty plan so wire-format tests that don't exercise
+    // purchase still compile and route correctly.
+    return new DecisionHandler(
+        registry, sc, rq, sr,
+        (session, req) -> new PurchasePlan(List.of(), List.of()));
   }
 
   private JsonNode responseJson(final FakeHttpExchange ex) throws Exception {
@@ -214,13 +221,42 @@ class DecisionHandlerWireFormatTest {
   }
 
   // ---------------------------------------------------------------------
-  // Offensive kinds → 501 with status=error, error=not-implemented, kind=<kind>
+  // Purchase → 200 with status=ready, plan.kind=purchase (Phase 3 wired)
   // ---------------------------------------------------------------------
 
   @Test
-  void purchase_501_wireShape() throws Exception {
-    assertOffensive501Shape("purchase");
+  void purchase_200_wireShape() throws Exception {
+    final SessionRegistry registry = newRegistry();
+    final Session s = newSession(registry);
+    final PurchasePlan fixedPlan =
+        new PurchasePlan(List.of(new PurchaseOrder("infantry", 1, null)), List.of());
+    final DecisionHandler h =
+        new DecisionHandler(
+            registry,
+            (session, req) -> { throw new AssertionError(); },
+            (session, req) -> { throw new AssertionError(); },
+            (session, req) -> { throw new AssertionError(); },
+            (session, req) -> fixedPlan);
+
+    final FakeHttpExchange ex =
+        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", offensiveBody("purchase"));
+    h.handle(ex);
+
+    assertEquals(200, ex.responseCode(), "purchase must return 200");
+    final JsonNode root = responseJson(ex);
+    assertEquals("ready", root.path("status").asText(), "status must be 'ready'");
+    assertTrue(root.has("plan"), "root must have 'plan'");
+    assertFalse(root.has("error"), "success body must not have 'error'");
+
+    final JsonNode plan = root.path("plan");
+    assertEquals("purchase", plan.path("kind").asText(), "plan.kind must be 'purchase'");
+    assertTrue(plan.path("buys").isArray(), "plan.buys must be array");
+    assertTrue(plan.path("repairs").isArray(), "plan.repairs must be array");
   }
+
+  // ---------------------------------------------------------------------
+  // Remaining offensive kinds → 501 with status=error, error=not-implemented, kind=<kind>
+  // ---------------------------------------------------------------------
 
   @Test
   void combatMove_501_wireShape() throws Exception {

@@ -67,7 +67,8 @@ class ExecutorSupportTest {
             42L,
             proAi,
             data,
-            new ConcurrentHashMap<>());
+            new ConcurrentHashMap<>(),
+            Executors.newSingleThreadExecutor());
 
     final GamePlayer player = data.getPlayerList().getPlayerId("Germans");
     assertThat(player).as("Germans player must exist in canonical game data").isNotNull();

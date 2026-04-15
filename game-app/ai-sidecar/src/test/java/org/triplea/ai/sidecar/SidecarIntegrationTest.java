@@ -60,7 +60,7 @@ class SidecarIntegrationTest {
               HttpResponse.BodyHandlers.ofString());
       assertEquals(204, update.statusCode());
 
-      // 3. decision → 501
+      // 3. decision → 200 (purchase is now wired to PurchaseExecutor)
       final HttpResponse<String> decision =
           client.send(
               HttpRequest.newBuilder(URI.create(base + "/session/" + sessionId + "/decision"))
@@ -68,8 +68,9 @@ class SidecarIntegrationTest {
                   .POST(HttpRequest.BodyPublishers.ofString(DECISION_BODY))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
-      assertEquals(501, decision.statusCode());
-      assertTrue(decision.body().contains("not-implemented"));
+      assertEquals(200, decision.statusCode());
+      assertTrue(decision.body().contains("\"status\":\"ready\""));
+      assertTrue(decision.body().contains("\"kind\":\"purchase\""));
 
       // 4. delete
       final HttpResponse<String> delete =

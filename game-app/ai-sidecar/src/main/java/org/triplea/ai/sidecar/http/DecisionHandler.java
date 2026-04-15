@@ -8,7 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import org.triplea.ai.sidecar.dto.DecisionPlan;
 import org.triplea.ai.sidecar.dto.DecisionRequest;
-import org.triplea.ai.sidecar.dto.OffensiveRequest;
+import org.triplea.ai.sidecar.dto.OtherOffensiveRequest;
+import org.triplea.ai.sidecar.dto.PurchasePlan;
+import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RetreatPlan;
 import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
 import org.triplea.ai.sidecar.dto.ScramblePlan;
@@ -16,6 +18,7 @@ import org.triplea.ai.sidecar.dto.ScrambleRequest;
 import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
 import org.triplea.ai.sidecar.dto.SelectCasualtiesRequest;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
+import org.triplea.ai.sidecar.exec.PurchaseExecutor;
 import org.triplea.ai.sidecar.exec.RetreatQueryExecutor;
 import org.triplea.ai.sidecar.exec.ScrambleExecutor;
 import org.triplea.ai.sidecar.exec.SelectCasualtiesExecutor;
@@ -43,14 +46,16 @@ public final class DecisionHandler implements HttpHandler {
       selectCasualtiesExecutor;
   private final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor;
   private final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor;
+  private final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor;
 
-  /** Production constructor — wires the real Phase-2 executors. */
+  /** Production constructor — wires the real Phase-2 and Phase-3 executors. */
   public DecisionHandler(final SessionRegistry registry) {
     this(
         registry,
         new SelectCasualtiesExecutor(),
         new RetreatQueryExecutor(),
-        new ScrambleExecutor());
+        new ScrambleExecutor(),
+        new PurchaseExecutor());
   }
 
   /** Test constructor — accepts executor stubs so handler logic can be exercised in isolation. */
@@ -58,11 +63,13 @@ public final class DecisionHandler implements HttpHandler {
       final SessionRegistry registry,
       final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> selectCasualtiesExecutor,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
-      final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor) {
+      final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
+      final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor) {
     this.registry = registry;
     this.selectCasualtiesExecutor = selectCasualtiesExecutor;
     this.retreatQueryExecutor = retreatQueryExecutor;
     this.scrambleExecutor = scrambleExecutor;
+    this.purchaseExecutor = purchaseExecutor;
   }
 
   @Override
@@ -111,10 +118,14 @@ public final class DecisionHandler implements HttpHandler {
           final ScramblePlan plan = scrambleExecutor.execute(session.get(), sr);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
-        case OffensiveRequest or -> writeJson(
+        case PurchaseRequest pr -> {
+          final PurchasePlan plan = purchaseExecutor.execute(session.get(), pr);
+          writeJson(exchange, 200, JsonBodies.readyBody(plan));
+        }
+        case OtherOffensiveRequest oo -> writeJson(
             exchange,
             501,
-            JsonBodies.errorBodyWithKind("not-implemented", or.kind()));
+            JsonBodies.errorBodyWithKind("not-implemented", oo.kind()));
       }
     } catch (final IllegalArgumentException e) {
       writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));

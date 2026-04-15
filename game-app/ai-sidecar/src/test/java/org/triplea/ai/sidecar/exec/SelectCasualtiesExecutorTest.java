@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
@@ -43,7 +44,8 @@ class SelectCasualtiesExecutorTest {
         42L,
         proAi,
         data,
-        new ConcurrentHashMap<>());
+        new ConcurrentHashMap<>(),
+        Executors.newSingleThreadExecutor());
   }
 
   private static WireState wireStateWithGermanStack(final List<WireUnit> units) {

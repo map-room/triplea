@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -108,7 +109,8 @@ class ScrambleExecutorBenchmark {
         42L,
         proAi,
         data,
-        new ConcurrentHashMap<>());
+        new ConcurrentHashMap<>(),
+        Executors.newSingleThreadExecutor());
   }
 
   private static ScrambleRequest buildRequest(final String tag) {
