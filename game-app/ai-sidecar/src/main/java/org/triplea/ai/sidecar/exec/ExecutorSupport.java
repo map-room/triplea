@@ -51,14 +51,22 @@ final class ExecutorSupport {
   /**
    * Attach a {@link PlayerBridge} + {@link GamePlayer} to the session's {@link ProAi} on first
    * use. No-op if already initialised.
+   *
+   * <p>Synchronized on the {@link Session} instance to prevent a check-then-act race: two
+   * concurrent HTTP threads on the same session could both observe {@code
+   * proAi.getGamePlayer() == null} and call {@code initialize} twice, corrupting the ProAi
+   * internal state. The session record is a stable reference shared across all executors on the
+   * same session, so it is a safe monitor.
    */
   static void ensureProAiInitialized(final Session session, final GamePlayer player) {
-    final ProAi proAi = session.proAi();
-    if (proAi.getGamePlayer() != null) {
-      return;
+    synchronized (session) {
+      final ProAi proAi = session.proAi();
+      if (proAi.getGamePlayer() != null) {
+        return;
+      }
+      final PlayerBridge bridge = new PlayerBridge(new HeadlessGame(session.gameData()));
+      proAi.initialize(bridge, player);
     }
-    final PlayerBridge bridge = new PlayerBridge(new HeadlessGame(session.gameData()));
-    proAi.initialize(bridge, player);
   }
 
   /**

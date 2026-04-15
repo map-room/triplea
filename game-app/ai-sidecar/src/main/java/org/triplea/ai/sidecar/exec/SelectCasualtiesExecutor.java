@@ -195,7 +195,15 @@ public final class SelectCasualtiesExecutor
       }
       killed.add(unit);
     }
-    // AbstractProAi enforces defaultCasualties.size() == hitCount.
+    // AbstractProAi.selectCasualties (AbstractProAi.java:390) enforces
+    // defaultCasualties.size() == hitCount and throws IllegalStateException otherwise.
+    // Map Room must therefore supply exactly hitCount default-casualty IDs. The upstream
+    // builder (packages/server/src/ai/decision-detectors.ts:120) reads
+    // battle.autoDefenseCasualties which is only populated by the auto-profile path
+    // (battle-steps.ts:432,739) — in that path the invariant holds because
+    // autoCasualtiesWithProfile is called with the same hit groups used to derive hitCount.
+    // We enforce the invariant here at the sidecar boundary so a violation produces a clear
+    // 400 rather than an opaque 500 from ProAi's own check.
     if (killed.size() != hitCount) {
       throw new IllegalArgumentException(
           "defaultCasualties size (" + killed.size() + ") != hitCount (" + hitCount + ")");

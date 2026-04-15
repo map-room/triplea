@@ -205,6 +205,51 @@ class SelectCasualtiesExecutorTest {
   }
 
   // ------------------------------------------------------------------------
+  // Test 4 (Fix 3a regression): defaultCasualties.size() != hitCount must
+  // throw IllegalArgumentException (→ 400).
+  //
+  // AbstractProAi.selectCasualties (AbstractProAi.java:390) enforces
+  // defaultCasualties.size() == hitCount. The upstream Map Room builder at
+  // decision-detectors.ts:120 reads battle.autoDefenseCasualties, which is
+  // only populated in the auto-profile path (battle-steps.ts:432,739) where
+  // autoCasualtiesWithProfile produces exactly hitCount selections. Any
+  // mismatch is therefore a protocol violation that we reject early at the
+  // sidecar boundary with a clear 400 rather than an opaque 500 from ProAi.
+  // ------------------------------------------------------------------------
+
+  @Test
+  void defaultCasualtiesSizeMismatch_throwsIllegalArgument() {
+    final Session session = freshSession("Germans");
+
+    final List<WireUnit> stack =
+        List.of(
+            new WireUnit("u-inf-1", "infantry", 0, 0),
+            new WireUnit("u-inf-2", "infantry", 0, 0));
+
+    // hitCount=2 but only 1 defaultCasualty — protocol violation.
+    final SelectCasualtiesRequest req =
+        new SelectCasualtiesRequest(
+            wireStateWithGermanStack(stack),
+            new SelectCasualtiesRequest.SelectCasualtiesBattle(
+                "b4",
+                "Germany",
+                "Russians",
+                "Germans",
+                /* hitCount */ 2,
+                stack,
+                /* friendlyUnits */ stack,
+                /* enemyUnits */ List.of(),
+                false,
+                List.of(),
+                /* defaultCasualties — one less than hitCount */ List.of("u-inf-1"),
+                false));
+
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalArgumentException.class,
+        () -> new SelectCasualtiesExecutor().execute(session, req));
+  }
+
+  // ------------------------------------------------------------------------
   // Helper: snoop BattleTracker.pendingBattles via reflection to assert the
   // executor cleans up after itself.
   // ------------------------------------------------------------------------

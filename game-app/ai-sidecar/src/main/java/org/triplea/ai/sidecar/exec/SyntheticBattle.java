@@ -1,7 +1,6 @@
 package org.triplea.ai.sidecar.exec;
 
 import games.strategy.engine.data.Change;
-import games.strategy.engine.data.CompositeChange;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
@@ -147,12 +146,16 @@ final class SyntheticBattle implements IBattle {
   @Override
   public Change addAttackChange(
       final Route route, final Collection<Unit> units, final Map<Unit, Set<Unit>> targets) {
-    return new CompositeChange();
+    throw new UnsupportedOperationException(
+        "SyntheticBattle does not support mutating method addAttackChange"
+            + " — defensive paths should not reach this method");
   }
 
   @Override
   public Change removeAttack(final Route route, final Collection<Unit> units) {
-    return new CompositeChange();
+    throw new UnsupportedOperationException(
+        "SyntheticBattle does not support mutating method removeAttack"
+            + " — defensive paths should not reach this method");
   }
 
   @Override

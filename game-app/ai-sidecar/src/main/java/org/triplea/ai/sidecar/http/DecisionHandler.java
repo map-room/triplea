@@ -36,6 +36,8 @@ import org.triplea.ai.sidecar.session.SessionRegistry;
  */
 public final class DecisionHandler implements HttpHandler {
 
+  private static final System.Logger LOG = System.getLogger(DecisionHandler.class.getName());
+
   private final SessionRegistry registry;
   private final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
       selectCasualtiesExecutor;
@@ -117,6 +119,7 @@ public final class DecisionHandler implements HttpHandler {
     } catch (final IllegalArgumentException e) {
       writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));
     } catch (final RuntimeException e) {
+      LOG.log(System.Logger.Level.ERROR, "Decision handler internal error", e);
       writeJson(exchange, 500, JsonBodies.errorBody("internal"));
     }
   }
