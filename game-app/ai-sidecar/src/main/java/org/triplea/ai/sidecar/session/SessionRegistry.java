@@ -5,6 +5,8 @@ import games.strategy.triplea.ai.pro.ProAi;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.triplea.ai.sidecar.CanonicalGameData;
 
 public final class SessionRegistry {
@@ -23,12 +25,20 @@ public final class SessionRegistry {
     }
     if (existing != null) {
       byId.remove(existing.sessionId());
+      existing.offensiveExecutor().shutdownNow();
     }
     final GameData data = canonical.cloneForSession();
     final ProAi proAi = new ProAi("sidecar-" + key.gameId() + "-" + key.nation(), key.nation());
     final String id = "s-" + UUID.randomUUID();
+    final ExecutorService offensiveExecutor =
+        Executors.newSingleThreadExecutor(
+            r -> {
+              final Thread t = new Thread(r, "sidecar-offensive-" + id);
+              t.setDaemon(true);
+              return t;
+            });
     final Session created =
-        new Session(id, key, seed, proAi, data, new ConcurrentHashMap<>());
+        new Session(id, key, seed, proAi, data, new ConcurrentHashMap<>(), offensiveExecutor);
     byKey.put(key, created);
     byId.put(id, created);
     return created;
@@ -44,6 +54,7 @@ public final class SessionRegistry {
       return false;
     }
     byKey.remove(removed.key(), removed);
+    removed.offensiveExecutor().shutdownNow();
     return true;
   }
 }
