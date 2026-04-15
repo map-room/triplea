@@ -264,6 +264,23 @@ public abstract class AbstractProAi extends AbstractAi {
     ProLogger.info(player.getName() + " time for purchase=" + (System.currentTimeMillis() - start));
   }
 
+  /**
+   * Public bridge to the {@code protected} {@link #purchase} entry point for the AI sidecar.
+   *
+   * <p>The sidecar's {@code PurchaseExecutor} lives in a separate package
+   * ({@code org.triplea.ai.sidecar.exec}) and therefore cannot invoke {@link #purchase}
+   * directly. This method is a thin delegation with no additional behaviour — keep it that
+   * way. All purchase logic belongs in {@link #purchase}.
+   */
+  public void invokePurchaseForSidecar(
+      final boolean purchaseForBid,
+      final int pusToSpend,
+      final IPurchaseDelegate purchaseDelegate,
+      final GameData data,
+      final GamePlayer player) {
+    purchase(purchaseForBid, pusToSpend, purchaseDelegate, data, player);
+  }
+
   private GameData copyData(GameData data) {
     GameDataManager.Options options = GameDataManager.Options.builder().withDelegates(true).build();
     GameData dataCopy = GameDataUtils.cloneGameData(data, options).orElse(null);
