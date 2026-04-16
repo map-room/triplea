@@ -10,6 +10,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
   @JsonSubTypes.Type(value = ScramblePlan.class,         name = "scramble"),
   @JsonSubTypes.Type(value = PurchasePlan.class,         name = "purchase"),
   @JsonSubTypes.Type(value = CombatMovePlan.class,       name = "combat-move"),
+  @JsonSubTypes.Type(value = NoncombatMovePlan.class,    name = "noncombat-move"),
 })
 public sealed interface DecisionPlan
-    permits SelectCasualtiesPlan, RetreatPlan, ScramblePlan, PurchasePlan, CombatMovePlan {}
+    permits SelectCasualtiesPlan, RetreatPlan, ScramblePlan, PurchasePlan, CombatMovePlan,
+        NoncombatMovePlan {}
