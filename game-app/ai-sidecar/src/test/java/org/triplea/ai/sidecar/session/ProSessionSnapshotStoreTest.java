@@ -102,7 +102,7 @@ class ProSessionSnapshotStoreTest {
     final SessionRegistry registry =
         new SessionRegistry(org.triplea.ai.sidecar.CanonicalGameData.load(), store);
 
-    final Session session = registry.createOrGet(new SessionKey("g-1", "Germans"), 42L);
+    final Session session = registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
     store.save(session.key(), emptySnapshot());
     assertTrue(store.load(session.key()).isPresent(), "snapshot should exist before delete");
 

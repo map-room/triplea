@@ -38,17 +38,18 @@ class SidecarIntegrationTest {
       final String base = "http://127.0.0.1:" + port;
       final String auth = "Bearer dev-token";
 
-      // 1. create
+      // 1. create via v2 /sessions endpoint (deterministic sessionId)
       final HttpResponse<String> create =
           client.send(
-              HttpRequest.newBuilder(URI.create(base + "/session"))
+              HttpRequest.newBuilder(URI.create(base + "/sessions"))
                   .header("Authorization", auth)
                   .POST(HttpRequest.BodyPublishers.ofString(
-                      "{\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
+                      "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, create.statusCode());
-      final String sessionId = extractSessionId(create.body());
+      assertTrue(create.body().contains("\"created\":true"));
+      final String sessionId = "g-1:Germans"; // deterministic — no extraction needed
 
       // 2. update
       final HttpResponse<String> update =
@@ -96,9 +97,4 @@ class SidecarIntegrationTest {
     }
   }
 
-  private static String extractSessionId(final String body) {
-    final int start = body.indexOf("\"sessionId\":\"") + "\"sessionId\":\"".length();
-    final int end = body.indexOf('"', start);
-    return body.substring(start, end);
-  }
 }

@@ -20,7 +20,7 @@ class SessionOffensiveExecutorTest {
   @Test
   void sessionHasSingleThreadOffensiveExecutor() throws Exception {
     final SessionRegistry reg = new SessionRegistry(CanonicalGameData.load());
-    final Session s = reg.createOrGet(new SessionKey("g-1", "Germans"), 42L);
+    final Session s = reg.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
     assertNotNull(s.offensiveExecutor());
     final Future<String> f =
         s.offensiveExecutor().submit(() -> Thread.currentThread().getName());

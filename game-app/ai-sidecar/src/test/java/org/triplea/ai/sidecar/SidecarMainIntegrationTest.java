@@ -39,14 +39,14 @@ class SidecarMainIntegrationTest {
 
       final HttpResponse<String> create =
           client.send(
-              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/session"))
+              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/sessions"))
                   .header("Authorization", "Bearer dev-token")
                   .POST(HttpRequest.BodyPublishers.ofString(
-                      "{\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
+                      "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, create.statusCode());
-      assertTrue(create.body().contains("\"sessionId\""));
+      assertTrue(create.body().contains("\"sessionId\":\"g-1:Germans\""));
     } finally {
       svc.stop();
     }

@@ -13,6 +13,8 @@ class SidecarConfigTest {
     assertEquals(8099, c.port());
     assertEquals(4, c.workerCount());
     assertEquals("dev-token", c.authToken());
+    assertEquals("data/sessions", c.dataDir());
+    assertEquals(null, c.serverUrl());
   }
 
   @Test

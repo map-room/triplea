@@ -64,6 +64,8 @@ public final class SessionLifecycleHandler implements HttpHandler {
       return;
     }
     // Phase 1: accept and record the delta request; actual GameData mutation is Phase 2.
+    // Touch updatedAt so the reaper doesn't mark this session as stale.
+    registry.touchUpdatedAt(session.get().key());
     exchange.sendResponseHeaders(204, -1);
     exchange.close();
   }

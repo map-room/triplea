@@ -74,20 +74,19 @@ class Phase3PurchaseIntegrationTest {
     base = "http://127.0.0.1:" + port;
     auth = "Bearer dev-token";
 
+    final String gameId = "integration-purchase";
+    sessionId = gameId + ":" + NATION;
     final HttpResponse<String> create =
         client.send(
-            HttpRequest.newBuilder(URI.create(base + "/session"))
+            HttpRequest.newBuilder(URI.create(base + "/sessions"))
                 .header("Authorization", auth)
                 .POST(
                     HttpRequest.BodyPublishers.ofString(
-                        "{\"gameId\":\"integration-purchase\",\"nation\":\""
-                            + NATION
-                            + "\",\"seed\":42}"))
+                        "{\"sessionId\":\"" + sessionId + "\",\"gameId\":\"" + gameId
+                            + "\",\"nation\":\"" + NATION + "\",\"seed\":42}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
     assertEquals(200, create.statusCode(), "Session create must return 200");
-    sessionId = extractField(create.body(), "sessionId");
-    assertNotNull(sessionId, "sessionId must be present in create response");
   }
 
   @AfterAll

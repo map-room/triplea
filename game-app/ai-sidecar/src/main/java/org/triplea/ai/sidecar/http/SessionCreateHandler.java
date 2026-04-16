@@ -5,12 +5,18 @@ import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import org.triplea.ai.sidecar.session.Session;
-import org.triplea.ai.sidecar.session.SessionKey;
 import org.triplea.ai.sidecar.session.SessionRegistry;
 import org.triplea.ai.sidecar.wire.SessionCreateRequest;
 import org.triplea.ai.sidecar.wire.SessionCreateResponse;
 
+/**
+ * Handles {@code POST /sessions} (v2 contract).
+ *
+ * <p>The caller supplies a deterministic {@code sessionId = matchID:nation}. The handler
+ * validates that {@code sessionId == gameId + ":" + nation} and then delegates to
+ * {@link SessionRegistry#createOrGet} which is idempotent — reopening an existing session
+ * returns {@code created=false} without reinitialising ProData.
+ */
 public final class SessionCreateHandler implements HttpHandler {
   private final SessionRegistry registry;
 
@@ -33,12 +39,30 @@ public final class SessionCreateHandler implements HttpHandler {
       writeJson(exchange, 400, JsonBodies.errorBody("bad-request", "invalid JSON body"));
       return;
     }
-    if (req.gameId() == null || req.nation() == null) {
-      writeJson(exchange, 400, JsonBodies.errorBody("bad-request", "gameId and nation required"));
+    // Validate required fields
+    if (req.sessionId() == null || req.gameId() == null || req.nation() == null) {
+      writeJson(exchange, 400, JsonBodies.errorBody("bad-request",
+          "sessionId, gameId and nation are required"));
       return;
     }
-    final Session session = registry.createOrGet(new SessionKey(req.gameId(), req.nation()), req.seed());
-    writeJson(exchange, 200, JsonBodies.writeValue(new SessionCreateResponse(session.sessionId())));
+    // Validate deterministic sessionId contract
+    final String expectedId = req.gameId() + ":" + req.nation();
+    if (!expectedId.equals(req.sessionId())) {
+      writeJson(exchange, 400, JsonBodies.errorBody("bad-request",
+          "sessionId must equal gameId + \":\" + nation (expected \"" + expectedId + "\")"));
+      return;
+    }
+
+    final SessionRegistry.CreateResult result =
+        registry.createOrGet(
+            new org.triplea.ai.sidecar.session.SessionKey(req.gameId(), req.nation()),
+            req.sessionId(),
+            req.seed());
+
+    writeJson(
+        exchange,
+        200,
+        JsonBodies.writeValue(new SessionCreateResponse(result.session().sessionId(), result.created())));
   }
 
   private static void writeJson(final HttpExchange ex, final int status, final String body)
