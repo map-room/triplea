@@ -308,6 +308,22 @@ public abstract class AbstractProAi extends AbstractAi {
   }
 
   /**
+   * Public bridge to the {@code protected} {@link #move} entry point for the AI sidecar's
+   * noncombat-move phase.
+   *
+   * <p>Calls {@code move(true, ...)} which dispatches to
+   * {@code ProNonCombatMoveAi.doNonCombatMove(storedFactoryMoveMap, storedPurchaseTerritories,
+   * delegate)}. After the call {@code storedFactoryMoveMap} is cleared; {@code
+   * storedPurchaseTerritories} is intentionally preserved for the subsequent place phase.
+   */
+  public void invokeNonCombatMoveForSidecar(
+      final games.strategy.triplea.delegate.remote.IMoveDelegate delegate,
+      final GameData data,
+      final GamePlayer player) {
+    move(/* nonCombat= */ true, delegate, data, player);
+  }
+
+  /**
    * Projects the three stored ProAi maps into a {@link ProSessionSnapshot} for persistence across
    * HTTP request boundaries.
    *
@@ -441,6 +457,22 @@ public abstract class AbstractProAi extends AbstractAi {
    */
   public boolean storedCombatMoveMapIsNull() {
     return storedCombatMoveMap == null;
+  }
+
+  /**
+   * Returns {@code true} if {@code storedFactoryMoveMap} has not been populated yet. Used by
+   * {@code NoncombatMoveExecutor} as a belt-and-suspenders guard before dispatching.
+   */
+  public boolean storedFactoryMoveMapIsNull() {
+    return storedFactoryMoveMap == null;
+  }
+
+  /**
+   * Returns {@code true} if {@code storedPurchaseTerritories} has not been populated yet. Used by
+   * {@code NoncombatMoveExecutor} and {@code PlaceExecutor} as a guard before dispatching.
+   */
+  public boolean storedPurchaseTerritoriesIsNull() {
+    return storedPurchaseTerritories == null;
   }
 
   private static Map<Territory, ProTerritory> restoreTerritoryMap(

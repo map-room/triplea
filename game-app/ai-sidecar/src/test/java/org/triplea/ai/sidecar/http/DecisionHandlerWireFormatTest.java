@@ -19,6 +19,8 @@ import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.dto.CombatMoveOrder;
 import org.triplea.ai.sidecar.dto.CombatMovePlan;
 import org.triplea.ai.sidecar.dto.CombatMoveRequest;
+import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
+import org.triplea.ai.sidecar.dto.NoncombatMoveRequest;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
@@ -276,7 +278,8 @@ class DecisionHandlerWireFormatTest {
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
-        (session, req) -> fixedPlan);
+        (session, req) -> fixedPlan,
+        (session, req) -> { throw new AssertionError(); });
 
     final FakeHttpExchange ex = new FakeHttpExchange(
         "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("combat-move"));
@@ -291,8 +294,31 @@ class DecisionHandlerWireFormatTest {
   }
 
   @Test
-  void noncombatMove_501_wireShape() throws Exception {
-    assertOffensive501Shape("noncombat-move");
+  void noncombatMove_success_wireShape() throws Exception {
+    // noncombat-move is now wired to NoncombatMoveExecutor; verify it returns 200 + ready envelope
+    final SessionRegistry registry = newRegistry();
+    final Session s = newSession(registry);
+    final NoncombatMovePlan fixedPlan = new NoncombatMovePlan(
+        List.of(new CombatMoveOrder(List.of("unit-2"), "Germany", "Eastern Europe")));
+
+    final DecisionHandler h = new DecisionHandler(
+        registry,
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> fixedPlan);
+
+    final FakeHttpExchange ex = new FakeHttpExchange(
+        "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("noncombat-move"));
+    h.handle(ex);
+
+    assertEquals(200, ex.responseCode(), "noncombat-move must return 200");
+    final JsonNode root = responseJson(ex);
+    assertEquals("ready", root.path("status").asText());
+    assertEquals("noncombat-move", root.path("plan").path("kind").asText());
+    assertTrue(root.path("plan").has("moves"), "plan must have 'moves'");
   }
 
   @Test

@@ -178,9 +178,9 @@ class DecisionHandlerTest {
 
   @Test
   void offensiveKinds_return501() throws Exception {
-    // purchase and combat-move are now wired to real executors (return 200); only the remaining
-    // offensive kinds that are still unimplemented return 501.
-    for (final String kind : new String[] {"noncombat-move", "place"}) {
+    // purchase, combat-move, and noncombat-move are now wired to real executors (return 200);
+    // only the remaining offensive kinds that are still unimplemented return 501.
+    for (final String kind : new String[] {"place"}) {
       final SessionRegistry registry = newRegistry();
       final Session s = newSession(registry);
       final DecisionHandler h =
