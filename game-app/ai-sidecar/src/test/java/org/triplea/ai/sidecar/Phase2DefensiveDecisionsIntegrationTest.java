@@ -58,20 +58,19 @@ class Phase2DefensiveDecisionsIntegrationTest {
     // Create a session for the DEFENDER — production path: defender is queried while the
     // attacker holds the top-level turn (ctx.currentPlayer = attacker) and the defender is
     // in an activePlayers stage.
+    final String gameId = "integration-defensive";
+    sessionId = gameId + ":" + DEFENDER;
     final HttpResponse<String> create =
         client.send(
-            HttpRequest.newBuilder(URI.create(base + "/session"))
+            HttpRequest.newBuilder(URI.create(base + "/sessions"))
                 .header("Authorization", auth)
                 .POST(
                     HttpRequest.BodyPublishers.ofString(
-                        "{\"gameId\":\"integration-defensive\",\"nation\":\""
-                            + DEFENDER
-                            + "\",\"seed\":42}"))
+                        "{\"sessionId\":\"" + sessionId + "\",\"gameId\":\"" + gameId
+                            + "\",\"nation\":\"" + DEFENDER + "\",\"seed\":42}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
     assertEquals(200, create.statusCode(), "Session create must return 200");
-    sessionId = extractField(create.body(), "sessionId");
-    assertNotNull(sessionId, "sessionId must be present in create response");
   }
 
   @AfterAll

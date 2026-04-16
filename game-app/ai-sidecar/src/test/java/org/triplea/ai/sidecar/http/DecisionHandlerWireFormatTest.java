@@ -95,7 +95,7 @@ class DecisionHandlerWireFormatTest {
   }
 
   private Session newSession(final SessionRegistry registry) {
-    return registry.createOrGet(new SessionKey("g-1", "Germans"), 42L);
+    return registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
   }
 
   private DecisionHandler stubHandler(

@@ -11,14 +11,17 @@ class JsonBodiesTest {
   void readValueParsesKnownDto() throws Exception {
     final SessionCreateRequest r =
         JsonBodies.readValue(
-            "{\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":7}", SessionCreateRequest.class);
+            "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":7}",
+            SessionCreateRequest.class);
+    assertEquals("g-1:Germans", r.sessionId());
     assertEquals("g-1", r.gameId());
   }
 
   @Test
   void writeValueSerializes() throws Exception {
-    final String s = JsonBodies.writeValue(new SessionCreateRequest("g-1", "Germans", 7));
+    final String s = JsonBodies.writeValue(new SessionCreateRequest("g-1:Germans", "g-1", "Germans", 7));
     assertTrue(s.contains("\"gameId\":\"g-1\""));
+    assertTrue(s.contains("\"sessionId\":\"g-1:Germans\""));
   }
 
   @Test

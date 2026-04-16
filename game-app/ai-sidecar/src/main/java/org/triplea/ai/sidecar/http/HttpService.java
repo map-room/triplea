@@ -17,11 +17,16 @@ public final class HttpService {
 
   public static HttpService start(final SidecarConfig cfg, final SessionRegistry registry)
       throws IOException {
-    final HttpServer server = HttpServer.create(new InetSocketAddress(cfg.bindHost(), cfg.port()), 0);
+    final HttpServer server =
+        HttpServer.create(new InetSocketAddress(cfg.bindHost(), cfg.port()), 0);
     final AuthFilter auth = new AuthFilter(cfg.authToken());
 
     server.createContext("/health", new HealthHandler());
-    registerAuthed(server, "/session", new SessionCreateHandler(registry), auth);
+
+    // v2 contract: POST /sessions (plural, deterministic sessionId)
+    registerAuthed(server, "/sessions", new SessionCreateHandler(registry), auth);
+
+    // Per-session sub-paths: /session/{id}/update, /session/{id}/decision, DELETE /session/{id}
     registerAuthed(server, "/session/", new CompositeSessionHandler(registry), auth);
 
     server.setExecutor(null);
@@ -38,7 +43,10 @@ public final class HttpService {
   }
 
   private static void registerAuthed(
-      final HttpServer server, final String path, final HttpHandler handler, final AuthFilter auth) {
+      final HttpServer server,
+      final String path,
+      final HttpHandler handler,
+      final AuthFilter auth) {
     server.createContext(
         path,
         exchange -> {
