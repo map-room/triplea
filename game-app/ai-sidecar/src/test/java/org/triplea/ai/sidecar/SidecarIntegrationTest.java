@@ -8,10 +8,12 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.http.HttpService;
 
@@ -23,6 +25,8 @@ class SidecarIntegrationTest {
       "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
           + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}}";
 
+  @TempDir Path tempDir;
+
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
@@ -31,7 +35,10 @@ class SidecarIntegrationTest {
   @Test
   void fullLifecycleRoundTrip() throws Exception {
     final HttpService svc =
-        SidecarMain.startForTest(Map.of("SIDECAR_BIND_HOST", "127.0.0.1", "SIDECAR_PORT", "0"));
+        SidecarMain.startForTest(Map.of(
+            "SIDECAR_BIND_HOST", "127.0.0.1",
+            "SIDECAR_PORT", "0",
+            "SIDECAR_DATA_DIR", tempDir.toString()));
     try {
       final int port = svc.boundPort();
       final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();

@@ -86,7 +86,11 @@ public final class SessionStore {
       return result;
     }
     try {
-      Files.walk(dataDir)
+      // Only read files at exactly depth 2 (dataDir/{gameId}/{nation}.json).
+      // The snapshots/ subdirectory (written by ProSessionSnapshotStore) is at depth 1
+      // and its files are a different schema — skip them by constraining the walk depth.
+      Files.walk(dataDir, 2)
+          .filter(p -> p.getNameCount() == dataDir.getNameCount() + 2)
           .filter(p -> p.toString().endsWith(".json") && !p.toString().endsWith(".tmp"))
           .forEach(p -> {
             try {
