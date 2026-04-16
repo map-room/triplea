@@ -288,6 +288,26 @@ public abstract class AbstractProAi extends AbstractAi {
   }
 
   /**
+   * Public bridge to the {@code protected} {@link #move} entry point for the AI sidecar's
+   * combat-move phase.
+   *
+   * <p>The sidecar's {@code CombatMoveExecutor} lives in a separate package and therefore cannot
+   * invoke {@link #move} directly. This method is a thin delegation with no additional behaviour —
+   * keep it that way. All combat-move logic belongs in {@link #move}.
+   *
+   * <p>When {@code storedCombatMoveMap} has been restored from a {@link
+   * games.strategy.triplea.ai.pro.data.ProSessionSnapshot} before this call, {@link #move} routes
+   * to {@code ProCombatMoveAi#doMove(storedCombatMoveMap, delegate, data, player)} and clears the
+   * stored map — exactly the same path taken in a normal in-process turn.
+   */
+  public void invokeCombatMoveForSidecar(
+      final games.strategy.triplea.delegate.remote.IMoveDelegate delegate,
+      final GameData data,
+      final GamePlayer player) {
+    move(/* nonCombat= */ false, delegate, data, player);
+  }
+
+  /**
    * Projects the three stored ProAi maps into a {@link ProSessionSnapshot} for persistence across
    * HTTP request boundaries.
    *
@@ -412,6 +432,15 @@ public abstract class AbstractProAi extends AbstractAi {
     if (storedPurchaseTerritories == null && !snap.purchaseTerritories().isEmpty()) {
       storedPurchaseTerritories = restorePurchaseMap(snap.purchaseTerritories(), data);
     }
+  }
+
+  /**
+   * Returns {@code true} if {@code storedCombatMoveMap} has not been populated yet (either by a
+   * purchase-phase think or by {@link #restoreCombatMoveMapFromSnapshot}). Used by
+   * {@code CombatMoveExecutor} as a belt-and-suspenders guard before dispatching.
+   */
+  public boolean storedCombatMoveMapIsNull() {
+    return storedCombatMoveMap == null;
   }
 
   private static Map<Territory, ProTerritory> restoreTerritoryMap(

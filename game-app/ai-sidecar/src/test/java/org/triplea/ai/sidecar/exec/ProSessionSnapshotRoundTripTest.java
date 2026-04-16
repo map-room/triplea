@@ -226,6 +226,65 @@ class ProSessionSnapshotRoundTripTest {
         "restoreCombatMoveMapFromSnapshot must populate storedCombatMoveMap");
   }
 
+  /**
+   * Stale-transport resilience: a {@code storedCombatMoveMap} snapshot whose
+   * {@code amphibAttackMap} references a transport UUID that is absent from the live
+   * {@link GameData} must not throw — the defensive drop in
+   * {@link AbstractProAi#restoreCombatMoveMapFromSnapshot} silently omits that entry.
+   */
+  @Test
+  void staleCombatMoveMapTransportUuidIsDroppedSilently() {
+    final String staleTransportUuid = UUID.randomUUID().toString();
+    final ProTerritorySnapshot snapWithStale = new ProTerritorySnapshot(
+        List.of(),
+        List.of(),
+        // amphibAttackMap carries a stale transport UUID
+        Map.of(staleTransportUuid, List.of(UUID.randomUUID().toString())),
+        Map.of(staleTransportUuid, "Sea Zone 5"),
+        Map.of());
+
+    final ProSessionSnapshot snap = new ProSessionSnapshot(
+        Map.of("Germany", snapWithStale),
+        Map.of(),
+        Map.of(),
+        Map.of());
+
+    final ProAi freshProAi = new ProAi("test-stale", "Germans");
+    final GameData data;
+    try {
+      data = CanonicalGameData.load().cloneForSession();
+    } catch (final Exception e) {
+      throw new RuntimeException(e);
+    }
+
+    // Must not throw even though the transport UUID is unknown in GameData
+    freshProAi.restoreCombatMoveMapFromSnapshot(snap, data);
+
+    // storedCombatMoveMap should be populated (the territory entry survives)
+    final java.lang.reflect.Field combatField;
+    try {
+      combatField = AbstractProAi.class.getDeclaredField("storedCombatMoveMap");
+      combatField.setAccessible(true);
+      final Object restored = combatField.get(freshProAi);
+      assertNotNull(restored, "storedCombatMoveMap must be populated even when transport is stale");
+      // The territory entry is present, but the amphibAttackMap for it must be empty
+      // (stale transport was dropped)
+      @SuppressWarnings("unchecked")
+      final java.util.Map<games.strategy.engine.data.Territory,
+          games.strategy.triplea.ai.pro.data.ProTerritory> combatMap =
+          (java.util.Map<games.strategy.engine.data.Territory,
+              games.strategy.triplea.ai.pro.data.ProTerritory>) restored;
+      assertFalse(combatMap.isEmpty(),
+          "storedCombatMoveMap must have an entry for Eastern Germany");
+      final games.strategy.triplea.ai.pro.data.ProTerritory pt =
+          combatMap.values().iterator().next();
+      assertTrue(pt.getAmphibAttackMap().isEmpty(),
+          "stale transport entry must be absent from restored amphibAttackMap");
+    } catch (final Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   private static List<Field> getAllFields(final Class<?> cls) {
     final List<Field> fields = new ArrayList<>(Arrays.asList(cls.getDeclaredFields()));
     Class<?> parent = cls.getSuperclass();
