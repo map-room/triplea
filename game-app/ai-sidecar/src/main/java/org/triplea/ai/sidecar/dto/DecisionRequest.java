@@ -12,7 +12,7 @@ import org.triplea.ai.sidecar.wire.WireState;
   @JsonSubTypes.Type(value = PurchaseRequest.class, name = "purchase"),
   @JsonSubTypes.Type(value = CombatMoveRequest.class,     name = "combat-move"),
   @JsonSubTypes.Type(value = NoncombatMoveRequest.class,  name = "noncombat-move"),
-  @JsonSubTypes.Type(value = OtherOffensiveRequest.class, name = "place"),
+  @JsonSubTypes.Type(value = PlaceRequest.class,          name = "place"),
 })
 public sealed interface DecisionRequest
     permits SelectCasualtiesRequest,
@@ -21,6 +21,7 @@ public sealed interface DecisionRequest
         PurchaseRequest,
         CombatMoveRequest,
         NoncombatMoveRequest,
+        PlaceRequest,
         OtherOffensiveRequest {
   WireState state();
 }

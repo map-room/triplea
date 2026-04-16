@@ -21,6 +21,9 @@ import org.triplea.ai.sidecar.dto.CombatMovePlan;
 import org.triplea.ai.sidecar.dto.CombatMoveRequest;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.NoncombatMoveRequest;
+import org.triplea.ai.sidecar.dto.PlaceOrder;
+import org.triplea.ai.sidecar.dto.PlacePlan;
+import org.triplea.ai.sidecar.dto.PlaceRequest;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
@@ -279,6 +282,7 @@ class DecisionHandlerWireFormatTest {
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> fixedPlan,
+        (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); });
 
     final FakeHttpExchange ex = new FakeHttpExchange(
@@ -308,7 +312,8 @@ class DecisionHandlerWireFormatTest {
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
-        (session, req) -> fixedPlan);
+        (session, req) -> fixedPlan,
+        (session, req) -> { throw new AssertionError(); });
 
     final FakeHttpExchange ex = new FakeHttpExchange(
         "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("noncombat-move"));
@@ -322,31 +327,35 @@ class DecisionHandlerWireFormatTest {
   }
 
   @Test
-  void place_501_wireShape() throws Exception {
-    assertOffensive501Shape("place");
-  }
-
-  private void assertOffensive501Shape(final String kind) throws Exception {
+  void place_success_wireShape() throws Exception {
+    // place is now wired to PlaceExecutor; verify it returns 200 + ready envelope
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
-    final DecisionHandler h = stubHandler(
+    final PlacePlan fixedPlan = new PlacePlan(
+        List.of(new PlaceOrder("Germany", List.of("infantry", "infantry"))));
+
+    final DecisionHandler h = new DecisionHandler(
         registry,
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
-        (session, req) -> { throw new AssertionError(); });
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> fixedPlan);
 
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", offensiveBody(kind));
+    final FakeHttpExchange ex = new FakeHttpExchange(
+        "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("place"));
     h.handle(ex);
 
-    assertEquals(501, ex.responseCode(), "kind=" + kind);
+    assertEquals(200, ex.responseCode(), "place must return 200");
     final JsonNode root = responseJson(ex);
-
-    assertEquals("error", root.path("status").asText(), "status must be 'error'; kind=" + kind);
-    assertEquals("not-implemented", root.path("error").asText(), "error code; kind=" + kind);
-    assertEquals(kind, root.path("kind").asText(), "kind must round-trip; kind=" + kind);
-    assertFalse(root.has("plan"), "error body must not have 'plan'; kind=" + kind);
-    assertFalse(root.has("message"), "error body must not have 'message'; kind=" + kind);
+    assertEquals("ready", root.path("status").asText());
+    assertEquals("place", root.path("plan").path("kind").asText());
+    assertTrue(root.path("plan").has("placements"), "plan must have 'placements'");
+    assertEquals(1, root.path("plan").path("placements").size(), "one placement entry");
+    assertEquals("Germany", root.path("plan").path("placements").get(0).path("territoryName").asText());
+    assertTrue(root.path("plan").path("placements").get(0).path("unitTypes").isArray());
   }
 
   // ---------------------------------------------------------------------
