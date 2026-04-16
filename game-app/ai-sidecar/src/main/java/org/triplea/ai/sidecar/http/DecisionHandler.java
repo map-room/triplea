@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import org.triplea.ai.sidecar.dto.CombatMovePlan;
+import org.triplea.ai.sidecar.dto.CombatMoveRequest;
 import org.triplea.ai.sidecar.dto.DecisionPlan;
 import org.triplea.ai.sidecar.dto.DecisionRequest;
 import org.triplea.ai.sidecar.dto.OtherOffensiveRequest;
@@ -17,6 +19,7 @@ import org.triplea.ai.sidecar.dto.ScramblePlan;
 import org.triplea.ai.sidecar.dto.ScrambleRequest;
 import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
 import org.triplea.ai.sidecar.dto.SelectCasualtiesRequest;
+import org.triplea.ai.sidecar.exec.CombatMoveExecutor;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
 import org.triplea.ai.sidecar.exec.PurchaseExecutor;
 import org.triplea.ai.sidecar.exec.RetreatQueryExecutor;
@@ -35,7 +38,7 @@ import org.triplea.ai.sidecar.session.SessionRegistry;
  * switch that picks the matching executor; the returned {@link DecisionPlan} is wrapped in a
  * {@code {"status":"ready","plan":{...}}} envelope and sent as the 200 response body.
  *
- * <p>Offensive kinds (purchase/combat-move/noncombat-move/place) return 501 with a
+ * <p>Offensive kinds not yet implemented (noncombat-move/place) return 501 with a
  * {@code {"status":"error","error":"not-implemented","kind":"<kind>"}} body.
  */
 public final class DecisionHandler implements HttpHandler {
@@ -48,6 +51,7 @@ public final class DecisionHandler implements HttpHandler {
   private final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor;
   private final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor;
   private final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor;
+  private final DecisionExecutor<CombatMoveRequest, CombatMovePlan> combatMoveExecutor;
 
   /** Production constructor — wires the real Phase-2 and Phase-3 executors. */
   public DecisionHandler(final SessionRegistry registry) {
@@ -56,7 +60,8 @@ public final class DecisionHandler implements HttpHandler {
         new SelectCasualtiesExecutor(),
         new RetreatQueryExecutor(),
         new ScrambleExecutor(),
-        new PurchaseExecutor(registry.snapshotStore()));
+        new PurchaseExecutor(registry.snapshotStore()),
+        new CombatMoveExecutor(registry.snapshotStore()));
   }
 
   /**
@@ -74,21 +79,46 @@ public final class DecisionHandler implements HttpHandler {
         selectCasualtiesExecutor,
         retreatQueryExecutor,
         scrambleExecutor,
-        new PurchaseExecutor(snapshotStore));
+        new PurchaseExecutor(snapshotStore),
+        new CombatMoveExecutor(snapshotStore));
   }
 
-  /** Test constructor — accepts executor stubs so handler logic can be exercised in isolation. */
+  /**
+   * Test constructor — accepts executor stubs so handler logic can be exercised in isolation.
+   * Combat-move defaults to a stub that throws {@link AssertionError}; use the 6-arg overload to
+   * inject a real or custom combat-move executor.
+   */
   public DecisionHandler(
       final SessionRegistry registry,
       final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> selectCasualtiesExecutor,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor) {
+    this(
+        registry,
+        selectCasualtiesExecutor,
+        retreatQueryExecutor,
+        scrambleExecutor,
+        purchaseExecutor,
+        (session, req) -> {
+          throw new AssertionError("CombatMoveExecutor was called unexpectedly");
+        });
+  }
+
+  /** Test constructor — full control over all executors. */
+  public DecisionHandler(
+      final SessionRegistry registry,
+      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> selectCasualtiesExecutor,
+      final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
+      final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
+      final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor,
+      final DecisionExecutor<CombatMoveRequest, CombatMovePlan> combatMoveExecutor) {
     this.registry = registry;
     this.selectCasualtiesExecutor = selectCasualtiesExecutor;
     this.retreatQueryExecutor = retreatQueryExecutor;
     this.scrambleExecutor = scrambleExecutor;
     this.purchaseExecutor = purchaseExecutor;
+    this.combatMoveExecutor = combatMoveExecutor;
   }
 
   @Override
@@ -139,6 +169,10 @@ public final class DecisionHandler implements HttpHandler {
         }
         case PurchaseRequest pr -> {
           final PurchasePlan plan = purchaseExecutor.execute(session.get(), pr);
+          writeJson(exchange, 200, JsonBodies.readyBody(plan));
+        }
+        case CombatMoveRequest cm -> {
+          final CombatMovePlan plan = combatMoveExecutor.execute(session.get(), cm);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
         case OtherOffensiveRequest oo -> writeJson(

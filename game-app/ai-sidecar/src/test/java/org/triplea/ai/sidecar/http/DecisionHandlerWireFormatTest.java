@@ -16,6 +16,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.dto.CombatMoveOrder;
+import org.triplea.ai.sidecar.dto.CombatMovePlan;
+import org.triplea.ai.sidecar.dto.CombatMoveRequest;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
@@ -259,8 +262,32 @@ class DecisionHandlerWireFormatTest {
   // ---------------------------------------------------------------------
 
   @Test
-  void combatMove_501_wireShape() throws Exception {
-    assertOffensive501Shape("combat-move");
+  void combatMove_success_wireShape() throws Exception {
+    // combat-move is now wired to CombatMoveExecutor; verify it returns 200 + ready envelope
+    final SessionRegistry registry = newRegistry();
+    final Session s = newSession(registry);
+    final CombatMovePlan fixedPlan = new CombatMovePlan(
+        List.of(new CombatMoveOrder(List.of("unit-1"), "Germany", "Poland")),
+        List.of());
+
+    final DecisionHandler h = new DecisionHandler(
+        registry,
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
+        (session, req) -> fixedPlan);
+
+    final FakeHttpExchange ex = new FakeHttpExchange(
+        "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("combat-move"));
+    h.handle(ex);
+
+    assertEquals(200, ex.responseCode(), "combat-move must return 200");
+    final JsonNode root = responseJson(ex);
+    assertEquals("ready", root.path("status").asText());
+    assertEquals("combat-move", root.path("plan").path("kind").asText());
+    assertTrue(root.path("plan").has("moves"), "plan must have 'moves'");
+    assertTrue(root.path("plan").has("sbrMoves"), "plan must have 'sbrMoves'");
   }
 
   @Test

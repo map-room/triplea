@@ -10,7 +10,7 @@ import org.triplea.ai.sidecar.wire.WireState;
   @JsonSubTypes.Type(value = RetreatQueryRequest.class, name = "retreat-or-press"),
   @JsonSubTypes.Type(value = ScrambleRequest.class, name = "scramble"),
   @JsonSubTypes.Type(value = PurchaseRequest.class, name = "purchase"),
-  @JsonSubTypes.Type(value = OtherOffensiveRequest.class, name = "combat-move"),
+  @JsonSubTypes.Type(value = CombatMoveRequest.class,     name = "combat-move"),
   @JsonSubTypes.Type(value = OtherOffensiveRequest.class, name = "noncombat-move"),
   @JsonSubTypes.Type(value = OtherOffensiveRequest.class, name = "place"),
 })
@@ -19,6 +19,7 @@ public sealed interface DecisionRequest
         RetreatQueryRequest,
         ScrambleRequest,
         PurchaseRequest,
+        CombatMoveRequest,
         OtherOffensiveRequest {
   WireState state();
 }
