@@ -261,6 +261,15 @@ public final class WireStateApplier {
         throw new IllegalArgumentException(
             "Unknown unit type in WireState: " + wu.unitType());
       }
+      // Per-unit owner: use the explicit owner from the wire when present, otherwise fall back
+      // to the territory owner. The fallback preserves backward compatibility with clients that
+      // do not send an owner field. The per-unit owner is critical for sea zones (territory
+      // owner = Neutral) where multiple nations may have ships — without it the ProAI sees all
+      // naval units as belonging to Neutral and misidentifies allies as enemies (#1776).
+      final GamePlayer unitOwner =
+          (wu.owner() != null && !wu.owner().isEmpty())
+              ? resolvePlayer(gameData, wu.owner())
+              : wireOwner;
       final Unit existing = findUnitById(territory.getUnits(), uuid);
       final Unit unit;
       if (existing != null) {
@@ -271,7 +280,7 @@ public final class WireStateApplier {
           existingUnitHitDeltas.put(unit, wu.hitsTaken());
         }
       } else {
-        unit = new Unit(uuid, type, wireOwner, gameData);
+        unit = new Unit(uuid, type, unitOwner, gameData);
         // Register with the central UnitsList so {@code GameData.getUnits().get(uuid)}
         // resolves to this unit. The raw {@link Unit#Unit(UUID, UnitType, GamePlayer,
         // GameData)} constructor does not do this registration — only {@link
