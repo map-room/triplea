@@ -308,6 +308,70 @@ class WireStateApplierTest {
         .hasMessageContaining("deathstar");
   }
 
+  // ---------- per-unit owner (#1776 regression fence) ----------
+
+  /**
+   * Sea zone with ships from two different nations: the unit's owner must come from the
+   * per-unit {@code owner} field, not the territory owner (Neutral). This is the regression
+   * fence for the bug where ProAI saw Italian ally ships as enemies because they were all
+   * attributed to Neutral.
+   */
+  @Test
+  void perUnitOwner_seaZoneMultiNation_assignsCorrectOwners() {
+    final GameData gd = fresh();
+    // 112 Sea Zone: territory owner is Germans but the cruiser belongs to Italians.
+    // This mirrors the bug scenario where sea zones hold ships from allied nations.
+    final WireUnit germanSub =
+        WireUnit.of("u-sub-1", "submarine", 0, 0, 0, "Germans");
+    final WireUnit italianCruiser =
+        WireUnit.of("u-cru-1", "cruiser", 0, 0, 0, "Italians");
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(germanSub, italianCruiser))),
+            List.of(),
+            1,
+            "combat",
+            "Germans");
+
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    WireStateApplier.apply(gd, wire, idMap);
+
+    final Territory seaZone = gd.getMap().getTerritoryOrNull("112 Sea Zone");
+    assertThat(seaZone).isNotNull();
+    final Map<String, String> unitOwners =
+        seaZone.getUnits().stream()
+            .collect(Collectors.toMap(
+                u -> u.getType().getName(),
+                u -> u.getOwner().getName()));
+    assertThat(unitOwners).containsEntry("submarine", "Germans");
+    assertThat(unitOwners).containsEntry("cruiser", "Italians");
+  }
+
+  /**
+   * Backward compat: units without an owner field ({@code owner} null) fall back to territory
+   * owner. No crash, correct assignment.
+   */
+  @Test
+  void perUnitOwner_nullOwner_fallsBackToTerritoryOwner() {
+    final GameData gd = fresh();
+    // Germany is a land territory owned by Germans.
+    final WireUnit infantry = new WireUnit("u-inf-1", "infantry", 0, 0); // no owner field
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("Germany", "Germans", List.of(infantry))),
+            List.of(),
+            1,
+            "combat",
+            "Germans");
+
+    WireStateApplier.apply(gd, wire, freshIdMap());
+
+    final Territory germany = gd.getMap().getTerritoryOrNull("Germany");
+    assertThat(germany).isNotNull();
+    assertThat(germany.getUnits()).hasSize(1);
+    assertThat(germany.getUnits().iterator().next().getOwner().getName()).isEqualTo("Germans");
+  }
+
   @Test
   void techFlag_setsAttachmentProperty() {
     final GameData gd = fresh();
