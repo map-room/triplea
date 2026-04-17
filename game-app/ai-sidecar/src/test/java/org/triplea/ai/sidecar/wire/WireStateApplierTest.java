@@ -373,6 +373,67 @@ class WireStateApplierTest {
   }
 
   @Test
+  void appliesMovesUsedToAlreadyMoved_newUnit() {
+    // Regression: WireUnit.movesUsed (the moves a unit has already spent this
+    // turn on the Map Room side) was parsed from JSON but never applied to
+    // TripleA's Unit.alreadyMoved field. Pro AI then planned movement as if
+    // every air unit had its full movement budget left, generating moves the
+    // engine rejects (e.g., trying to land a tac bomber 5 hexes away when
+    // only 1 move remains).
+    final GameData gd = fresh();
+    final WireState wire =
+        new WireState(
+            List.of(
+                new WireTerritory(
+                    "Germany",
+                    "Germans",
+                    List.of(new WireUnit("u-tac-1", "tactical_bomber", 0, 4)))),
+            List.of(),
+            1,
+            "noncombat",
+            "Germans");
+    WireStateApplier.apply(gd, wire, freshIdMap());
+    final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
+    final Unit tac = germany.getUnits().iterator().next();
+    assertThat(tac.getAlreadyMoved()).isEqualTo(new java.math.BigDecimal(4));
+  }
+
+  @Test
+  void appliesMovesUsedToAlreadyMoved_existingUnit() {
+    // Same regression, exercising the existing-unit branch (apply called twice
+    // with different movesUsed values for the same unitId).
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final WireState first =
+        new WireState(
+            List.of(
+                new WireTerritory(
+                    "Germany",
+                    "Germans",
+                    List.of(new WireUnit("u-fighter-1", "fighter", 0, 0)))),
+            List.of(),
+            1,
+            "combat",
+            "Germans");
+    WireStateApplier.apply(gd, first, idMap);
+    final WireState second =
+        new WireState(
+            List.of(
+                new WireTerritory(
+                    "Germany",
+                    "Germans",
+                    List.of(new WireUnit("u-fighter-1", "fighter", 0, 3)))),
+            List.of(),
+            1,
+            "noncombat",
+            "Germans");
+    WireStateApplier.apply(gd, second, idMap);
+    final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
+    final Unit fighter = germany.getUnits().iterator().next();
+    assertThat(fighter.getAlreadyMoved()).isEqualTo(new java.math.BigDecimal(3));
+  }
+
+  @Test
   void techFlag_setsAttachmentProperty() {
     final GameData gd = fresh();
     final WireState wire =

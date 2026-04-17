@@ -272,12 +272,23 @@ public final class WireStateApplier {
               : wireOwner;
       final Unit existing = findUnitById(territory.getUnits(), uuid);
       final Unit unit;
+      final java.math.BigDecimal desiredAlreadyMoved = java.math.BigDecimal.valueOf(wu.movesUsed());
       if (existing != null) {
         unit = existing;
         if (wu.hitsTaken() != unit.getHits()) {
           // Route through ChangeFactory.unitsHit so game-data listeners fire. The IntegerMap
           // value is the absolute new hit count (ChangeFactory.unitsHit sets, not adds).
           existingUnitHitDeltas.put(unit, wu.hitsTaken());
+        }
+        // Pro AI's Non-Combat Move planner consults Unit.alreadyMoved when picking
+        // landing destinations for air units (movesLeft = maxMovementAllowed -
+        // alreadyMoved). Without this sync, every plane appears unmoved and the AI
+        // generates landings the engine rejects (e.g., a tac bomber with 1 move
+        // left planning a 5-hex landing).
+        if (unit.getAlreadyMoved().compareTo(desiredAlreadyMoved) != 0) {
+          out.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, desiredAlreadyMoved, Unit.PropertyName.ALREADY_MOVED));
         }
       } else {
         unit = new Unit(uuid, type, unitOwner, gameData);
@@ -290,6 +301,11 @@ public final class WireStateApplier {
         if (wu.hitsTaken() != unit.getHits()) {
           // Safe: unit is not yet attached to any territory, no listeners to bypass.
           unit.setHits(wu.hitsTaken());
+        }
+        // Same rationale as the existing-unit branch above; safe to set directly
+        // because the unit is not yet attached to a territory.
+        if (unit.getAlreadyMoved().compareTo(desiredAlreadyMoved) != 0) {
+          unit.setAlreadyMoved(desiredAlreadyMoved);
         }
       }
       desired.add(unit);
