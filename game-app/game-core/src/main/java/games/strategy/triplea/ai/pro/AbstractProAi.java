@@ -309,6 +309,20 @@ public abstract class AbstractProAi extends AbstractAi {
   }
 
   /**
+   * Sidecar-only bridge: run politics planning against the live PoliticsDelegate.
+   * Mirrors {@link #invokeCombatMoveForSidecar} — kept thin so the sidecar boundary
+   * stays the only TripleA-side change for politics support.
+   *
+   * <p>Note: this mutates the in-memory RelationshipTracker via the real delegate's
+   * attemptAction calls. The sidecar rebuilds GameData from wire each turn, so this
+   * within-turn drift is intentional — combat-move planning that follows must see the
+   * post-politics graph for declared wars to result in actual attacks.
+   */
+  public void invokePoliticsForSidecar() {
+    politicsAi.politicalActions();
+  }
+
+  /**
    * Public bridge to the {@code protected} {@link #move} entry point for the AI sidecar's
    * noncombat-move phase.
    *
