@@ -399,7 +399,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combatMove",
-            "Germans");
+            "Germans",
+            List.of());
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -420,7 +421,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "nonCombatMove",
-            "Germans");
+            "Germans",
+            List.of());
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -443,7 +445,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combatMove",
-            "Germans");
+            "Germans",
+            List.of());
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -545,7 +548,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combatMove",
-            "Germans");
+            "Germans",
+            List.of());
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -566,7 +570,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combatMove",
-            "Germans");
+            "Germans",
+            List.of());
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -587,7 +592,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combatMove",
-            "Germans");
+            "Germans",
+            List.of());
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
