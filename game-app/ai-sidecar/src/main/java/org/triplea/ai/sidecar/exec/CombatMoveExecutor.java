@@ -90,12 +90,18 @@ public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequ
     // Step 4: submit combat-move to the session's single-threaded offensive executor.
     // Politics was already run by PoliticsExecutor in the preceding /decide call; the WireState
     // received here already reflects the post-declaration relationship graph.
+    //
+    // reinitializeProDataForSidecar() re-binds proData.getData() to the session GameData
+    // before planning — otherwise purchase's simulation dataCopy leaks through and
+    // ProCombatMoveAi reads stale alreadyMoved values. Same pattern as PoliticsExecutor
+    // and NoncombatMoveExecutor.
     final RecordingMoveDelegate recorder = new RecordingMoveDelegate(proAi);
     final Future<Void> future =
         session
             .offensiveExecutor()
             .submit(
                 () -> {
+                  proAi.reinitializeProDataForSidecar();
                   proAi.invokeCombatMoveForSidecar(recorder, data, player);
                   return null;
                 });

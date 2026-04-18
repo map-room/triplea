@@ -86,13 +86,20 @@ public final class NoncombatMoveExecutor
               + " — purchase must run before noncombat-move");
     }
 
-    // Step 4: dispatch on the session's single-threaded offensive executor
+    // Step 4: dispatch on the session's single-threaded offensive executor.
+    // reinitializeProDataForSidecar() re-binds proData.getData() to the session GameData
+    // before planning — otherwise purchase's simulation dataCopy leaks through and
+    // ProNonCombatMoveAi reads stale alreadyMoved values, producing plans that move
+    // units the engine already recorded as spent (INVALID_MOVE: "<unit> already moved
+    // during combat move"). Same pattern applied to PoliticsExecutor and
+    // CombatMoveExecutor.
     final RecordingMoveDelegate recorder = new RecordingMoveDelegate(proAi);
     final Future<Void> future =
         session
             .offensiveExecutor()
             .submit(
                 () -> {
+                  proAi.reinitializeProDataForSidecar();
                   proAi.invokeNonCombatMoveForSidecar(recorder, data, player);
                   return null;
                 });
