@@ -84,6 +84,49 @@ class PoliticsObserverTest {
   }
 
   @Test
+  void filtersNonPrimaryNations_UKPacific() throws MutableProperty.InvalidValueException {
+    final GameData data = fresh();
+    // Japanese is the acting player declaring war on UK_Pacific (a TripleA split-UK faction
+    // not recognised by Map Room's engine). The observer must filter it out.
+    final GamePlayer japanese = data.getPlayerList().getPlayerId("Japanese");
+    final PoliticsObserver observer = PoliticsObserver.attach(data);
+
+    // Build an action: Japanese vs UK_Pacific → war.
+    final PoliticalActionAttachment action = buildWarAction(data, "Japanese", "UK_Pacific");
+    observer.recordAttempt(action);
+
+    assertThat(observer.toWarDeclarations(japanese)).isEmpty();
+    observer.detach();
+  }
+
+  @Test
+  void filtersNonPrimaryNations_Dutch() throws MutableProperty.InvalidValueException {
+    final GameData data = fresh();
+    final GamePlayer japanese = data.getPlayerList().getPlayerId("Japanese");
+    final PoliticsObserver observer = PoliticsObserver.attach(data);
+
+    final PoliticalActionAttachment action = buildWarAction(data, "Japanese", "Dutch");
+    observer.recordAttempt(action);
+
+    assertThat(observer.toWarDeclarations(japanese)).isEmpty();
+    observer.detach();
+  }
+
+  @Test
+  void keepsPrimaryNationsInWarDeclarations() throws MutableProperty.InvalidValueException {
+    final GameData data = fresh();
+    final GamePlayer japanese = data.getPlayerList().getPlayerId("Japanese");
+    final PoliticsObserver observer = PoliticsObserver.attach(data);
+
+    // British is a primary — must be kept.
+    final PoliticalActionAttachment action = buildWarAction(data, "Japanese", "British");
+    observer.recordAttempt(action);
+
+    assertThat(observer.toWarDeclarations(japanese)).containsExactly(new WarDeclaration("British"));
+    observer.detach();
+  }
+
+  @Test
   void capturedListIsAccessibleAfterDetach() throws MutableProperty.InvalidValueException {
     final GameData data = fresh();
     final GamePlayer germans = data.getPlayerList().getPlayerId("Germans");

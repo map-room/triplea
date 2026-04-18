@@ -6,6 +6,7 @@ import games.strategy.triplea.attachments.PoliticalActionAttachment;
 import games.strategy.triplea.delegate.PoliticsDelegate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.triplea.ai.sidecar.dto.WarDeclaration;
 
 /**
@@ -22,6 +23,17 @@ import org.triplea.ai.sidecar.dto.WarDeclaration;
  * {@link PoliticsDelegate} (or removes the observing one if there was no original).
  */
 public final class PoliticsObserver {
+
+  /**
+   * The 9 primary Map Room nations. TripleA's ww2global40_2nd_edition.xml contains split factions
+   * like {@code UK_Pacific} and {@code Dutch} that are not first-class players in Map Room's engine.
+   * War declarations against these non-primary names are rejected by Map Room with
+   * {@code ERROR: invalid move: declareWar args: <name>}. Filter them out here so only valid
+   * targets are returned by {@link #toWarDeclarations}.
+   */
+  private static final Set<String> MAP_ROOM_PRIMARY_NATIONS =
+      Set.of("Americans", "ANZAC", "British", "Chinese", "French",
+             "Germans", "Italians", "Japanese", "Russians");
 
   private final GameData gameData;
   private final PoliticsDelegate original;
@@ -96,11 +108,18 @@ public final class PoliticsObserver {
         final String p1 = change.player1.getName();
         final String p2 = change.player2.getName();
         final String acting = actingPlayer.getName();
+        final String target;
         if (acting.equals(p1)) {
-          out.add(new WarDeclaration(p2));
+          target = p2;
         } else if (acting.equals(p2)) {
-          out.add(new WarDeclaration(p1));
+          target = p1;
+        } else {
+          continue; // action didn't involve the acting player
         }
+        if (!MAP_ROOM_PRIMARY_NATIONS.contains(target)) {
+          continue; // non-primary (UK_Pacific, Dutch, etc.) — skip
+        }
+        out.add(new WarDeclaration(target));
       }
     }
     return out;
