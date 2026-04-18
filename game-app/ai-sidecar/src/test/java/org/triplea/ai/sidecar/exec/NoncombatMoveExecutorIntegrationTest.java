@@ -62,7 +62,7 @@ class NoncombatMoveExecutorIntegrationTest {
   }
 
   private static WireState wireState(final String phase, final String nation) {
-    return new WireState(List.of(), List.of(), 1, phase, nation);
+    return new WireState(List.of(), List.of(), 1, phase, nation, List.of());
   }
 
   // The StepNameMapper uses TripleA camelCase phase names: "purchase", "combatMove",

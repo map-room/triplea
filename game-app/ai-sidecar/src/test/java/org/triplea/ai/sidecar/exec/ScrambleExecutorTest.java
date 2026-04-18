@@ -81,7 +81,8 @@ class ScrambleExecutorTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     final ScrambleRequest req =
         new ScrambleRequest(
@@ -140,7 +141,8 @@ class ScrambleExecutorTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     final ScrambleRequest req =
         new ScrambleRequest(
@@ -188,7 +190,8 @@ class ScrambleExecutorTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     final ScrambleRequest req =
         new ScrambleRequest(
@@ -228,7 +231,8 @@ class ScrambleExecutorTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     final ScrambleRequest req =
         new ScrambleRequest(

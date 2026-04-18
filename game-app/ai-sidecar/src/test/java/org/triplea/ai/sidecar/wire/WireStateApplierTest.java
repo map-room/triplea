@@ -47,7 +47,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Russians");
+            "Russians",
+            List.of());
     WireStateApplier.apply(gd, wire, freshIdMap());
     assertThat(gd.getMap().getTerritoryOrThrow("Germany").getOwner().getName())
         .isEqualTo("Russians");
@@ -66,7 +67,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, wire, freshIdMap());
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     assertThat(germany.getUnits()).hasSize(1);
@@ -82,7 +84,8 @@ class WireStateApplierTest {
             List.of(new WirePlayer("Germans", 42, List.of(), false)),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, wire, freshIdMap());
     assertThat(
             gd.getPlayerList().getPlayerId("Germans").getResources().getQuantity("PUs"))
@@ -111,7 +114,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, wire, idMap);
 
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
@@ -150,7 +154,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, wire, idMap);
 
     assertThat(gd.getMap().getTerritoryOrThrow("France").getUnits()).hasSize(2);
@@ -176,7 +181,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, wire, idMap);
 
     final Territory wg = gd.getMap().getTerritoryOrThrow("Western Germany");
@@ -205,7 +211,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, a, idMap);
     assertThat(gd.getMap().getTerritoryOrThrow("Germany").getUnits()).hasSize(2);
 
@@ -219,7 +226,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Russians");
+            "Russians",
+            List.of());
     WireStateApplier.apply(gd, b, idMap);
 
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
@@ -244,7 +252,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, wire, idMap);
     final UUID first = idMap.get("u-inf-1");
 
@@ -268,7 +277,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     assertThatThrownBy(() -> WireStateApplier.apply(gd, wire, freshIdMap()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Atlantis");
@@ -283,7 +293,8 @@ class WireStateApplierTest {
             List.of(new WirePlayer("Martians", 42, List.of(), false)),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     assertThatThrownBy(() -> WireStateApplier.apply(gd, wire, freshIdMap()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Martians");
@@ -302,7 +313,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     assertThatThrownBy(() -> WireStateApplier.apply(gd, wire, freshIdMap()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("deathstar");
@@ -331,7 +343,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
@@ -362,7 +375,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     WireStateApplier.apply(gd, wire, freshIdMap());
 
@@ -473,7 +487,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "noncombat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, wire, freshIdMap());
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     final Unit tac = germany.getUnits().iterator().next();
@@ -496,7 +511,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, first, idMap);
     final WireState second =
         new WireState(
@@ -508,7 +524,8 @@ class WireStateApplierTest {
             List.of(),
             1,
             "noncombat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, second, idMap);
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     final Unit fighter = germany.getUnits().iterator().next();
@@ -524,7 +541,8 @@ class WireStateApplierTest {
             List.of(new WirePlayer("Germans", 30, List.of("heavyBomber"), false)),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     WireStateApplier.apply(gd, wire, freshIdMap());
     assertThat(gd.getPlayerList().getPlayerId("Germans").getTechAttachment().getHeavyBomber())
         .isTrue();

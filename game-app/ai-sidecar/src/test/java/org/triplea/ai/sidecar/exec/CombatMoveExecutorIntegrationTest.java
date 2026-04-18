@@ -63,12 +63,12 @@ class CombatMoveExecutorIntegrationTest {
     // Run purchase — this calls think() which populates storedCombatMoveMap
     final PurchaseExecutor purchaseExecutor = new PurchaseExecutor(store);
     purchaseExecutor.execute(session,
-        new PurchaseRequest(new WireState(List.of(), List.of(), 1, "purchase", "Germans")));
+        new PurchaseRequest(new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of())));
 
     // storedCombatMoveMap is now set; run combat-move on same session
     final CombatMoveExecutor combatMoveExecutor = new CombatMoveExecutor(store);
     final CombatMovePlan plan = combatMoveExecutor.execute(session,
-        new CombatMoveRequest(new WireState(List.of(), List.of(), 1, "combat-move", "Germans")));
+        new CombatMoveRequest(new WireState(List.of(), List.of(), 1, "combat-move", "Germans", List.of())));
 
     assertNotNull(plan);
     // Germans on turn 1 have combat moves (they border enemy territories)
@@ -82,10 +82,10 @@ class CombatMoveExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     new PurchaseExecutor(store).execute(session,
-        new PurchaseRequest(new WireState(List.of(), List.of(), 1, "purchase", "Germans")));
+        new PurchaseRequest(new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of())));
 
     final CombatMovePlan plan = new CombatMoveExecutor(store).execute(session,
-        new CombatMoveRequest(new WireState(List.of(), List.of(), 1, "combat-move", "Germans")));
+        new CombatMoveRequest(new WireState(List.of(), List.of(), 1, "combat-move", "Germans", List.of())));
 
     assertNotNull(plan, "plan must not be null");
   }

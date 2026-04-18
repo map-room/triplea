@@ -309,6 +309,40 @@ public abstract class AbstractProAi extends AbstractAi {
   }
 
   /**
+   * Sidecar-only bridge: run politics planning against the live PoliticsDelegate.
+   * Mirrors {@link #invokeCombatMoveForSidecar} — kept thin so the sidecar boundary
+   * stays the only TripleA-side change for politics support.
+   *
+   * <p>Note: this mutates the in-memory RelationshipTracker via the real delegate's
+   * attemptAction calls. The sidecar rebuilds GameData from wire each turn, so this
+   * within-turn drift is intentional — combat-move planning that follows must see the
+   * post-politics graph for declared wars to result in actual attacks.
+   *
+   * <p>Callers must invoke {@link #reinitializeProDataForSidecar()} immediately before
+   * this method so {@code proData.getData()} points at the session's live {@link GameData}
+   * (and thus the installed {@code ObservingPoliticsDelegate}) rather than a stale purchase
+   * simulation copy.
+   */
+  public void invokePoliticsForSidecar() {
+    politicsAi.politicalActions();
+  }
+
+  /**
+   * Sidecar-only bridge: re-bind {@link ProData} to the live session {@link GameData} before
+   * politics runs. The purchase phase leaves {@code proData} pointing at its simulation copy
+   * ({@code dataCopy}) via the last {@code proData.initializeSimulation} call; without
+   * re-initializing here, {@code proData.getData()} inside {@link ProPoliticsAi#politicalActions}
+   * resolves to {@code dataCopy} instead of the session {@link GameData}, so the politics
+   * delegate lookup misses the installed {@code ObservingPoliticsDelegate} and
+   * {@code attemptsLeftThisTurn=0} (already consumed during the purchase simulation) silently
+   * filters out every valid war action. Call this immediately before
+   * {@link #invokePoliticsForSidecar()} from the sidecar's PoliticsExecutor.
+   */
+  public void reinitializeProDataForSidecar() {
+    initializeData();
+  }
+
+  /**
    * Public bridge to the {@code protected} {@link #move} entry point for the AI sidecar's
    * noncombat-move phase.
    *

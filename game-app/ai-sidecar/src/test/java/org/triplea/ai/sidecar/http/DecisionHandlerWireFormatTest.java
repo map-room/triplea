@@ -281,6 +281,7 @@ class DecisionHandlerWireFormatTest {
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
         (session, req) -> fixedPlan,
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); });
@@ -312,6 +313,7 @@ class DecisionHandlerWireFormatTest {
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
         (session, req) -> fixedPlan,
         (session, req) -> { throw new AssertionError(); });
 
@@ -336,6 +338,7 @@ class DecisionHandlerWireFormatTest {
 
     final DecisionHandler h = new DecisionHandler(
         registry,
+        (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },

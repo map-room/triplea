@@ -65,7 +65,7 @@ class PlaceExecutorIntegrationTest {
   }
 
   private static WireState wireState(final String phase, final String nation) {
-    return new WireState(List.of(), List.of(), 1, phase, nation);
+    return new WireState(List.of(), List.of(), 1, phase, nation, List.of());
   }
 
   // TripleA camelCase phase names — must match StepNameMapper exactly

@@ -5,6 +5,7 @@ import games.strategy.engine.data.CompositeChange;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.GameStep;
+import games.strategy.engine.data.RelationshipType;
 import games.strategy.engine.data.Resource;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
@@ -82,6 +83,12 @@ public final class WireStateApplier {
     if (!changes.isEmpty()) {
       gameData.performChange(changes);
     }
+
+    // Hydrate RelationshipTracker directly — must happen before the politics step (Task 8) runs
+    // on this same GameData so that invokePoliticsForSidecar sees the current relationship graph.
+    // Direct setter is used (not ChangeFactory.relationshipChange) to ensure in-memory visibility
+    // without relying on change-listener ordering (see map-room#1824 phase-ordering constraint).
+    applyRelationships(gameData, wire);
 
     // Phase 3 branches: conquered-this-turn, factory operational damage, and round/step.
     // These run AFTER the main CompositeChange has been performed so that any units the
@@ -459,6 +466,52 @@ public final class WireStateApplier {
       throw new IllegalArgumentException("Unknown player in WireState: " + name);
     }
     return p;
+  }
+
+  /**
+   * Hydrate {@link games.strategy.engine.data.RelationshipTracker} from the wire's {@code
+   * relationships} list. Each pair is set unconditionally via the tracker's direct setter so the
+   * mutation is visible immediately to in-memory readers — the sidecar's politics step runs next
+   * on this same tracker and must see the current state (see map-room#1824 phase-ordering
+   * constraint).
+   *
+   * <p>Pairs whose nations don't exist in the loaded GameData are skipped with a warning
+   * (defensive — the TS side should already filter to TRIPLEA_KNOWN_PLAYERS, but stale fixtures
+   * shouldn't blow up the applier).
+   */
+  private static void applyRelationships(final GameData gameData, final WireState wire) {
+    if (wire.relationships().isEmpty()) {
+      return;
+    }
+    for (final WireRelationship rel : wire.relationships()) {
+      final GamePlayer a = gameData.getPlayerList().getPlayerId(rel.a());
+      final GamePlayer b = gameData.getPlayerList().getPlayerId(rel.b());
+      if (a == null || b == null) {
+        LOG.log(
+            Level.WARNING,
+            () -> "Skipping relationship for unknown player(s): " + rel.a() + " / " + rel.b());
+        continue;
+      }
+      final RelationshipType type = resolveRelationshipType(gameData, rel.kind());
+      if (type == null) {
+        LOG.log(Level.WARNING, () -> "Unknown relationship kind: " + rel.kind());
+        continue;
+      }
+      gameData.getRelationshipTracker().setRelationship(a, b, type);
+    }
+  }
+
+  /**
+   * Resolve a wire {@code kind} ("war" / "allied" / "neutral") to the engine's first {@link
+   * RelationshipType} whose archeType matches. The Global 1940 XML defines multiple subtypes per
+   * archetype; the first one found is the canonical inter-power type for that archetype.
+   */
+  private static RelationshipType resolveRelationshipType(
+      final GameData gameData, final String kind) {
+    return gameData.getRelationshipTypeList().getAllRelationshipTypes().stream()
+        .filter(r -> kind.equalsIgnoreCase(r.getRelationshipTypeAttachment().getArcheType()))
+        .findFirst()
+        .orElse(null);
   }
 
   // Map Room tech-flag name -> TechAttachment property name. Keep in sync with

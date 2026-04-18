@@ -42,7 +42,7 @@ class WireStateApplierPhase3Test {
   void appliesRoundAndStep() {
     final GameData gd = fresh();
     final WireState wire =
-        new WireState(List.of(), List.of(), 3, "purchase", "Germans");
+        new WireState(List.of(), List.of(), 3, "purchase", "Germans", List.of());
     WireStateApplier.apply(gd, wire, freshIdMap());
     assertThat(gd.getSequence().getRound()).isEqualTo(3);
     // Uniquely identify the step via its XML name attribute + player. GameStep.getDisplayName
@@ -58,7 +58,7 @@ class WireStateApplierPhase3Test {
     final WireTerritory egypt =
         new WireTerritory("Egypt", "Germans", List.of(), true);
     final WireState wire =
-        new WireState(List.of(egypt), List.of(), 3, "purchase", "Germans");
+        new WireState(List.of(egypt), List.of(), 3, "purchase", "Germans", List.of());
     WireStateApplier.apply(gd, wire, freshIdMap());
 
     final Territory egyptT = gd.getMap().getTerritoryOrThrow("Egypt");
@@ -78,7 +78,7 @@ class WireStateApplierPhase3Test {
     final WireTerritory wt =
         new WireTerritory("Germany", "Germans", List.of(wu), false);
     final WireState wire =
-        new WireState(List.of(wt), List.of(), 3, "purchase", "Germans");
+        new WireState(List.of(wt), List.of(), 3, "purchase", "Germans", List.of());
     WireStateApplier.apply(gd, wire, idMap);
 
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");

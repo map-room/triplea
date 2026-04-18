@@ -76,7 +76,8 @@ class RetreatQueryExecutorTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     final RetreatQueryRequest req =
         new RetreatQueryRequest(
@@ -115,7 +116,8 @@ class RetreatQueryExecutorTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     final RetreatQueryRequest req =
         new RetreatQueryRequest(
@@ -151,7 +153,8 @@ class RetreatQueryExecutorTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     final RetreatQueryRequest req =
         new RetreatQueryRequest(

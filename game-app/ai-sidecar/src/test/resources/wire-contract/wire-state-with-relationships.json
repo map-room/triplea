@@ -1,0 +1,24 @@
+{
+  "territories" : [ ],
+  "players" : [ ],
+  "round" : 3,
+  "phase" : "combat-move",
+  "currentPlayer" : "Germans",
+  "relationships" : [ {
+    "a" : "Americans",
+    "b" : "Germans",
+    "kind" : "war"
+  }, {
+    "a" : "British",
+    "b" : "Germans",
+    "kind" : "war"
+  }, {
+    "a" : "Germans",
+    "b" : "Italians",
+    "kind" : "allied"
+  }, {
+    "a" : "Germans",
+    "b" : "Russians",
+    "kind" : "neutral"
+  } ]
+}
