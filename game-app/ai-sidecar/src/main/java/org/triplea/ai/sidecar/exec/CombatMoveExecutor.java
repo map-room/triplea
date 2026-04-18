@@ -2,7 +2,6 @@ package org.triplea.ai.sidecar.exec;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
-import games.strategy.engine.data.Unit;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -129,20 +128,10 @@ public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequ
     final List<CombatMoveOrder> sbrMoves = new ArrayList<>();
 
     for (final RecordingMoveDelegate.CapturedMove captured : recorder.captured()) {
-      final List<String> unitIds = new ArrayList<>();
-      for (final Unit unit : captured.move().getUnits()) {
-        final String wireId = uuidToWireId.get(unit.getId());
-        if (wireId != null) {
-          unitIds.add(wireId);
-        }
-      }
-      final String from = captured.move().getRoute().getStart().getName();
-      final String to = captured.move().getRoute().getEnd().getName();
-      final CombatMoveOrder order = new CombatMoveOrder(unitIds, from, to);
       if (captured.isBombing()) {
-        sbrMoves.add(order);
+        sbrMoves.addAll(ExecutorSupport.projectOrders(captured.move(), uuidToWireId));
       } else {
-        moves.add(order);
+        moves.addAll(ExecutorSupport.projectOrders(captured.move(), uuidToWireId));
       }
     }
 
