@@ -2,7 +2,6 @@ package org.triplea.ai.sidecar.exec;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
-import games.strategy.engine.data.Unit;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -131,16 +130,7 @@ public final class NoncombatMoveExecutor
         throw new AssertionError(
             "isBombing == true in noncombat-move phase — ProAI invariant violated");
       }
-      final List<String> unitIds = new ArrayList<>();
-      for (final Unit unit : captured.move().getUnits()) {
-        final String wireId = uuidToWireId.get(unit.getId());
-        if (wireId != null) {
-          unitIds.add(wireId);
-        }
-      }
-      final String from = captured.move().getRoute().getStart().getName();
-      final String to = captured.move().getRoute().getEnd().getName();
-      moves.add(new CombatMoveOrder(unitIds, from, to));
+      moves.addAll(ExecutorSupport.projectOrders(captured.move(), uuidToWireId));
     }
 
     return new NoncombatMovePlan(moves);
