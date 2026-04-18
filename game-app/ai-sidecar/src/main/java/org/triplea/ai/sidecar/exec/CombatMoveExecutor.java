@@ -26,17 +26,24 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
  *
  * <h2>Ordering contract</h2>
  *
+ * <p>The bot must call the {@code politics} decision kind first (handled by {@link
+ * PoliticsExecutor}), which dispatches war declarations server-side and sends a fresh
+ * post-declaration {@link org.triplea.ai.sidecar.wire.WireState} in the subsequent
+ * {@code combat-move} request. This executor therefore receives a WireState that already
+ * reflects post-politics relationships.
+ *
  * <p>Before dispatching to the ProAi this executor enforces the contract established in #1763:
  * <ol>
  *   <li>Load the session snapshot (if present) and call
  *       {@link ProSessionSnapshotStore#restoreUnitIdMap} — pre-seeds the live {@code unitIdMap}
  *       so that {@code computeIfAbsent} inside {@link WireStateApplier} assigns the same UUIDs
  *       that the purchase snapshot used, not fresh random ones.
- *   <li>{@link WireStateApplier#apply} — hydrates live {@link GameData} from wire state.
+ *   <li>{@link WireStateApplier#apply} — hydrates live {@link GameData} from wire state,
+ *       including the {@code relationships} field that reflects the post-politics graph.
  *   <li>{@link games.strategy.triplea.ai.pro.ProAi#restoreCombatMoveMapFromSnapshot} — restores
- *       {@code storedCombatMoveMap} from the snapshot. No-op if it was already populated in this
- *       JVM session (purchase ran in the same process).
- *   <li>Submit {@code invokeCombatMoveForSidecar} to the session's single-threaded executor.
+ *       {@code storedCombatMoveMap} from the snapshot. No-op if already populated this JVM session.
+ *   <li>Submit {@code invokeCombatMoveForSidecar} to the session's single-threaded offensive
+ *       executor.
  * </ol>
  */
 public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequest, CombatMovePlan> {
@@ -80,7 +87,9 @@ public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequ
               + " — purchase must run before combat-move");
     }
 
-    // Step 4: dispatch on the session's single-threaded offensive executor
+    // Step 4: submit combat-move to the session's single-threaded offensive executor.
+    // Politics was already run by PoliticsExecutor in the preceding /decide call; the WireState
+    // received here already reflects the post-declaration relationship graph.
     final RecordingMoveDelegate recorder = new RecordingMoveDelegate(proAi);
     final Future<Void> future =
         session
@@ -128,6 +137,6 @@ public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequ
       }
     }
 
-    return new CombatMovePlan(List.of(), moves, sbrMoves);
+    return new CombatMovePlan(moves, sbrMoves);
   }
 }

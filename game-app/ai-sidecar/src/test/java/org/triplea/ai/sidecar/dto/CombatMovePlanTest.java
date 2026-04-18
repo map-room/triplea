@@ -8,24 +8,15 @@ import org.junit.jupiter.api.Test;
 
 class CombatMovePlanTest {
   @Test
-  void serializesDeclarations() throws Exception {
-    final CombatMovePlan plan =
-        new CombatMovePlan(
-            List.of(new WarDeclaration("Russians")),
-            List.of(),
-            List.of());
-    final String json = new ObjectMapper().writeValueAsString(plan);
-    assertThat(json).contains("\"declarations\":[{\"target\":\"Russians\"}]");
-  }
-
-  @Test
-  void deserializesWithoutDeclarationsField() throws Exception {
-    // Deserialize via the DecisionPlan interface so the 'kind' discriminator is present,
-    // which mirrors how the sidecar actually receives plans. Omitting 'declarations' must
-    // default to an empty list (backwards-compat for older TS clients).
+  void deserializesFromMinimalJson() throws Exception {
+    // Deserialize via the DecisionPlan interface so the 'kind' discriminator is exercised,
+    // which mirrors how the sidecar actually receives plans. Missing moves/sbrMoves must
+    // default to empty lists (backwards-compat for older TS clients).
     final String json = "{\"kind\":\"combat-move\",\"moves\":[],\"sbrMoves\":[]}";
     final DecisionPlan plan = new ObjectMapper().readValue(json, DecisionPlan.class);
     assertThat(plan).isInstanceOf(CombatMovePlan.class);
-    assertThat(((CombatMovePlan) plan).declarations()).isEmpty();
+    final CombatMovePlan combatMovePlan = (CombatMovePlan) plan;
+    assertThat(combatMovePlan.moves()).isEmpty();
+    assertThat(combatMovePlan.sbrMoves()).isEmpty();
   }
 }

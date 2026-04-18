@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.InputStream;
 import org.junit.jupiter.api.Test;
-import org.triplea.ai.sidecar.dto.CombatMovePlan;
 import org.triplea.ai.sidecar.dto.DecisionPlan;
 
 class WireContractFixtureTest {
@@ -15,18 +14,18 @@ class WireContractFixtureTest {
       new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
   @Test
-  void wireStateFixtureRoundTripsByteIdentical() throws Exception {
-    final byte[] original = readResource("wire-contract/wire-state-with-relationships.json");
-    final WireState parsed = MAPPER.readValue(original, WireState.class);
+  void politicsPlanFixtureRoundTripsByteIdentical() throws Exception {
+    final byte[] original = readResource("wire-contract/politics-plan.json");
+    final DecisionPlan parsed = MAPPER.readValue(original, DecisionPlan.class);
     final byte[] reserialized = MAPPER.writeValueAsBytes(parsed);
     assertThat(normalize(reserialized)).isEqualTo(normalize(original));
   }
 
   @Test
-  void combatMovePlanFixtureRoundTripsByteIdentical() throws Exception {
-    final byte[] original = readResource("wire-contract/combat-move-plan-with-declarations.json");
-    final CombatMovePlan parsed = (CombatMovePlan) MAPPER.readValue(original, DecisionPlan.class);
-    final byte[] reserialized = MAPPER.writeValueAsBytes((DecisionPlan) parsed);
+  void wireStateFixtureRoundTripsByteIdentical() throws Exception {
+    final byte[] original = readResource("wire-contract/wire-state-with-relationships.json");
+    final WireState parsed = MAPPER.readValue(original, WireState.class);
+    final byte[] reserialized = MAPPER.writeValueAsBytes(parsed);
     assertThat(normalize(reserialized)).isEqualTo(normalize(original));
   }
 

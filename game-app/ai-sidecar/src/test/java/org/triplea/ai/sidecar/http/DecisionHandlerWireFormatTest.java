@@ -272,12 +272,12 @@ class DecisionHandlerWireFormatTest {
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
     final CombatMovePlan fixedPlan = new CombatMovePlan(
-        List.of(),
         List.of(new CombatMoveOrder(List.of("unit-1"), "Germany", "Poland")),
         List.of());
 
     final DecisionHandler h = new DecisionHandler(
         registry,
+        (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
@@ -313,6 +313,7 @@ class DecisionHandlerWireFormatTest {
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
+        (session, req) -> { throw new AssertionError(); },
         (session, req) -> fixedPlan,
         (session, req) -> { throw new AssertionError(); });
 
@@ -337,6 +338,7 @@ class DecisionHandlerWireFormatTest {
 
     final DecisionHandler h = new DecisionHandler(
         registry,
+        (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
         (session, req) -> { throw new AssertionError(); },
