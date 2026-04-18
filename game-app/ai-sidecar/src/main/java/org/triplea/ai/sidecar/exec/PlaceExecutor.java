@@ -2,12 +2,16 @@ package org.triplea.ai.sidecar.exec;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
+import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.triplea.delegate.battle.BattleTracker;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import org.triplea.ai.sidecar.dto.PlaceOrder;
@@ -113,11 +117,41 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
       throw new RuntimeException("PlaceExecutor failed", cause);
     }
 
-    // Group captures by territory name (land-first order is preserved because ProPurchaseAi
-    // iterates land territories before sea territories).
+    // The map-room engine rejects placement at any territory captured this turn
+    // (rules §16/§20: a freshly captured factory cannot produce in the same turn).
+    // Pro AI's purchase planner does not consult wasConquered when picking placement
+    // targets, and RecordingPlaceDelegate accepts every placeUnits call without
+    // validation — so without this filter, freshly conquered territories show up in
+    // the plan and the engine rejects the whole place phase, leaving the bot stuck.
+    final Set<Territory> conqueredThisTurn = collectConqueredThisTurn(data);
+
+    return groupCapturesIntoPlan(recorder.captured(), conqueredThisTurn, session.key().toString());
+  }
+
+  static Set<Territory> collectConqueredThisTurn(final GameData data) {
+    if (data.getBattleDelegate() == null) {
+      return Set.of();
+    }
+    final BattleTracker tracker = data.getBattleDelegate().getBattleTracker();
+    return new HashSet<>(tracker.getConquered());
+  }
+
+  /**
+   * Groups recorded placeUnits captures into a {@link PlacePlan}, dropping any capture whose
+   * territory was conquered this turn. Public-package for direct unit testing.
+   */
+  static PlacePlan groupCapturesIntoPlan(
+      final List<RecordingPlaceDelegate.PlaceCapture> captures,
+      final Set<Territory> conqueredThisTurn,
+      final String sessionKey) {
     final Map<String, List<String>> byTerritory = new LinkedHashMap<>();
     int totalCaptured = 0;
-    for (final RecordingPlaceDelegate.PlaceCapture cap : recorder.captured()) {
+    int droppedConquered = 0;
+    for (final RecordingPlaceDelegate.PlaceCapture cap : captures) {
+      if (conqueredThisTurn.contains(cap.territory())) {
+        droppedConquered += cap.units().size();
+        continue;
+      }
       final String tName = cap.territory().getName();
       final List<String> types = byTerritory.computeIfAbsent(tName, k -> new ArrayList<>());
       for (final Unit unit : cap.units()) {
@@ -126,11 +160,18 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
       }
     }
 
-    if (totalCaptured == 0 && !recorder.captured().isEmpty()) {
+    if (droppedConquered > 0) {
+      LOG.log(
+          System.Logger.Level.INFO,
+          "PlaceExecutor: dropped " + droppedConquered
+              + " unit placements at conquered-this-turn territories for session " + sessionKey);
+    }
+
+    if (totalCaptured == 0 && !captures.isEmpty() && droppedConquered == 0) {
       // Captures exist but all had empty unit lists — type-mismatch no-op path
       LOG.log(System.Logger.Level.WARNING,
           "PlaceExecutor: all placeUnits calls returned empty unit lists for session "
-              + session.key() + " — player.getUnitCollection() likely missing purchased units");
+              + sessionKey + " — player.getUnitCollection() likely missing purchased units");
     }
 
     final List<PlaceOrder> placements = new ArrayList<>();
