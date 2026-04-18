@@ -15,6 +15,8 @@ import org.triplea.ai.sidecar.dto.NoncombatMoveRequest;
 import org.triplea.ai.sidecar.dto.OtherOffensiveRequest;
 import org.triplea.ai.sidecar.dto.PlacePlan;
 import org.triplea.ai.sidecar.dto.PlaceRequest;
+import org.triplea.ai.sidecar.dto.PoliticsPlan;
+import org.triplea.ai.sidecar.dto.PoliticsRequest;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RetreatPlan;
@@ -27,6 +29,7 @@ import org.triplea.ai.sidecar.exec.CombatMoveExecutor;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
 import org.triplea.ai.sidecar.exec.NoncombatMoveExecutor;
 import org.triplea.ai.sidecar.exec.PlaceExecutor;
+import org.triplea.ai.sidecar.exec.PoliticsExecutor;
 import org.triplea.ai.sidecar.exec.PurchaseExecutor;
 import org.triplea.ai.sidecar.exec.RetreatQueryExecutor;
 import org.triplea.ai.sidecar.exec.ScrambleExecutor;
@@ -57,6 +60,7 @@ public final class DecisionHandler implements HttpHandler {
   private final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor;
   private final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor;
   private final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor;
+  private final DecisionExecutor<PoliticsRequest, PoliticsPlan> politicsExecutor;
   private final DecisionExecutor<CombatMoveRequest, CombatMovePlan> combatMoveExecutor;
   private final DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> noncombatMoveExecutor;
   private final DecisionExecutor<PlaceRequest, PlacePlan> placeExecutor;
@@ -69,6 +73,7 @@ public final class DecisionHandler implements HttpHandler {
         new RetreatQueryExecutor(),
         new ScrambleExecutor(),
         new PurchaseExecutor(registry.snapshotStore()),
+        new PoliticsExecutor(registry.snapshotStore()),
         new CombatMoveExecutor(registry.snapshotStore()),
         new NoncombatMoveExecutor(registry.snapshotStore()),
         new PlaceExecutor(registry.snapshotStore()));
@@ -90,6 +95,7 @@ public final class DecisionHandler implements HttpHandler {
         retreatQueryExecutor,
         scrambleExecutor,
         new PurchaseExecutor(snapshotStore),
+        new PoliticsExecutor(snapshotStore),
         new CombatMoveExecutor(snapshotStore),
         new NoncombatMoveExecutor(snapshotStore),
         new PlaceExecutor(snapshotStore));
@@ -97,7 +103,8 @@ public final class DecisionHandler implements HttpHandler {
 
   /**
    * Test constructor — accepts executor stubs so handler logic can be exercised in isolation.
-   * Combat-move, noncombat-move, and place default to stubs that throw {@link AssertionError}.
+   * Politics, combat-move, noncombat-move, and place default to stubs that throw {@link
+   * AssertionError}.
    */
   public DecisionHandler(
       final SessionRegistry registry,
@@ -111,6 +118,7 @@ public final class DecisionHandler implements HttpHandler {
         retreatQueryExecutor,
         scrambleExecutor,
         purchaseExecutor,
+        (session, req) -> { throw new AssertionError("PoliticsExecutor was called unexpectedly"); },
         (session, req) -> { throw new AssertionError("CombatMoveExecutor was called unexpectedly"); },
         (session, req) -> { throw new AssertionError("NoncombatMoveExecutor was called unexpectedly"); },
         (session, req) -> { throw new AssertionError("PlaceExecutor was called unexpectedly"); });
@@ -123,6 +131,7 @@ public final class DecisionHandler implements HttpHandler {
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor,
+      final DecisionExecutor<PoliticsRequest, PoliticsPlan> politicsExecutor,
       final DecisionExecutor<CombatMoveRequest, CombatMovePlan> combatMoveExecutor,
       final DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> noncombatMoveExecutor,
       final DecisionExecutor<PlaceRequest, PlacePlan> placeExecutor) {
@@ -131,6 +140,7 @@ public final class DecisionHandler implements HttpHandler {
     this.retreatQueryExecutor = retreatQueryExecutor;
     this.scrambleExecutor = scrambleExecutor;
     this.purchaseExecutor = purchaseExecutor;
+    this.politicsExecutor = politicsExecutor;
     this.combatMoveExecutor = combatMoveExecutor;
     this.noncombatMoveExecutor = noncombatMoveExecutor;
     this.placeExecutor = placeExecutor;
@@ -160,6 +170,7 @@ public final class DecisionHandler implements HttpHandler {
     try {
       request = JsonBodies.readValue(body, DecisionRequest.class);
     } catch (final IOException e) {
+      LOG.log(System.Logger.Level.ERROR, "Decision bad-request: JSON deserialization failed", e);
       writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));
       return;
     }
@@ -186,6 +197,10 @@ public final class DecisionHandler implements HttpHandler {
           final PurchasePlan plan = purchaseExecutor.execute(session.get(), pr);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
+        case PoliticsRequest pol -> {
+          final PoliticsPlan plan = politicsExecutor.execute(session.get(), pol);
+          writeJson(exchange, 200, JsonBodies.readyBody(plan));
+        }
         case CombatMoveRequest cm -> {
           final CombatMovePlan plan = combatMoveExecutor.execute(session.get(), cm);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
@@ -204,6 +219,7 @@ public final class DecisionHandler implements HttpHandler {
             JsonBodies.errorBodyWithKind("not-implemented", oo.kind()));
       }
     } catch (final IllegalArgumentException e) {
+      LOG.log(System.Logger.Level.ERROR, "Decision bad-request: IllegalArgumentException", e);
       writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));
     } catch (final RuntimeException e) {
       LOG.log(System.Logger.Level.ERROR, "Decision handler internal error", e);
