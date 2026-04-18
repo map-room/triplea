@@ -12,6 +12,7 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.PoliticsPlan;
 import org.triplea.ai.sidecar.dto.PoliticsRequest;
 import org.triplea.ai.sidecar.dto.WarDeclaration;
@@ -37,10 +38,10 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
  *
  * <h2>Session setup</h2>
  *
- * <p>Mirrors the setup in {@link CombatMoveExecutor}: snapshot restore, WireState hydration,
- * ProAi initialization, and delegate registration. In addition this executor installs the politics
- * and other required delegates (same as {@link PurchaseExecutor} does) since they may have been
- * cleared by the GameData clone round-trip.
+ * <p>Mirrors the setup in {@link CombatMoveExecutor}: snapshot restore, WireState hydration, ProAi
+ * initialization, and delegate registration. In addition this executor installs the politics and
+ * other required delegates (same as {@link PurchaseExecutor} does) since they may have been cleared
+ * by the GameData clone round-trip.
  */
 public final class PoliticsExecutor implements DecisionExecutor<PoliticsRequest, PoliticsPlan> {
 
@@ -62,8 +63,7 @@ public final class PoliticsExecutor implements DecisionExecutor<PoliticsRequest,
     // Step 2: hydrate GameData from wire state (includes relationships field)
     WireStateApplier.apply(data, request.state(), session.unitIdMap());
 
-    final GamePlayer player =
-        data.getPlayerList().getPlayerId(request.state().currentPlayer());
+    final GamePlayer player = data.getPlayerList().getPlayerId(request.state().currentPlayer());
     if (player == null) {
       throw new IllegalArgumentException(
           "Unknown player in PoliticsRequest: " + request.state().currentPlayer());
@@ -87,8 +87,7 @@ public final class PoliticsExecutor implements DecisionExecutor<PoliticsRequest,
     // (which has no ObservingPoliticsDelegate installed). The result is that the politics
     // delegate on dataCopy has attemptsLeftThisTurn=0 (already consumed in the purchase
     // simulation), filtering out all valid war actions.
-    final AtomicReference<List<WarDeclaration>> declarationsRef =
-        new AtomicReference<>(List.of());
+    final AtomicReference<List<WarDeclaration>> declarationsRef = new AtomicReference<>(List.of());
     final Future<Void> future =
         session
             .offensiveExecutor()
@@ -122,6 +121,9 @@ public final class PoliticsExecutor implements DecisionExecutor<PoliticsRequest,
       throw new RuntimeException("PoliticsExecutor failed", cause);
     }
 
+    for (final WarDeclaration decl : declarationsRef.get()) {
+      AiTraceLogger.logWarDeclaration(player.getName(), decl.target());
+    }
     return new PoliticsPlan(declarationsRef.get());
   }
 
