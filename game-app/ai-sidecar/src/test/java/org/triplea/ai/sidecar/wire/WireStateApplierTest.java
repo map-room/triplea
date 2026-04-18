@@ -334,9 +334,9 @@ class WireStateApplierTest {
     // 112 Sea Zone: territory owner is Germans but the cruiser belongs to Italians.
     // This mirrors the bug scenario where sea zones hold ships from allied nations.
     final WireUnit germanSub =
-        WireUnit.of("u-sub-1", "submarine", 0, 0, 0, "Germans", null, false, false);
+        WireUnit.of("u-sub-1", "submarine", 0, 0, 0, "Germans", null, false, false, false, false, 0);
     final WireUnit italianCruiser =
-        WireUnit.of("u-cru-1", "cruiser", 0, 0, 0, "Italians", null, false, false);
+        WireUnit.of("u-cru-1", "cruiser", 0, 0, 0, "Italians", null, false, false, false, false, 0);
     final WireState wire =
         new WireState(
             List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(germanSub, italianCruiser))),
@@ -392,7 +392,7 @@ class WireStateApplierTest {
   void submerged_trueOnWire_setsSubmergedOnUnit() {
     final GameData gd = fresh();
     final WireUnit sub =
-        WireUnit.of("u-sub-1", "submarine", 0, 0, 0, "Germans", null, true, false);
+        WireUnit.of("u-sub-1", "submarine", 0, 0, 0, "Germans", null, true, false, false, false, 0);
     final WireState wire =
         new WireState(
             List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(sub))),
@@ -413,7 +413,7 @@ class WireStateApplierTest {
   void wasInCombat_trueOnWire_setsWasInCombatOnUnit() {
     final GameData gd = fresh();
     final WireUnit infantry =
-        WireUnit.of("u-inf-1", "infantry", 0, 0, 0, "Germans", null, false, true);
+        WireUnit.of("u-inf-1", "infantry", 0, 0, 0, "Germans", null, false, true, false, false, 0);
     final WireState wire =
         new WireState(
             List.of(new WireTerritory("Germany", "Germans", List.of(infantry))),
@@ -434,9 +434,9 @@ class WireStateApplierTest {
   void transportedBy_unitIdOnWire_linksInfantryToTransport() {
     final GameData gd = fresh();
     final WireUnit transport =
-        WireUnit.of("u-trn-1", "transport", 0, 0, 0, "Germans", null, false, false);
+        WireUnit.of("u-trn-1", "transport", 0, 0, 0, "Germans", null, false, false, false, false, 0);
     final WireUnit infantry =
-        WireUnit.of("u-inf-1", "infantry", 0, 0, 0, "Germans", "u-trn-1", false, false);
+        WireUnit.of("u-inf-1", "infantry", 0, 0, 0, "Germans", "u-trn-1", false, false, false, false, 0);
     final WireState wire =
         new WireState(
             List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(transport, infantry))),
@@ -530,6 +530,71 @@ class WireStateApplierTest {
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     final Unit fighter = germany.getUnits().iterator().next();
     assertThat(fighter.getAlreadyMoved()).isEqualTo(new java.math.BigDecimal(3));
+  }
+
+  // ---------- wasLoadedThisTurn / wasUnloadedInCombatPhase / bonusMovement hydration (#1832) ----------
+
+  @Test
+  void wasLoadedThisTurn_trueOnWire_setsWasLoadedThisTurnOnUnit() {
+    final GameData gd = fresh();
+    final WireUnit infantry =
+        WireUnit.of("u-inf-1", "infantry", 0, 1, 0, "Germans", null, false, false, true, false, 0);
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("Germany", "Germans", List.of(infantry))),
+            List.of(),
+            1,
+            "combatMove",
+            "Germans");
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    WireStateApplier.apply(gd, wire, idMap);
+
+    final Territory germany = gd.getMap().getTerritoryOrNull("Germany");
+    assertThat(germany).isNotNull();
+    final Unit liveUnit = germany.getUnits().iterator().next();
+    assertThat(liveUnit.getWasLoadedThisTurn()).isTrue();
+  }
+
+  @Test
+  void wasUnloadedInCombatPhase_trueOnWire_setsWasUnloadedInCombatPhaseOnUnit() {
+    final GameData gd = fresh();
+    final WireUnit infantry =
+        WireUnit.of("u-inf-1", "infantry", 0, 1, 0, "Germans", null, false, false, false, true, 0);
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("Germany", "Germans", List.of(infantry))),
+            List.of(),
+            1,
+            "combatMove",
+            "Germans");
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    WireStateApplier.apply(gd, wire, idMap);
+
+    final Territory germany = gd.getMap().getTerritoryOrNull("Germany");
+    assertThat(germany).isNotNull();
+    final Unit liveUnit = germany.getUnits().iterator().next();
+    assertThat(liveUnit.getWasUnloadedInCombatPhase()).isTrue();
+  }
+
+  @Test
+  void bonusMovement_nonZeroOnWire_setsBonusMovementOnUnit() {
+    final GameData gd = fresh();
+    final WireUnit fighter =
+        WireUnit.of("u-ftr-1", "fighter", 0, 0, 0, "Germans", null, false, false, false, false, 1);
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("Germany", "Germans", List.of(fighter))),
+            List.of(),
+            1,
+            "combatMove",
+            "Germans");
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    WireStateApplier.apply(gd, wire, idMap);
+
+    final Territory germany = gd.getMap().getTerritoryOrNull("Germany");
+    assertThat(germany).isNotNull();
+    final Unit liveUnit = germany.getUnits().iterator().next();
+    assertThat(liveUnit.getBonusMovement()).isEqualTo(1);
   }
 
   @Test
