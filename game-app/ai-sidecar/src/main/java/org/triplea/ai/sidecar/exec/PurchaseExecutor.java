@@ -9,10 +9,10 @@ import games.strategy.engine.data.Resource;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
+import games.strategy.engine.delegate.IDelegate;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.ai.pro.ProAi;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
-import games.strategy.engine.delegate.IDelegate;
 import games.strategy.triplea.delegate.EndRoundDelegate;
 import games.strategy.triplea.delegate.MoveDelegate;
 import games.strategy.triplea.delegate.PlaceDelegate;
@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
@@ -34,42 +35,40 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
 import org.triplea.java.collections.IntegerMap;
 
 /**
- * Runs {@link ProAi#invokePurchaseForSidecar} on the session's bounded offensive executor,
- * captures the resulting {@code IntegerMap<ProductionRule>} via a {@link
- * RecordingPurchaseDelegate}, trims the captured map to fit the session player's PU budget,
- * and projects the result into a wire-shaped {@link PurchasePlan}.
+ * Runs {@link ProAi#invokePurchaseForSidecar} on the session's bounded offensive executor, captures
+ * the resulting {@code IntegerMap<ProductionRule>} via a {@link RecordingPurchaseDelegate}, trims
+ * the captured map to fit the session player's PU budget, and projects the result into a
+ * wire-shaped {@link PurchasePlan}.
  *
  * <h2>Why trim-to-fit is a necessary backstop (not a reimplementation)</h2>
  *
- * <p>TripleA's {@code ProPurchaseAi} consults a {@code ProResourceTracker} inside the
- * per-territory purchase loop, but the final {@code IntegerMap<ProductionRule>} that is handed
- * to {@code purchaseDelegate.purchase(...)} is produced by
- * {@code ProPurchaseAi.populateProductionRuleMap} (see
- * {@code game-core/src/main/java/games/strategy/triplea/ai/pro/ProPurchaseAi.java:2404-2429}):
- * that method iterates {@code ProPurchaseOption}s and counts
- * {@code ProPlaceTerritory.getPlaceUnits()} entries per option. It does <b>not</b>
- * re-consult {@code ProResourceTracker} at aggregation time, so nothing forces the aggregated
- * cost to equal the cost tracked during the loop.
+ * <p>TripleA's {@code ProPurchaseAi} consults a {@code ProResourceTracker} inside the per-territory
+ * purchase loop, but the final {@code IntegerMap<ProductionRule>} that is handed to {@code
+ * purchaseDelegate.purchase(...)} is produced by {@code ProPurchaseAi.populateProductionRuleMap}
+ * (see {@code game-core/src/main/java/games/strategy/triplea/ai/pro/ProPurchaseAi.java:2404-2429}):
+ * that method iterates {@code ProPurchaseOption}s and counts {@code
+ * ProPlaceTerritory.getPlaceUnits()} entries per option. It does <b>not</b> re-consult {@code
+ * ProResourceTracker} at aggregation time, so nothing forces the aggregated cost to equal the cost
+ * tracked during the loop.
  *
- * <p>The map produced by {@code populateProductionRuleMap} is then passed directly to
- * {@code purchaseDelegate.purchase(purchaseMap)} at
- * {@code ProPurchaseAi.java:251} (main purchase path) and {@code ProPurchaseAi.java:380}
- * (upgrade / second-pass path), with no intervening validation. Neither
- * {@code ai/pro/util/ProPurchaseUtils.java} nor {@code ai/pro/util/ProPurchaseValidationUtils.java}
- * contains any clamp/trim/budget-check helper — a grep for {@code trim|clamp|budget|exceed}
- * across both files returns zero hits. A 123 PU overrun against a 120 PU budget has been
- * observed in practice (see Phase 3 spec §5 note); this is consistent with the gap described
- * above.
+ * <p>The map produced by {@code populateProductionRuleMap} is then passed directly to {@code
+ * purchaseDelegate.purchase(purchaseMap)} at {@code ProPurchaseAi.java:251} (main purchase path)
+ * and {@code ProPurchaseAi.java:380} (upgrade / second-pass path), with no intervening validation.
+ * Neither {@code ai/pro/util/ProPurchaseUtils.java} nor {@code
+ * ai/pro/util/ProPurchaseValidationUtils.java} contains any clamp/trim/budget-check helper — a grep
+ * for {@code trim|clamp|budget|exceed} across both files returns zero hits. A 123 PU overrun
+ * against a 120 PU budget has been observed in practice (see Phase 3 spec §5 note); this is
+ * consistent with the gap described above.
  *
- * <p>The {@link #trimToFit} backstop implemented here is therefore <b>a necessary backstop,
- * not a paraphrase of an existing TripleA routine</b>. It reads exactly the map that ProAi
- * would have handed to the live purchase delegate and drops production-rule units from the
- * lowest-priority end until the total PU cost fits the caller's budget.
+ * <p>The {@link #trimToFit} backstop implemented here is therefore <b>a necessary backstop, not a
+ * paraphrase of an existing TripleA routine</b>. It reads exactly the map that ProAi would have
+ * handed to the live purchase delegate and drops production-rule units from the lowest-priority end
+ * until the total PU cost fits the caller's budget.
  *
  * <p><b>Trim order:</b> reverse iteration over the captured {@code IntegerMap<ProductionRule>}.
  * {@code populateProductionRuleMap} iterates {@code ProPurchaseOptionMap.getAllOptions()} in
- * descending priority, so the resulting {@code IntegerMap} preserves that ordering; dropping
- * from the tail therefore drops the lowest priority rules first.
+ * descending priority, so the resulting {@code IntegerMap} preserves that ordering; dropping from
+ * the tail therefore drops the lowest priority rules first.
  */
 public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest, PurchasePlan> {
 
@@ -81,12 +80,13 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
   }
 
   /**
-   * No-arg constructor for tests and contexts where snapshot persistence is not needed. Saves go
-   * to a subdirectory of {@code java.io.tmpdir} and are harmless.
+   * No-arg constructor for tests and contexts where snapshot persistence is not needed. Saves go to
+   * a subdirectory of {@code java.io.tmpdir} and are harmless.
    */
   public PurchaseExecutor() {
-    this(new ProSessionSnapshotStore(
-        Path.of(System.getProperty("java.io.tmpdir"), "sidecar-snapshots")));
+    this(
+        new ProSessionSnapshotStore(
+            Path.of(System.getProperty("java.io.tmpdir"), "sidecar-snapshots")));
   }
 
   @Override
@@ -94,8 +94,7 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     final GameData data = session.gameData();
     WireStateApplier.apply(data, request.state(), session.unitIdMap());
 
-    final GamePlayer player =
-        data.getPlayerList().getPlayerId(request.state().currentPlayer());
+    final GamePlayer player = data.getPlayerList().getPlayerId(request.state().currentPlayer());
     if (player == null) {
       throw new IllegalArgumentException(
           "Unknown player in PurchaseRequest: " + request.state().currentPlayer());
@@ -157,13 +156,16 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     final IntegerMap<ProductionRule> trimmed = trimToFit(captured, pusToSpend, pus);
 
     final List<PurchaseOrder> buys = toPurchaseOrders(trimmed);
+    for (final PurchaseOrder order : buys) {
+      AiTraceLogger.logPurchaseOrder(player.getName(), order.unitType(), order.count());
+    }
     final List<RepairOrder> repairs = toRepairOrders(recorder.capturedRepair(), data);
     return new PurchasePlan(buys, repairs);
   }
 
   /**
-   * Drop rules in reverse-priority order (iterating from the tail of the captured map) until
-   * the total PU cost fits {@code pusBudget}. See the class Javadoc for the justification.
+   * Drop rules in reverse-priority order (iterating from the tail of the captured map) until the
+   * total PU cost fits {@code pusBudget}. See the class Javadoc for the justification.
    */
   static IntegerMap<ProductionRule> trimToFit(
       final IntegerMap<ProductionRule> captured, final int pusBudget, final Resource pus) {

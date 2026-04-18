@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.CombatMoveOrder;
 import org.triplea.ai.sidecar.dto.CombatMovePlan;
 import org.triplea.ai.sidecar.dto.CombatMoveRequest;
@@ -20,33 +21,35 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
 
 /**
  * Runs {@link games.strategy.triplea.ai.pro.ProAi#invokeCombatMoveForSidecar} on the session's
- * bounded offensive executor, captures every {@link games.strategy.engine.data.MoveDescription}
- * via a {@link RecordingMoveDelegate}, partitions captured moves into standard moves and
+ * bounded offensive executor, captures every {@link games.strategy.engine.data.MoveDescription} via
+ * a {@link RecordingMoveDelegate}, partitions captured moves into standard moves and
  * strategic-bombing-raid moves, and projects each to a wire-shaped {@link CombatMoveOrder}.
  *
  * <h2>Ordering contract</h2>
  *
  * <p>The bot must call the {@code politics} decision kind first (handled by {@link
  * PoliticsExecutor}), which dispatches war declarations server-side and sends a fresh
- * post-declaration {@link org.triplea.ai.sidecar.wire.WireState} in the subsequent
- * {@code combat-move} request. This executor therefore receives a WireState that already
- * reflects post-politics relationships.
+ * post-declaration {@link org.triplea.ai.sidecar.wire.WireState} in the subsequent {@code
+ * combat-move} request. This executor therefore receives a WireState that already reflects
+ * post-politics relationships.
  *
  * <p>Before dispatching to the ProAi this executor enforces the contract established in #1763:
+ *
  * <ol>
- *   <li>Load the session snapshot (if present) and call
- *       {@link ProSessionSnapshotStore#restoreUnitIdMap} — pre-seeds the live {@code unitIdMap}
- *       so that {@code computeIfAbsent} inside {@link WireStateApplier} assigns the same UUIDs
- *       that the purchase snapshot used, not fresh random ones.
- *   <li>{@link WireStateApplier#apply} — hydrates live {@link GameData} from wire state,
- *       including the {@code relationships} field that reflects the post-politics graph.
+ *   <li>Load the session snapshot (if present) and call {@link
+ *       ProSessionSnapshotStore#restoreUnitIdMap} — pre-seeds the live {@code unitIdMap} so that
+ *       {@code computeIfAbsent} inside {@link WireStateApplier} assigns the same UUIDs that the
+ *       purchase snapshot used, not fresh random ones.
+ *   <li>{@link WireStateApplier#apply} — hydrates live {@link GameData} from wire state, including
+ *       the {@code relationships} field that reflects the post-politics graph.
  *   <li>{@link games.strategy.triplea.ai.pro.ProAi#restoreCombatMoveMapFromSnapshot} — restores
  *       {@code storedCombatMoveMap} from the snapshot. No-op if already populated this JVM session.
  *   <li>Submit {@code invokeCombatMoveForSidecar} to the session's single-threaded offensive
  *       executor.
  * </ol>
  */
-public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequest, CombatMovePlan> {
+public final class CombatMoveExecutor
+    implements DecisionExecutor<CombatMoveRequest, CombatMovePlan> {
 
   private final ProSessionSnapshotStore snapshotStore;
 
@@ -66,8 +69,7 @@ public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequ
     // Step 2: hydrate GameData from wire state
     WireStateApplier.apply(data, request.state(), session.unitIdMap());
 
-    final GamePlayer player =
-        data.getPlayerList().getPlayerId(request.state().currentPlayer());
+    final GamePlayer player = data.getPlayerList().getPlayerId(request.state().currentPlayer());
     if (player == null) {
       throw new IllegalArgumentException(
           "Unknown player in CombatMoveRequest: " + request.state().currentPlayer());
@@ -83,7 +85,8 @@ public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequ
 
     if (proAi.storedCombatMoveMapIsNull()) {
       throw new IllegalStateException(
-          "storedCombatMoveMap is null for session " + session.key()
+          "storedCombatMoveMap is null for session "
+              + session.key()
               + " — purchase must run before combat-move");
     }
 
@@ -128,6 +131,8 @@ public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequ
     final List<CombatMoveOrder> sbrMoves = new ArrayList<>();
 
     for (final RecordingMoveDelegate.CapturedMove captured : recorder.captured()) {
+      AiTraceLogger.logCapturedMove(
+          player.getName(), "combat-move", captured.move(), captured.isBombing(), uuidToWireId);
       if (captured.isBombing()) {
         sbrMoves.addAll(ExecutorSupport.projectOrders(captured.move(), uuidToWireId));
       } else {

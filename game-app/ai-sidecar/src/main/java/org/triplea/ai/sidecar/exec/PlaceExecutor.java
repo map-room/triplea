@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.PlaceOrder;
 import org.triplea.ai.sidecar.dto.PlacePlan;
 import org.triplea.ai.sidecar.dto.PlaceRequest;
@@ -31,8 +32,8 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
  * <h2>Ordering contract</h2>
  *
  * <ol>
- *   <li>Load snapshot; call {@link ProSessionSnapshotStore#restoreUnitIdMap} before
- *       {@link WireStateApplier}.
+ *   <li>Load snapshot; call {@link ProSessionSnapshotStore#restoreUnitIdMap} before {@link
+ *       WireStateApplier}.
  *   <li>{@link WireStateApplier#apply}.
  *   <li>{@link games.strategy.triplea.ai.pro.ProAi#restorePurchaseTerritoriesFromSnapshot} —
  *       re-populates {@code storedPurchaseTerritories} when crossing an HTTP boundary.
@@ -43,9 +44,9 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
  *
  * <h2>Type-mismatch silent no-op</h2>
  *
- * <p>{@code ProPurchaseAi.place()} resolves each {@code placeUnit} in
- * {@code storedPurchaseTerritories} by scanning {@code player.getUnitCollection()} for a unit with
- * a matching type. If no match is found (e.g., the session's {@link GameData} was deserialized
+ * <p>{@code ProPurchaseAi.place()} resolves each {@code placeUnit} in {@code
+ * storedPurchaseTerritories} by scanning {@code player.getUnitCollection()} for a unit with a
+ * matching type. If no match is found (e.g., the session's {@link GameData} was deserialized
  * without the purchased units in the player's collection), the inner loop emits an empty list and
  * {@code doPlace()} is called with zero units. This is faithful to the reference algorithm: no
  * exception is thrown, but a WARNING is logged when the total captured unit count is smaller than
@@ -73,8 +74,7 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
     // Step 2: hydrate GameData from wire state
     WireStateApplier.apply(data, request.state(), session.unitIdMap());
 
-    final GamePlayer player =
-        data.getPlayerList().getPlayerId(request.state().currentPlayer());
+    final GamePlayer player = data.getPlayerList().getPlayerId(request.state().currentPlayer());
     if (player == null) {
       throw new IllegalArgumentException(
           "Unknown player in PlaceRequest: " + request.state().currentPlayer());
@@ -133,7 +133,12 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
     // own validation did not catch the case — a WARNING is logged in groupCapturesIntoPlan.
     final Set<Territory> conqueredThisTurn = collectConqueredThisTurn(data);
 
-    return groupCapturesIntoPlan(recorder.captured(), conqueredThisTurn, session.key().toString());
+    final PlacePlan plan =
+        groupCapturesIntoPlan(recorder.captured(), conqueredThisTurn, session.key().toString());
+    for (final PlaceOrder order : plan.placements()) {
+      AiTraceLogger.logPlaceOrder(player.getName(), order.territoryName(), order.unitTypes());
+    }
+    return plan;
   }
 
   static Set<Territory> collectConqueredThisTurn(final GameData data) {
@@ -174,16 +179,20 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
       // delegate-level validation did not catch the conquered-this-turn case — investigate.
       LOG.log(
           System.Logger.Level.WARNING,
-          "PlaceExecutor: belt-and-suspenders filter dropped " + droppedConquered
-              + " unit placements at conquered-this-turn territories for session " + sessionKey
+          "PlaceExecutor: belt-and-suspenders filter dropped "
+              + droppedConquered
+              + " unit placements at conquered-this-turn territories for session "
+              + sessionKey
               + " — RecordingPlaceDelegate should have rejected these at capture time");
     }
 
     if (totalCaptured == 0 && !captures.isEmpty() && droppedConquered == 0) {
       // Captures exist but all had empty unit lists — type-mismatch no-op path
-      LOG.log(System.Logger.Level.WARNING,
+      LOG.log(
+          System.Logger.Level.WARNING,
           "PlaceExecutor: all placeUnits calls returned empty unit lists for session "
-              + sessionKey + " — player.getUnitCollection() likely missing purchased units");
+              + sessionKey
+              + " — player.getUnitCollection() likely missing purchased units");
     }
 
     final List<PlaceOrder> placements = new ArrayList<>();
