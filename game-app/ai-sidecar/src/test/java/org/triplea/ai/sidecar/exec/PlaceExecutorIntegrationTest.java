@@ -87,7 +87,7 @@ class PlaceExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combat-move", "Germans")));
+    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
     new NoncombatMoveExecutor(store).execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
     final PlacePlan plan = new PlaceExecutor(store).execute(
@@ -107,7 +107,7 @@ class PlaceExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combat-move", "Germans")));
+    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
     new NoncombatMoveExecutor(store).execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
     final PlacePlan plan = new PlaceExecutor(store).execute(
@@ -158,7 +158,7 @@ class PlaceExecutorIntegrationTest {
 
     // Run purchase through noncombat-move to establish session state
     new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combat-move", "Germans")));
+    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
     new NoncombatMoveExecutor(store).execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
     // At this point storedPurchaseTerritories is still populated in-memory from purchase.

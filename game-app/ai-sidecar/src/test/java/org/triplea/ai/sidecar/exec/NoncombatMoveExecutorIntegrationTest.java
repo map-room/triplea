@@ -85,7 +85,7 @@ class NoncombatMoveExecutorIntegrationTest {
     new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
 
     // Step 2: combat-move — consumes storedCombatMoveMap
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combat-move", "Germans")));
+    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
 
     // Step 3: noncombat-move — consumes storedFactoryMoveMap, preserves storedPurchaseTerritories
     final NoncombatMovePlan plan = new NoncombatMoveExecutor(store).execute(
@@ -108,7 +108,7 @@ class NoncombatMoveExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combat-move", "Germans")));
+    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
 
     // If any captured move had isBombing==true, the executor would throw AssertionError.
     // The plan being returned means the invariant held.
@@ -128,7 +128,7 @@ class NoncombatMoveExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combat-move", "Germans")));
+    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
     new NoncombatMoveExecutor(store).execute(
         session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
@@ -157,7 +157,7 @@ class NoncombatMoveExecutorIntegrationTest {
 
     // Run purchase and combat-move normally to establish the session state
     new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combat-move", "Germans")));
+    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
 
     // Inject a stale UUID into the snapshot's factoryMoveMap
     final var staleUuid = UUID.randomUUID().toString();

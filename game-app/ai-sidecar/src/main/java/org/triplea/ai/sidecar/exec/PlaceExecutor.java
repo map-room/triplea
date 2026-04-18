@@ -4,6 +4,7 @@ import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import games.strategy.triplea.delegate.battle.BattleTracker;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -101,6 +102,8 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
     // newly-captured territories like France and groupCapturesIntoPlan has to drop them.
     // Same pattern as CombatMove/NoncombatMove/PoliticsExecutor.
     final RecordingPlaceDelegate recorder = new RecordingPlaceDelegate();
+    recorder.initialize("place", "Place");
+    recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
     final Future<Void> future =
         session
             .offensiveExecutor()
@@ -123,12 +126,11 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
       throw new RuntimeException("PlaceExecutor failed", cause);
     }
 
-    // The map-room engine rejects placement at any territory captured this turn
-    // (rules §16/§20: a freshly captured factory cannot produce in the same turn).
-    // Pro AI's purchase planner does not consult wasConquered when picking placement
-    // targets, and RecordingPlaceDelegate accepts every placeUnits call without
-    // validation — so without this filter, freshly conquered territories show up in
-    // the plan and the engine rejects the whole place phase, leaving the bot stuck.
+    // Belt-and-suspenders filter: RecordingPlaceDelegate now validates via
+    // AbstractPlaceDelegate.placeUnits() before recording, so placements at
+    // conquered-this-turn territories should already be rejected at capture time.
+    // This filter is kept as defence-in-depth; if it fires it means the delegate's
+    // own validation did not catch the case — a WARNING is logged in groupCapturesIntoPlan.
     final Set<Territory> conqueredThisTurn = collectConqueredThisTurn(data);
 
     return groupCapturesIntoPlan(recorder.captured(), conqueredThisTurn, session.key().toString());
@@ -167,10 +169,14 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
     }
 
     if (droppedConquered > 0) {
+      // This filter should now be unreachable under normal flow: RecordingPlaceDelegate
+      // validates via AbstractPlaceDelegate before recording. Firing here means the
+      // delegate-level validation did not catch the conquered-this-turn case — investigate.
       LOG.log(
-          System.Logger.Level.INFO,
-          "PlaceExecutor: dropped " + droppedConquered
-              + " unit placements at conquered-this-turn territories for session " + sessionKey);
+          System.Logger.Level.WARNING,
+          "PlaceExecutor: belt-and-suspenders filter dropped " + droppedConquered
+              + " unit placements at conquered-this-turn territories for session " + sessionKey
+              + " — RecordingPlaceDelegate should have rejected these at capture time");
     }
 
     if (totalCaptured == 0 && !captures.isEmpty() && droppedConquered == 0) {
