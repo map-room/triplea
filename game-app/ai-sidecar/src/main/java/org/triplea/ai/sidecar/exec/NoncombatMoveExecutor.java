@@ -3,6 +3,7 @@ package org.triplea.ai.sidecar.exec;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Unit;
+import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -94,6 +95,8 @@ public final class NoncombatMoveExecutor
     // during combat move"). Same pattern applied to PoliticsExecutor and
     // CombatMoveExecutor.
     final RecordingMoveDelegate recorder = new RecordingMoveDelegate(proAi);
+    recorder.initialize("move", "Move");
+    recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
     final Future<Void> future =
         session
             .offensiveExecutor()
