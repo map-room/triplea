@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.CombatMoveOrder;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.NoncombatMoveRequest;
@@ -19,25 +20,24 @@ import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.wire.WireStateApplier;
 
 /**
- * Runs {@link games.strategy.triplea.ai.pro.ProAi#invokeNonCombatMoveForSidecar} on the
- * session's bounded offensive executor, captures every {@link
- * games.strategy.engine.data.MoveDescription} via a {@link RecordingMoveDelegate}, and projects
- * each to a wire-shaped {@link CombatMoveOrder}.
+ * Runs {@link games.strategy.triplea.ai.pro.ProAi#invokeNonCombatMoveForSidecar} on the session's
+ * bounded offensive executor, captures every {@link games.strategy.engine.data.MoveDescription} via
+ * a {@link RecordingMoveDelegate}, and projects each to a wire-shaped {@link CombatMoveOrder}.
  *
  * <p>The noncombat phase never issues strategic-bombing-raid moves, so all captured moves land in
- * {@code moves}; an {@link AssertionError} is thrown if any captured move has
- * {@code isBombing == true} (belt-and-suspenders invariant).
+ * {@code moves}; an {@link AssertionError} is thrown if any captured move has {@code isBombing ==
+ * true} (belt-and-suspenders invariant).
  *
  * <h2>Ordering contract</h2>
  *
  * <ol>
- *   <li>Load snapshot; call {@link ProSessionSnapshotStore#restoreUnitIdMap} before
- *       {@link WireStateApplier}.
+ *   <li>Load snapshot; call {@link ProSessionSnapshotStore#restoreUnitIdMap} before {@link
+ *       WireStateApplier}.
  *   <li>{@link WireStateApplier#apply}.
- *   <li>{@link games.strategy.triplea.ai.pro.ProAi#restoreFactoryMoveMapFromSnapshot} and
- *       {@link games.strategy.triplea.ai.pro.ProAi#restorePurchaseTerritoriesFromSnapshot} —
- *       both maps are needed; {@code storedPurchaseTerritories} is preserved (not cleared) after
- *       this phase so the place executor can consume it.
+ *   <li>{@link games.strategy.triplea.ai.pro.ProAi#restoreFactoryMoveMapFromSnapshot} and {@link
+ *       games.strategy.triplea.ai.pro.ProAi#restorePurchaseTerritoriesFromSnapshot} — both maps are
+ *       needed; {@code storedPurchaseTerritories} is preserved (not cleared) after this phase so
+ *       the place executor can consume it.
  *   <li>Submit {@code invokeNonCombatMoveForSidecar} to the session's single-threaded executor.
  * </ol>
  */
@@ -62,8 +62,7 @@ public final class NoncombatMoveExecutor
     // Step 2: hydrate GameData from wire state
     WireStateApplier.apply(data, request.state(), session.unitIdMap());
 
-    final GamePlayer player =
-        data.getPlayerList().getPlayerId(request.state().currentPlayer());
+    final GamePlayer player = data.getPlayerList().getPlayerId(request.state().currentPlayer());
     if (player == null) {
       throw new IllegalArgumentException(
           "Unknown player in NoncombatMoveRequest: " + request.state().currentPlayer());
@@ -75,14 +74,16 @@ public final class NoncombatMoveExecutor
     final var proAi = session.proAi();
 
     // Step 3: restore storedFactoryMoveMap and storedPurchaseTerritories
-    snapOpt.ifPresent(snap -> {
-      proAi.restoreFactoryMoveMapFromSnapshot(snap, data);
-      proAi.restorePurchaseTerritoriesFromSnapshot(snap, data);
-    });
+    snapOpt.ifPresent(
+        snap -> {
+          proAi.restoreFactoryMoveMapFromSnapshot(snap, data);
+          proAi.restorePurchaseTerritoriesFromSnapshot(snap, data);
+        });
 
     if (proAi.storedFactoryMoveMapIsNull()) {
       throw new IllegalStateException(
-          "storedFactoryMoveMap is null for session " + session.key()
+          "storedFactoryMoveMap is null for session "
+              + session.key()
               + " — purchase must run before noncombat-move");
     }
 
@@ -130,6 +131,8 @@ public final class NoncombatMoveExecutor
         throw new AssertionError(
             "isBombing == true in noncombat-move phase — ProAI invariant violated");
       }
+      AiTraceLogger.logCapturedMove(
+          player.getName(), "noncombat-move", captured.move(), false, uuidToWireId);
       moves.addAll(ExecutorSupport.projectOrders(captured.move(), uuidToWireId));
     }
 
