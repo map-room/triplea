@@ -322,9 +322,9 @@ class WireStateApplierTest {
     // 112 Sea Zone: territory owner is Germans but the cruiser belongs to Italians.
     // This mirrors the bug scenario where sea zones hold ships from allied nations.
     final WireUnit germanSub =
-        WireUnit.of("u-sub-1", "submarine", 0, 0, 0, "Germans");
+        WireUnit.of("u-sub-1", "submarine", 0, 0, 0, "Germans", null, false, false);
     final WireUnit italianCruiser =
-        WireUnit.of("u-cru-1", "cruiser", 0, 0, 0, "Italians");
+        WireUnit.of("u-cru-1", "cruiser", 0, 0, 0, "Italians", null, false, false);
     final WireState wire =
         new WireState(
             List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(germanSub, italianCruiser))),
@@ -370,6 +370,88 @@ class WireStateApplierTest {
     assertThat(germany).isNotNull();
     assertThat(germany.getUnits()).hasSize(1);
     assertThat(germany.getUnits().iterator().next().getOwner().getName()).isEqualTo("Germans");
+  }
+
+  // ---------- transportedBy / submerged / wasInCombat hydration (#1831) ----------
+
+  @Test
+  void submerged_trueOnWire_setsSubmergedOnUnit() {
+    final GameData gd = fresh();
+    final WireUnit sub =
+        WireUnit.of("u-sub-1", "submarine", 0, 0, 0, "Germans", null, true, false);
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(sub))),
+            List.of(),
+            1,
+            "combatMove",
+            "Germans");
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    WireStateApplier.apply(gd, wire, idMap);
+
+    final Territory seaZone = gd.getMap().getTerritoryOrNull("112 Sea Zone");
+    assertThat(seaZone).isNotNull();
+    final Unit liveUnit = seaZone.getUnits().iterator().next();
+    assertThat(liveUnit.getSubmerged()).isTrue();
+  }
+
+  @Test
+  void wasInCombat_trueOnWire_setsWasInCombatOnUnit() {
+    final GameData gd = fresh();
+    final WireUnit infantry =
+        WireUnit.of("u-inf-1", "infantry", 0, 0, 0, "Germans", null, false, true);
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("Germany", "Germans", List.of(infantry))),
+            List.of(),
+            1,
+            "nonCombatMove",
+            "Germans");
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    WireStateApplier.apply(gd, wire, idMap);
+
+    final Territory germany = gd.getMap().getTerritoryOrNull("Germany");
+    assertThat(germany).isNotNull();
+    final Unit liveUnit = germany.getUnits().iterator().next();
+    assertThat(liveUnit.getWasInCombat()).isTrue();
+  }
+
+  @Test
+  void transportedBy_unitIdOnWire_linksInfantryToTransport() {
+    final GameData gd = fresh();
+    final WireUnit transport =
+        WireUnit.of("u-trn-1", "transport", 0, 0, 0, "Germans", null, false, false);
+    final WireUnit infantry =
+        WireUnit.of("u-inf-1", "infantry", 0, 0, 0, "Germans", "u-trn-1", false, false);
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(transport, infantry))),
+            List.of(),
+            1,
+            "combatMove",
+            "Germans");
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    WireStateApplier.apply(gd, wire, idMap);
+
+    final Territory seaZone = gd.getMap().getTerritoryOrNull("112 Sea Zone");
+    assertThat(seaZone).isNotNull();
+    final UUID transportUuid = idMap.get("u-trn-1");
+    final UUID infantryUuid = idMap.get("u-inf-1");
+    assertThat(transportUuid).isNotNull();
+    assertThat(infantryUuid).isNotNull();
+
+    Unit transportUnit = null;
+    Unit infantryUnit = null;
+    for (final Unit u : seaZone.getUnits()) {
+      if (u.getId().equals(transportUuid)) {
+        transportUnit = u;
+      } else if (u.getId().equals(infantryUuid)) {
+        infantryUnit = u;
+      }
+    }
+    assertThat(transportUnit).isNotNull();
+    assertThat(infantryUnit).isNotNull();
+    assertThat(infantryUnit.getTransportedBy()).isEqualTo(transportUnit);
   }
 
   @Test

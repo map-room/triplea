@@ -18,6 +18,7 @@ import java.lang.System.Logger.Level;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +88,7 @@ public final class WireStateApplier {
     // damage branch references are live on the board.
     applyConqueredThisTurn(gameData, wire);
     applyOperationalDamage(gameData, wire, unitIdMap);
+    applyUnitProperties(gameData, wire, unitIdMap);
     // Round/step last — GameSequence mutation has no interaction with the earlier branches,
     // but keeping it at the tail means nothing downstream can overwrite it.
     applyRoundAndStep(gameData, wire);
@@ -340,6 +342,73 @@ public final class WireStateApplier {
     }
     if (!toAdd.isEmpty()) {
       out.add(ChangeFactory.addUnits(territory, toAdd));
+    }
+  }
+
+  /**
+   * Hydrate per-unit transient state (transportedBy, submerged, wasInCombat) after all units are
+   * live on the board. Runs after the main {@link CompositeChange} so that transporter units
+   * referenced by transportedBy are guaranteed to exist in game data.
+   */
+  private static void applyUnitProperties(
+      final GameData gameData,
+      final WireState wire,
+      final ConcurrentMap<String, UUID> unitIdMap) {
+    // Index every live unit by UUID for O(1) transport resolution across territories.
+    final Map<UUID, Unit> allUnitsById = new HashMap<>();
+    for (final Territory t : gameData.getMap().getTerritories()) {
+      for (final Unit u : t.getUnits()) {
+        allUnitsById.put(u.getId(), u);
+      }
+    }
+
+    for (final WireTerritory wt : wire.territories()) {
+      final Territory t = gameData.getMap().getTerritoryOrNull(wt.territoryId());
+      if (t == null) {
+        continue;
+      }
+      final CompositeChange changes = new CompositeChange();
+      for (final WireUnit wu : wt.units()) {
+        final UUID uuid = unitIdMap.get(wu.unitId());
+        if (uuid == null) {
+          continue;
+        }
+        final Unit unit = allUnitsById.get(uuid);
+        if (unit == null) {
+          continue;
+        }
+
+        if (wu.submerged() != unit.getSubmerged()) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, wu.submerged(), Unit.PropertyName.SUBMERGED));
+        }
+        if (wu.wasInCombat() != unit.getWasInCombat()) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, wu.wasInCombat(), Unit.PropertyName.WAS_IN_COMBAT));
+        }
+
+        final String wireTransportedById = wu.transportedBy();
+        final Unit currentTransportedBy = unit.getTransportedBy();
+        if (wireTransportedById != null) {
+          final UUID transporterUuid = unitIdMap.get(wireTransportedById);
+          if (transporterUuid != null) {
+            final Unit transporter = allUnitsById.get(transporterUuid);
+            if (transporter != null && !transporter.equals(currentTransportedBy)) {
+              changes.add(
+                  ChangeFactory.unitPropertyChange(
+                      unit, transporter, Unit.PropertyName.TRANSPORTED_BY));
+            }
+          }
+        } else if (currentTransportedBy != null) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(unit, null, Unit.PropertyName.TRANSPORTED_BY));
+        }
+      }
+      if (!changes.isEmpty()) {
+        gameData.performChange(changes);
+      }
     }
   }
 
