@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import javax.annotation.Nullable;
 import lombok.Getter;
@@ -42,9 +43,17 @@ public final class ProData {
   private final Set<Unit> unitsToBeConsumed = new HashSet<>();
   private double minCostPerHitPoint = Double.MAX_VALUE;
 
+  /** Seeded RNG for deterministic AI decisions. Seeded via {@link #setSeed(long)}. */
+  @Getter private Random rng = new Random();
+
   private AbstractProAi proAi;
   private GameData data;
   private GamePlayer player;
+
+  /** Seeds the RNG used by AI subsystems for deterministic behaviour. */
+  public void setSeed(final long seed) {
+    rng = new Random(seed);
+  }
 
   public void initialize(final AbstractProAi proAi) {
     hiddenInitialize(proAi, proAi.getGameData(), proAi.getGamePlayer(), false);

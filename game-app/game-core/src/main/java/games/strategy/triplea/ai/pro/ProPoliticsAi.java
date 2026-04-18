@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import org.triplea.java.collections.CollectionUtils;
 
 /** Pro politics AI. */
@@ -25,10 +26,16 @@ class ProPoliticsAi {
 
   private final ProOddsCalculator calc;
   private final ProData proData;
+  private final Random rng;
 
   ProPoliticsAi(final AbstractProAi ai) {
+    this(ai, ai.getProData().getRng());
+  }
+
+  ProPoliticsAi(final AbstractProAi ai, final Random rng) {
     calc = ai.getCalc();
     proData = ai.getProData();
+    this.rng = rng;
   }
 
   List<PoliticalActionAttachment> politicalActions() {
@@ -123,7 +130,7 @@ class ProPoliticsAi {
         final double roundFactor = (round - 1) * .05; // 0, .05, .1, .15, etc
         final double warChance =
             roundFactor + attackPercentageMap.get(action) * (1 + 10 * roundFactor);
-        final double random = Math.random();
+        final double random = rng.nextDouble();
         ProLogger.trace(enemyMap.get(action) + ", warChance=" + warChance + ", random=" + random);
         if (random <= warChance) {
           results.add(action);
@@ -136,7 +143,7 @@ class ProPoliticsAi {
       // Decide whether to declare war on a neutral
       final List<PoliticalActionAttachment> options = new ArrayList<>(neutralMap.keySet());
       Collections.shuffle(options);
-      final double random = Math.random();
+      final double random = rng.nextDouble();
       final double warChance = .01;
       ProLogger.debug("warChance=" + warChance + ", random=" + random);
       if (random <= warChance) {
@@ -146,14 +153,14 @@ class ProPoliticsAi {
     }
 
     // Old code used for non-war actions
-    if (Math.random() < .5) {
+    if (rng.nextDouble() < .5) {
       final List<PoliticalActionAttachment> actionChoicesOther =
           AiPoliticalUtils.getPoliticalActionsOther(
               player, politicsDelegate.getTestedConditions(), data);
       if (!actionChoicesOther.isEmpty()) {
         Collections.shuffle(actionChoicesOther);
         int i = 0;
-        final double random = Math.random();
+        final double random = rng.nextDouble();
         final int maxOtherActionsPerTurn =
             (random < .3
                 ? 0

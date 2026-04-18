@@ -175,6 +175,7 @@ public final class SessionRegistry {
   private Session buildSession(final SessionKey key, final String sessionId, final long seed) {
     final GameData data = canonical.cloneForSession();
     final ProAi proAi = new ProAi("sidecar-" + key.gameId() + "-" + key.nation(), key.nation());
+    proAi.getProData().setSeed(seed);
     final ExecutorService offensiveExecutor =
         Executors.newSingleThreadExecutor(
             r -> {
