@@ -11,6 +11,7 @@ import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.ai.pro.ProAi;
+import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import games.strategy.engine.delegate.IDelegate;
 import games.strategy.triplea.delegate.EndRoundDelegate;
 import games.strategy.triplea.delegate.MoveDelegate;
@@ -116,8 +117,10 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     final Resource pus = data.getResourceList().getResourceOrThrow(Constants.PUS);
     final int pusToSpend = player.getResources().getQuantity(pus);
 
-    final RecordingPurchaseDelegate recorder = new RecordingPurchaseDelegate();
     final ProAi proAi = session.proAi();
+    final RecordingPurchaseDelegate recorder = new RecordingPurchaseDelegate();
+    recorder.initialize("purchase", "Purchase");
+    recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
 
     final Future<Void> future =
         session

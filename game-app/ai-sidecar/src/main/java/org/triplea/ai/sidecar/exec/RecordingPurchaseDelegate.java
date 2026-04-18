@@ -1,35 +1,36 @@
 package org.triplea.ai.sidecar.exec;
 
-import games.strategy.engine.data.ProductionRule;
 import games.strategy.engine.data.RepairRule;
+import games.strategy.engine.data.ProductionRule;
 import games.strategy.engine.data.Unit;
-import games.strategy.engine.delegate.IDelegateBridge;
-import games.strategy.engine.message.IRemote;
-import games.strategy.engine.posted.game.pbem.PbemMessagePoster;
-import games.strategy.net.websocket.ClientNetworkBridge;
-import games.strategy.triplea.delegate.remote.IPurchaseDelegate;
-import java.io.Serializable;
+import games.strategy.triplea.delegate.PurchaseDelegate;
 import java.util.Map;
+import javax.annotation.Nullable;
 import org.triplea.java.collections.IntegerMap;
 
 /**
- * {@link IPurchaseDelegate} stub that captures the {@code IntegerMap<ProductionRule>} handed to
- * {@link #purchase} and the repair map handed to {@link #purchaseRepair}, while no-opping every
- * other method on the interface. Used by {@code PurchaseExecutor} to intercept the side-effect
- * output of {@code games.strategy.triplea.ai.pro.AbstractProAi#purchase} without mutating the
- * session's {@link games.strategy.engine.data.GameData}.
+ * {@link PurchaseDelegate} subclass that captures the purchase and repair maps passed to
+ * {@link #purchase} and {@link #purchaseRepair}, without forwarding to {@code super}.
+ *
+ * <p><b>Why super is NOT called here:</b> {@link PurchaseDelegate#purchase(IntegerMap)} mutates
+ * {@code GameData} by deducting PUs and adding purchased units to {@code player.getUnitCollection()}
+ * via {@code bridge.addChange()}. The sidecar's {@link PlaceExecutor} later calls
+ * {@code AbstractProAi.invokePlaceForSidecar()}, which explicitly injects units from
+ * {@code storedPurchaseTerritories} into the player's holding pool before {@code purchaseAi.place()}
+ * runs. If {@code super.purchase()} were called here, those units would be injected a second time
+ * (since {@link org.triplea.ai.sidecar.wire.WireStateApplier#apply} does not clear the player's
+ * holding pool). Fixing this would require coordinated changes to
+ * {@code AbstractProAi.invokePlaceForSidecar} in {@code game-core}; that is tracked as a
+ * follow-up. For now, budget validation is the responsibility of the {@link PurchaseExecutor}
+ * {@code trimToFit} backstop.
  *
  * <p><b>Thread-safety:</b> not thread-safe. Each {@code PurchaseExecutor.execute} call creates a
  * fresh instance and the session-scoped executor serialises access on the Java side.
  */
-public final class RecordingPurchaseDelegate implements IPurchaseDelegate {
+public final class RecordingPurchaseDelegate extends PurchaseDelegate {
 
   private IntegerMap<ProductionRule> capturedPurchase = new IntegerMap<>();
   private Map<Unit, IntegerMap<RepairRule>> capturedRepair = Map.of();
-  private IDelegateBridge bridge;
-  private boolean hasPostedTurnSummary;
-  private String name = "recordingPurchase";
-  private String displayName = "Recording Purchase";
 
   public IntegerMap<ProductionRule> capturedPurchase() {
     return capturedPurchase;
@@ -39,88 +40,23 @@ public final class RecordingPurchaseDelegate implements IPurchaseDelegate {
     return capturedRepair;
   }
 
+  /**
+   * Captures the purchase map. Does NOT call {@code super.purchase()} to avoid mutating the
+   * player's unit holding pool (see class Javadoc). Always returns {@code null} (success).
+   */
   @Override
-  public String purchase(final IntegerMap<ProductionRule> productionRules) {
+  public @Nullable String purchase(final IntegerMap<ProductionRule> productionRules) {
     this.capturedPurchase = new IntegerMap<>(productionRules);
     return null;
   }
 
+  /**
+   * Captures the repair map. Does NOT call {@code super.purchaseRepair()} for the same reason as
+   * {@link #purchase}. Always returns {@code null} (success).
+   */
   @Override
-  public String purchaseRepair(final Map<Unit, IntegerMap<RepairRule>> productionRules) {
+  public @Nullable String purchaseRepair(final Map<Unit, IntegerMap<RepairRule>> productionRules) {
     this.capturedRepair = Map.copyOf(productionRules);
     return null;
-  }
-
-  @Override
-  public void setHasPostedTurnSummary(final boolean hasPostedTurnSummary) {
-    this.hasPostedTurnSummary = hasPostedTurnSummary;
-  }
-
-  @Override
-  public boolean getHasPostedTurnSummary() {
-    return hasPostedTurnSummary;
-  }
-
-  @Override
-  public boolean postTurnSummary(final PbemMessagePoster poster, final String title) {
-    return true;
-  }
-
-  @Override
-  public void initialize(final String name, final String displayName) {
-    this.name = name;
-    this.displayName = displayName;
-  }
-
-  @Override
-  public void setDelegateBridgeAndPlayer(final IDelegateBridge delegateBridge) {
-    this.bridge = delegateBridge;
-  }
-
-  @Override
-  public void setDelegateBridgeAndPlayer(
-      final IDelegateBridge delegateBridge, final ClientNetworkBridge clientNetworkBridge) {
-    this.bridge = delegateBridge;
-  }
-
-  @Override
-  public void start() {}
-
-  @Override
-  public void end() {}
-
-  @Override
-  public String getName() {
-    return name;
-  }
-
-  @Override
-  public String getDisplayName() {
-    return displayName;
-  }
-
-  @Override
-  public IDelegateBridge getBridge() {
-    return bridge;
-  }
-
-  @Override
-  public Serializable saveState() {
-    return new Serializable() {
-      private static final long serialVersionUID = 1L;
-    };
-  }
-
-  @Override
-  public void loadState(final Serializable state) {}
-
-  @Override
-  public Class<? extends IRemote> getRemoteType() {
-    return IPurchaseDelegate.class;
-  }
-
-  @Override
-  public boolean delegateCurrentlyRequiresUserInput() {
-    return false;
   }
 }
