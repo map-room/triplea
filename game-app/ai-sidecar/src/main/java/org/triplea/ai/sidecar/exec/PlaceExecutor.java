@@ -94,13 +94,19 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
               + " — check restore path and dispatch order");
     }
 
-    // Step 4: dispatch on the session's single-threaded offensive executor
+    // Step 4: dispatch on the session's single-threaded offensive executor.
+    // reinitializeProDataForSidecar() re-binds proData.getData() to the session GameData
+    // so ProPurchaseAi's placement pass sees the live BattleTracker (populated by
+    // WireStateApplier.applyConqueredThisTurn) — otherwise ProAi plans placements at
+    // newly-captured territories like France and groupCapturesIntoPlan has to drop them.
+    // Same pattern as CombatMove/NoncombatMove/PoliticsExecutor.
     final RecordingPlaceDelegate recorder = new RecordingPlaceDelegate();
     final Future<Void> future =
         session
             .offensiveExecutor()
             .submit(
                 () -> {
+                  proAi.reinitializeProDataForSidecar();
                   proAi.invokePlaceForSidecar(recorder, data, player);
                   return null;
                 });
