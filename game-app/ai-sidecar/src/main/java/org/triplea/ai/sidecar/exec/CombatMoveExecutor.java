@@ -128,6 +128,6 @@ public final class CombatMoveExecutor implements DecisionExecutor<CombatMoveRequ
       }
     }
 
-    return new CombatMovePlan(moves, sbrMoves);
+    return new CombatMovePlan(List.of(), moves, sbrMoves);
   }
 }
