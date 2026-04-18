@@ -131,7 +131,8 @@ class ScrambleExecutorBenchmark {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
     return new ScrambleRequest(
         wire,
         new ScrambleRequest.ScrambleBattle(

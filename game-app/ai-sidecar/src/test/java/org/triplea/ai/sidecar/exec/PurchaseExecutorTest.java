@@ -52,7 +52,7 @@ class PurchaseExecutorTest {
 
   private static PurchaseRequest purchaseRequestFor(final String nation) {
     return new PurchaseRequest(
-        new WireState(List.of(), List.of(), 1, "purchase", nation));
+        new WireState(List.of(), List.of(), 1, "purchase", nation, List.of()));
   }
 
   private static int playerPus(final GameData data, final String nation) {

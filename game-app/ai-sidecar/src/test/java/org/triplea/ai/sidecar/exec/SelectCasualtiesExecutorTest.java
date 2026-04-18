@@ -54,7 +54,8 @@ class SelectCasualtiesExecutorTest {
         List.of(),
         1,
         "combat",
-        "Germans");
+        "Germans",
+        List.of());
   }
 
   // ------------------------------------------------------------------------
@@ -174,7 +175,8 @@ class SelectCasualtiesExecutorTest {
             List.of(),
             1,
             "combat",
-            "Germans");
+            "Germans",
+            List.of());
 
     final List<WireUnit> selectFrom =
         List.of(
