@@ -1,0 +1,12 @@
+{
+  "kind" : "combat-move",
+  "declarations" : [ {
+    "target" : "Russians"
+  } ],
+  "moves" : [ {
+    "unitIds" : [ "u-1", "u-2" ],
+    "from" : "Germany",
+    "to" : "Belarus"
+  } ],
+  "sbrMoves" : [ ]
+}
