@@ -395,6 +395,21 @@ public final class WireStateApplier {
               ChangeFactory.unitPropertyChange(
                   unit, wu.wasInCombat(), Unit.PropertyName.WAS_IN_COMBAT));
         }
+        if (wu.wasLoadedThisTurn() != unit.getWasLoadedThisTurn()) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, wu.wasLoadedThisTurn(), Unit.PropertyName.LOADED_THIS_TURN));
+        }
+        if (wu.wasUnloadedInCombatPhase() != unit.getWasUnloadedInCombatPhase()) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, wu.wasUnloadedInCombatPhase(), Unit.PropertyName.UNLOADED_IN_COMBAT_PHASE));
+        }
+        if (wu.bonusMovement() != unit.getBonusMovement()) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, wu.bonusMovement(), Unit.PropertyName.BONUS_MOVEMENT));
+        }
 
         final String wireTransportedById = wu.transportedBy();
         final Unit currentTransportedBy = unit.getTransportedBy();
