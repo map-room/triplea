@@ -115,10 +115,14 @@ class PoliticsExecutorTest {
         new WireRelationship("Americans", "Germans", "war"),
         new WireRelationship("Chinese", "Germans", "war"));
 
+    // Use "combatMove" phase so WireStateApplier.applyRoundAndStep can advance the sequence
+    // to round 21. "politics" is not in StepNameMapper, so it would be silently skipped,
+    // leaving round at 1 where warChance is < 1.0. PoliticsExecutor does not use the
+    // phase value for any logic — only the round matters for the war-probability check.
     final PoliticsPlan plan = new PoliticsExecutor(store).execute(
         session,
         new PoliticsRequest(new WireState(List.of(), List.of(), DETERMINISTIC_WAR_ROUND,
-            "politics", "Germans", preWarRelationships)));
+            "combatMove", "Germans", preWarRelationships)));
 
     assertThat(plan.declarations())
         .as("Germany must declare war on Russia at round " + DETERMINISTIC_WAR_ROUND
