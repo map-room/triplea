@@ -7,6 +7,7 @@ import games.strategy.engine.data.GameState;
 import games.strategy.engine.data.GameStep;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.engine.delegate.IDelegateBridge;
 import games.strategy.engine.framework.GameDataManager;
 import games.strategy.engine.framework.GameDataUtils;
@@ -30,7 +31,6 @@ import games.strategy.triplea.ai.pro.util.ProOddsCalculator;
 import games.strategy.triplea.ai.pro.util.ProPurchaseUtils;
 import games.strategy.triplea.ai.pro.util.ProTransportUtils;
 import games.strategy.triplea.attachments.PoliticalActionAttachment;
-import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.triplea.delegate.DiceRoll;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.PoliticsDelegate;
@@ -79,6 +79,14 @@ public abstract class AbstractProAi extends AbstractAi {
   private List<PoliticalActionAttachment> storedPoliticalActions;
   private List<Territory> storedStrafingTerritories;
 
+  // Sidecar mode: skip the politics step in purchase()'s simulation loop.
+  // Politics has already executed on the session GameData before purchase runs;
+  // re-rolling here would speculatively declare additional wars not present in
+  // the real state, inflating attack-option scoring and producing unplaceable
+  // purchases (e.g. a factory_minor for a UK-owned territory when no UK war was
+  // declared). Default true preserves full-game TripleA behaviour.
+  private boolean simulatePoliticsInPurchase = true;
+
   public AbstractProAi(
       final String name,
       final IBattleCalculator battleCalculator,
@@ -98,6 +106,7 @@ public abstract class AbstractProAi extends AbstractAi {
     storedPurchaseTerritories = null;
     storedPoliticalActions = null;
     storedStrafingTerritories = new ArrayList<>();
+    simulatePoliticsInPurchase = true;
   }
 
   @Override
@@ -112,6 +121,22 @@ public abstract class AbstractProAi extends AbstractAi {
 
   public void setStoredStrafingTerritories(final List<Territory> strafingTerritories) {
     storedStrafingTerritories = strafingTerritories;
+  }
+
+  /**
+   * Sidecar-only toggle: disable the politics step inside {@link #purchase}'s turn-simulation loop.
+   * The sidecar's bot calls {@code kind=politics} before {@code kind=purchase}, so by the time
+   * {@code purchase} runs, real politics has already executed on the session GameData and the
+   * cloned {@code dataCopy} inherits the post-politics relationships. Re-rolling politics in
+   * simulation would only speculate wrongly. Default {@code true} preserves full-game behaviour.
+   */
+  public void setSimulatePoliticsInPurchase(final boolean simulate) {
+    this.simulatePoliticsInPurchase = simulate;
+  }
+
+  /** Package-private — visible to unit tests only. */
+  boolean isSimulatePoliticsInPurchase() {
+    return simulatePoliticsInPurchase;
   }
 
   /**
@@ -255,6 +280,12 @@ public abstract class AbstractProAi extends AbstractAi {
           storedPurchaseTerritories = purchaseAi.purchase(purchaseDelegate, data);
           break;
         } else if (GameStep.isPoliticsStepName(stepName)) {
+          if (!simulatePoliticsInPurchase) {
+            // Sidecar mode: real politics already executed on the session's GameData before this
+            // purchase call. dataCopy inherits the post-politics relationships. Re-rolling politics
+            // in simulation would speculate additional wars, inflating attack-option scoring.
+            continue;
+          }
           proData.initializeSimulation(this, dataCopy, player);
           // Can only do politics if this player still owns its capital.
           if (proData.getMyCapital() == null || proData.getMyCapital().isOwnedBy(player)) {
@@ -274,10 +305,17 @@ public abstract class AbstractProAi extends AbstractAi {
   /**
    * Public bridge to the {@code protected} {@link #purchase} entry point for the AI sidecar.
    *
-   * <p>The sidecar's {@code PurchaseExecutor} lives in a separate package
-   * ({@code org.triplea.ai.sidecar.exec}) and therefore cannot invoke {@link #purchase}
-   * directly. This method is a thin delegation with no additional behaviour — keep it that
-   * way. All purchase logic belongs in {@link #purchase}.
+   * <p>The sidecar's {@code PurchaseExecutor} lives in a separate package ({@code
+   * org.triplea.ai.sidecar.exec}) and therefore cannot invoke {@link #purchase} directly.
+   *
+   * <p>This method disables the politics step inside {@link #purchase}'s turn-simulation loop for
+   * the duration of the call. By the time the sidecar calls this method, real politics has already
+   * executed on the session GameData via {@code invokePoliticsForSidecar}; {@code dataCopy} (cloned
+   * inside {@link #purchase}) inherits the correct post-politics relationships. Re-running politics
+   * in simulation would roll fresh RNG and may declare additional wars, inflating attack-option
+   * scoring and producing purchases for territories that won't actually be conquered.
+   *
+   * @see #setSimulatePoliticsInPurchase
    */
   public void invokePurchaseForSidecar(
       final boolean purchaseForBid,
@@ -285,7 +323,16 @@ public abstract class AbstractProAi extends AbstractAi {
       final IPurchaseDelegate purchaseDelegate,
       final GameData data,
       final GamePlayer player) {
-    purchase(purchaseForBid, pusToSpend, purchaseDelegate, data, player);
+    // Disable simulated politics; real politics has already executed on the session's
+    // GameData via invokePoliticsForSidecar before this call.
+    setSimulatePoliticsInPurchase(false);
+    try {
+      purchase(purchaseForBid, pusToSpend, purchaseDelegate, data, player);
+    } finally {
+      // Restore default behaviour for any subsequent code paths (defensive — the same
+      // ProAi instance is reused across turns within a session).
+      setSimulatePoliticsInPurchase(true);
+    }
   }
 
   /**
@@ -309,19 +356,18 @@ public abstract class AbstractProAi extends AbstractAi {
   }
 
   /**
-   * Sidecar-only bridge: run politics planning against the live PoliticsDelegate.
-   * Mirrors {@link #invokeCombatMoveForSidecar} — kept thin so the sidecar boundary
-   * stays the only TripleA-side change for politics support.
+   * Sidecar-only bridge: run politics planning against the live PoliticsDelegate. Mirrors {@link
+   * #invokeCombatMoveForSidecar} — kept thin so the sidecar boundary stays the only TripleA-side
+   * change for politics support.
    *
-   * <p>Note: this mutates the in-memory RelationshipTracker via the real delegate's
-   * attemptAction calls. The sidecar rebuilds GameData from wire each turn, so this
-   * within-turn drift is intentional — combat-move planning that follows must see the
-   * post-politics graph for declared wars to result in actual attacks.
+   * <p>Note: this mutates the in-memory RelationshipTracker via the real delegate's attemptAction
+   * calls. The sidecar rebuilds GameData from wire each turn, so this within-turn drift is
+   * intentional — combat-move planning that follows must see the post-politics graph for declared
+   * wars to result in actual attacks.
    *
-   * <p>Callers must invoke {@link #reinitializeProDataForSidecar()} immediately before
-   * this method so {@code proData.getData()} points at the session's live {@link GameData}
-   * (and thus the installed {@code ObservingPoliticsDelegate}) rather than a stale purchase
-   * simulation copy.
+   * <p>Callers must invoke {@link #reinitializeProDataForSidecar()} immediately before this method
+   * so {@code proData.getData()} points at the session's live {@link GameData} (and thus the
+   * installed {@code ObservingPoliticsDelegate}) rather than a stale purchase simulation copy.
    */
   public void invokePoliticsForSidecar() {
     politicsAi.politicalActions();
@@ -332,11 +378,11 @@ public abstract class AbstractProAi extends AbstractAi {
    * politics runs. The purchase phase leaves {@code proData} pointing at its simulation copy
    * ({@code dataCopy}) via the last {@code proData.initializeSimulation} call; without
    * re-initializing here, {@code proData.getData()} inside {@link ProPoliticsAi#politicalActions}
-   * resolves to {@code dataCopy} instead of the session {@link GameData}, so the politics
-   * delegate lookup misses the installed {@code ObservingPoliticsDelegate} and
-   * {@code attemptsLeftThisTurn=0} (already consumed during the purchase simulation) silently
-   * filters out every valid war action. Call this immediately before
-   * {@link #invokePoliticsForSidecar()} from the sidecar's PoliticsExecutor.
+   * resolves to {@code dataCopy} instead of the session {@link GameData}, so the politics delegate
+   * lookup misses the installed {@code ObservingPoliticsDelegate} and {@code
+   * attemptsLeftThisTurn=0} (already consumed during the purchase simulation) silently filters out
+   * every valid war action. Call this immediately before {@link #invokePoliticsForSidecar()} from
+   * the sidecar's PoliticsExecutor.
    */
   public void reinitializeProDataForSidecar() {
     initializeData();
@@ -346,10 +392,10 @@ public abstract class AbstractProAi extends AbstractAi {
    * Public bridge to the {@code protected} {@link #move} entry point for the AI sidecar's
    * noncombat-move phase.
    *
-   * <p>Calls {@code move(true, ...)} which dispatches to
-   * {@code ProNonCombatMoveAi.doNonCombatMove(storedFactoryMoveMap, storedPurchaseTerritories,
-   * delegate)}. After the call {@code storedFactoryMoveMap} is cleared; {@code
-   * storedPurchaseTerritories} is intentionally preserved for the subsequent place phase.
+   * <p>Calls {@code move(true, ...)} which dispatches to {@code
+   * ProNonCombatMoveAi.doNonCombatMove(storedFactoryMoveMap, storedPurchaseTerritories, delegate)}.
+   * After the call {@code storedFactoryMoveMap} is cleared; {@code storedPurchaseTerritories} is
+   * intentionally preserved for the subsequent place phase.
    */
   public void invokeNonCombatMoveForSidecar(
       final games.strategy.triplea.delegate.remote.IMoveDelegate delegate,
@@ -368,12 +414,12 @@ public abstract class AbstractProAi extends AbstractAi {
    * type listed in {@code storedPurchaseTerritories}. In a normal TripleA turn the purchase phase
    * adds units to the player's collection via the real {@code IPurchaseDelegate}; in the sidecar
    * the {@code RecordingPurchaseDelegate} only captures purchases without modifying game state, so
-   * this step simulates the effect of the preceding purchase on the player's holding pool.
-   * {@code purchaseAi.place()} then matches these real units against the scratch units in
-   * {@code storedPurchaseTerritories} by type, exactly as in a live game.
+   * this step simulates the effect of the preceding purchase on the player's holding pool. {@code
+   * purchaseAi.place()} then matches these real units against the scratch units in {@code
+   * storedPurchaseTerritories} by type, exactly as in a live game.
    *
-   * <p>Callers must ensure {@code storedPurchaseTerritories} is non-null before calling;
-   * {@link PlaceExecutor} enforces this with an {@link IllegalStateException} guard.
+   * <p>Callers must ensure {@code storedPurchaseTerritories} is non-null before calling; {@link
+   * PlaceExecutor} enforces this with an {@link IllegalStateException} guard.
    */
   public void invokePlaceForSidecar(
       final games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate placeDelegate,
@@ -410,20 +456,18 @@ public abstract class AbstractProAi extends AbstractAi {
    * #invokePurchaseForSidecar} returns. Unit references are encoded as UUID strings; territory
    * references are encoded as territory names. The {@code unitIdMap} parameter is the sidecar's
    * wire-ID → UUID mapping at purchase time; it is stored in the snapshot so that subsequent
-   * executors can pre-populate the session's live {@code unitIdMap} before
-   * {@code WireStateApplier.apply()} runs, ensuring UUID references in the snapshot remain
-   * resolvable after a process restart.
+   * executors can pre-populate the session's live {@code unitIdMap} before {@code
+   * WireStateApplier.apply()} runs, ensuring UUID references in the snapshot remain resolvable
+   * after a process restart.
    *
    * <p>Null stored maps are projected as empty maps in the snapshot.
    *
-   * @param wireToUuid the sidecar's wire-unit-ID → UUID mapping at snapshot time (Map Room unit
-   *     IDs → serialised Java {@link UUID} strings)
+   * @param wireToUuid the sidecar's wire-unit-ID → UUID mapping at snapshot time (Map Room unit IDs
+   *     → serialised Java {@link UUID} strings)
    */
   public ProSessionSnapshot snapshotForSidecar(final Map<String, String> wireToUuid) {
-    final Map<String, ProTerritorySnapshot> combatSnap =
-        projectTerritoryMap(storedCombatMoveMap);
-    final Map<String, ProTerritorySnapshot> factorySnap =
-        projectTerritoryMap(storedFactoryMoveMap);
+    final Map<String, ProTerritorySnapshot> combatSnap = projectTerritoryMap(storedCombatMoveMap);
+    final Map<String, ProTerritorySnapshot> factorySnap = projectTerritoryMap(storedFactoryMoveMap);
     final Map<String, PurchaseTerritorySnapshot> purchaseSnap =
         projectPurchaseMap(storedPurchaseTerritories);
     return new ProSessionSnapshot(combatSnap, factorySnap, purchaseSnap, wireToUuid);
@@ -466,7 +510,8 @@ public abstract class AbstractProAi extends AbstractAi {
     for (final Map.Entry<Unit, Territory> e : pt.getBombardTerritoryMap().entrySet()) {
       bombardSnap.put(e.getKey().getId().toString(), e.getValue().getName());
     }
-    return new ProTerritorySnapshot(unitIds, bomberIds, amphibSnap, transportTerritorySnap, bombardSnap);
+    return new ProTerritorySnapshot(
+        unitIds, bomberIds, amphibSnap, transportTerritorySnap, bombardSnap);
   }
 
   private static Map<String, PurchaseTerritorySnapshot> projectPurchaseMap(
@@ -492,14 +537,13 @@ public abstract class AbstractProAi extends AbstractAi {
   /**
    * Restores {@code storedCombatMoveMap} from a snapshot. No-op if the map is already populated
    * (purchase ran in the same JVM request). Call this before dispatching a {@code combat-move}
-   * decision; do NOT combine with the other restore methods — each phase clears its own map,
-   * and a unified restore would re-populate stale entries for already-consumed phases.
+   * decision; do NOT combine with the other restore methods — each phase clears its own map, and a
+   * unified restore would re-populate stale entries for already-consumed phases.
    *
    * <p><b>Dead-unit resilience:</b> transport UUIDs absent from {@code data.getUnits()} (e.g.
    * transport sunk mid-turn) are dropped silently rather than throwing.
    */
-  public void restoreCombatMoveMapFromSnapshot(
-      final ProSessionSnapshot snap, final GameData data) {
+  public void restoreCombatMoveMapFromSnapshot(final ProSessionSnapshot snap, final GameData data) {
     if (storedCombatMoveMap == null && !snap.combatMoveMap().isEmpty()) {
       storedCombatMoveMap = restoreTerritoryMap(snap.combatMoveMap(), data);
     }
@@ -531,16 +575,16 @@ public abstract class AbstractProAi extends AbstractAi {
 
   /**
    * Returns {@code true} if {@code storedCombatMoveMap} has not been populated yet (either by a
-   * purchase-phase think or by {@link #restoreCombatMoveMapFromSnapshot}). Used by
-   * {@code CombatMoveExecutor} as a belt-and-suspenders guard before dispatching.
+   * purchase-phase think or by {@link #restoreCombatMoveMapFromSnapshot}). Used by {@code
+   * CombatMoveExecutor} as a belt-and-suspenders guard before dispatching.
    */
   public boolean storedCombatMoveMapIsNull() {
     return storedCombatMoveMap == null;
   }
 
   /**
-   * Returns {@code true} if {@code storedFactoryMoveMap} has not been populated yet. Used by
-   * {@code NoncombatMoveExecutor} as a belt-and-suspenders guard before dispatching.
+   * Returns {@code true} if {@code storedFactoryMoveMap} has not been populated yet. Used by {@code
+   * NoncombatMoveExecutor} as a belt-and-suspenders guard before dispatching.
    */
   public boolean storedFactoryMoveMapIsNull() {
     return storedFactoryMoveMap == null;
@@ -623,8 +667,7 @@ public abstract class AbstractProAi extends AbstractAi {
       // only accessed by getRemainingUnitProduction(), which is called on a fresh
       // placeNonConstructionTerritories list, not on the stored one.
       final ProPurchaseTerritory ppt =
-          new ProPurchaseTerritory(
-              prodTerritory, data, data.getPlayerList().getNullPlayer(), 0);
+          new ProPurchaseTerritory(prodTerritory, data, data.getPlayerList().getNullPlayer(), 0);
       // Clear the auto-populated canPlaceTerritories (constructed from the live map) and
       // replace with the snapshotted list, which carries the placeUnits from purchase.
       ppt.getCanPlaceTerritories().clear();
