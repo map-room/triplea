@@ -17,7 +17,7 @@ import org.triplea.io.IoUtils;
 @Getter
 @Setter
 @Slf4j
-final class ProLogSettings implements Serializable {
+public final class ProLogSettings implements Serializable {
   private static final long serialVersionUID = 5532153908942939829L;
   private static final String PROGRAM_SETTINGS = "Program Settings";
   private static ProLogSettings currentSettings;
@@ -27,7 +27,7 @@ final class ProLogSettings implements Serializable {
   private boolean logEnabled = true;
   private Level logLevel = Level.FINEST;
 
-  static ProLogSettings loadSettings() {
+  public static ProLogSettings loadSettings() {
     if (currentSettings == null) {
       currentSettings = loadSettingsImpl();
     }
