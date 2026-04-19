@@ -1251,6 +1251,14 @@ class ProPurchaseAi {
             data.getMap().getTerritories(),
             ProMatches.territoryHasNoInfraFactoryAndIsNotConqueredOwnedLand(player));
     possibleFactoryTerritories.removeAll(factoryPurchaseTerritories.keySet());
+
+    // §20 enforcement: a new factory may only be placed on territory the player controlled since
+    // the start of their turn. Even if live GameData ownership has drifted during mid-turn
+    // simulation or wire-state application, startOfTurnData is a frozen snapshot at turn-start and
+    // gives the authoritative answer.
+    possibleFactoryTerritories.removeIf(
+        t -> isNotOwnedByPlayerAtStartOfTurn(startOfTurnData, player, t));
+
     final Set<Territory> purchaseFactoryTerritories = new HashSet<>();
     final List<Territory> territoriesThatCantBeHeld = new ArrayList<>();
     for (final Territory t : possibleFactoryTerritories) {
@@ -2640,5 +2648,17 @@ class ProPurchaseAi {
               });
     }
     AbstractAi.movePause();
+  }
+
+  /**
+   * Returns true when the given territory was NOT owned by {@code player} at the start of their
+   * turn, as determined by the frozen {@code startOfTurnData} snapshot. Used as a {@code removeIf}
+   * predicate to enforce §20: a new factory may only be placed on territory the player controlled
+   * since the start of their turn.
+   */
+  static boolean isNotOwnedByPlayerAtStartOfTurn(
+      final GameState startOfTurnData, final GamePlayer player, final Territory t) {
+    final Territory startOfTurnTerritory = startOfTurnData.getMap().getTerritoryOrNull(t.getName());
+    return startOfTurnTerritory == null || !player.equals(startOfTurnTerritory.getOwner());
   }
 }
