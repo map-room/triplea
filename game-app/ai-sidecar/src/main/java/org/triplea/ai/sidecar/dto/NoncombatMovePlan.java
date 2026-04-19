@@ -1,18 +1,18 @@
 package org.triplea.ai.sidecar.dto;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
-/**
- * Response for the {@code noncombat-move} decision kind.
- *
- * <p>{@code moves} contains all move orders produced by
- * {@code ProNonCombatMoveAi.doNonCombatMove}. There are no SBR moves in the noncombat phase —
- * {@code isBombing} is always {@code false} for every captured {@code MoveDescription}.
- *
- * <p>Reuses {@link CombatMoveOrder} for the per-move shape; #1761 will expand the shape later.
- */
-public record NoncombatMovePlan(List<CombatMoveOrder> moves) implements DecisionPlan {
+/** Response for the {@code noncombat-move} decision kind. */
+public record NoncombatMovePlan(List<WireMoveDescription> moves) implements DecisionPlan {
+
   public String kind() {
     return "noncombat-move";
+  }
+
+  @JsonCreator
+  public NoncombatMovePlan(@JsonProperty("moves") final List<WireMoveDescription> moves) {
+    this.moves = moves == null ? List.of() : moves;
   }
 }

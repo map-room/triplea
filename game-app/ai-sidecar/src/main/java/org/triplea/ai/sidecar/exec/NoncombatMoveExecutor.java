@@ -3,7 +3,6 @@ package org.triplea.ai.sidecar.exec;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,9 +11,9 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import org.triplea.ai.sidecar.AiTraceLogger;
-import org.triplea.ai.sidecar.dto.CombatMoveOrder;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.NoncombatMoveRequest;
+import org.triplea.ai.sidecar.dto.WireMoveDescription;
 import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.wire.WireStateApplier;
@@ -22,7 +21,8 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
 /**
  * Runs {@link games.strategy.triplea.ai.pro.ProAi#invokeNonCombatMoveForSidecar} on the session's
  * bounded offensive executor, captures every {@link games.strategy.engine.data.MoveDescription} via
- * a {@link RecordingMoveDelegate}, and projects each to a wire-shaped {@link CombatMoveOrder}.
+ * a {@link RecordingMoveDelegate}, and projects each to a {@link
+ * org.triplea.ai.sidecar.dto.WireMoveDescription}.
  *
  * <p>The noncombat phase never issues strategic-bombing-raid moves, so all captured moves land in
  * {@code moves}; an {@link AssertionError} is thrown if any captured move has {@code isBombing ==
@@ -123,18 +123,20 @@ public final class NoncombatMoveExecutor
     final Map<UUID, String> uuidToWireId = new HashMap<>();
     session.unitIdMap().forEach((wireId, uuid) -> uuidToWireId.put(uuid, wireId));
 
-    final List<CombatMoveOrder> moves = new ArrayList<>();
-
-    for (final RecordingMoveDelegate.CapturedMove captured : recorder.captured()) {
-      // Invariant: noncombat phase must never issue a bombing move
-      if (captured.isBombing()) {
-        throw new AssertionError(
-            "isBombing == true in noncombat-move phase — ProAI invariant violated");
-      }
-      AiTraceLogger.logCapturedMove(
-          player.getName(), "noncombat-move", captured.move(), false, uuidToWireId);
-      moves.addAll(ExecutorSupport.projectOrders(captured.move(), uuidToWireId));
-    }
+    final List<WireMoveDescription> moves =
+        recorder.captured().stream()
+            .peek(
+                c -> {
+                  // Invariant: noncombat phase must never issue a bombing move
+                  if (c.isBombing()) {
+                    throw new AssertionError(
+                        "isBombing == true in noncombat-move phase — ProAI invariant violated");
+                  }
+                  AiTraceLogger.logCapturedMove(
+                      player.getName(), "noncombat-move", c.move(), false, uuidToWireId);
+                })
+            .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
+            .toList();
 
     return new NoncombatMovePlan(moves);
   }
