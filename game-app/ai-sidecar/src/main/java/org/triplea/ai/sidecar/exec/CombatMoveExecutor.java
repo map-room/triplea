@@ -3,7 +3,6 @@ package org.triplea.ai.sidecar.exec;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,9 +11,9 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import org.triplea.ai.sidecar.AiTraceLogger;
-import org.triplea.ai.sidecar.dto.CombatMoveOrder;
 import org.triplea.ai.sidecar.dto.CombatMovePlan;
 import org.triplea.ai.sidecar.dto.CombatMoveRequest;
+import org.triplea.ai.sidecar.dto.WireMoveDescription;
 import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.wire.WireStateApplier;
@@ -23,7 +22,8 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
  * Runs {@link games.strategy.triplea.ai.pro.ProAi#invokeCombatMoveForSidecar} on the session's
  * bounded offensive executor, captures every {@link games.strategy.engine.data.MoveDescription} via
  * a {@link RecordingMoveDelegate}, partitions captured moves into standard moves and
- * strategic-bombing-raid moves, and projects each to a wire-shaped {@link CombatMoveOrder}.
+ * strategic-bombing-raid moves, and projects each to a {@link
+ * org.triplea.ai.sidecar.dto.WireMoveDescription}.
  *
  * <h2>Ordering contract</h2>
  *
@@ -127,18 +127,25 @@ public final class CombatMoveExecutor
     final Map<UUID, String> uuidToWireId = new HashMap<>();
     session.unitIdMap().forEach((wireId, uuid) -> uuidToWireId.put(uuid, wireId));
 
-    final List<CombatMoveOrder> moves = new ArrayList<>();
-    final List<CombatMoveOrder> sbrMoves = new ArrayList<>();
+    final List<WireMoveDescription> moves =
+        recorder.captured().stream()
+            .filter(c -> !c.isBombing())
+            .peek(
+                c ->
+                    AiTraceLogger.logCapturedMove(
+                        player.getName(), "combat-move", c.move(), false, uuidToWireId))
+            .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
+            .toList();
 
-    for (final RecordingMoveDelegate.CapturedMove captured : recorder.captured()) {
-      AiTraceLogger.logCapturedMove(
-          player.getName(), "combat-move", captured.move(), captured.isBombing(), uuidToWireId);
-      if (captured.isBombing()) {
-        sbrMoves.addAll(ExecutorSupport.projectOrders(captured.move(), uuidToWireId));
-      } else {
-        moves.addAll(ExecutorSupport.projectOrders(captured.move(), uuidToWireId));
-      }
-    }
+    final List<WireMoveDescription> sbrMoves =
+        recorder.captured().stream()
+            .filter(RecordingMoveDelegate.CapturedMove::isBombing)
+            .peek(
+                c ->
+                    AiTraceLogger.logCapturedMove(
+                        player.getName(), "combat-move", c.move(), true, uuidToWireId))
+            .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
+            .toList();
 
     return new CombatMovePlan(moves, sbrMoves);
   }

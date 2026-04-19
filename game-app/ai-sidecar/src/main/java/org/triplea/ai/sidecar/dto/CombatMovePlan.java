@@ -7,25 +7,21 @@ import java.util.List;
 /**
  * Response for the {@code combat-move} decision kind.
  *
- * <p>{@code moves} contains standard (non-bombing) move orders (batches 1–3 from {@code
- * ProCombatMoveAi.doMove}). {@code sbrMoves} contains strategic-bombing-raid orders (batch 4,
- * where {@code AbstractProAi#shouldBomberBomb} returned {@code true} at capture time).
- *
- * <p>War declarations are no longer embedded here — they are returned by the preceding {@code
- * politics} decision kind ({@link PoliticsPlan}).
+ * <p>{@code moves} contains standard (non-bombing) move descriptions. {@code sbrMoves} contains
+ * strategic-bombing-raid descriptions. Classification into load/unload/move is performed on the TS
+ * side by {@code move-translator.ts}.
  */
-public record CombatMovePlan(List<CombatMoveOrder> moves, List<CombatMoveOrder> sbrMoves)
+public record CombatMovePlan(List<WireMoveDescription> moves, List<WireMoveDescription> sbrMoves)
     implements DecisionPlan {
 
   public String kind() {
     return "combat-move";
   }
 
-  /** Backwards-compat: missing moves/sbrMoves fields default to empty list. */
   @JsonCreator
   public CombatMovePlan(
-      @JsonProperty("moves") final List<CombatMoveOrder> moves,
-      @JsonProperty("sbrMoves") final List<CombatMoveOrder> sbrMoves) {
+      @JsonProperty("moves") final List<WireMoveDescription> moves,
+      @JsonProperty("sbrMoves") final List<WireMoveDescription> sbrMoves) {
     this.moves = moves == null ? List.of() : moves;
     this.sbrMoves = sbrMoves == null ? List.of() : sbrMoves;
   }
