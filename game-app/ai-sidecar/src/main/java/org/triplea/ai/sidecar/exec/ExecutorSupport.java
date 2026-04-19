@@ -9,7 +9,6 @@ import games.strategy.triplea.ai.pro.ProAi;
 import games.strategy.triplea.delegate.battle.BattleDelegate;
 import games.strategy.triplea.delegate.battle.BattleTracker;
 import games.strategy.triplea.delegate.battle.IBattle;
-
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,16 +26,15 @@ import org.triplea.ai.sidecar.session.Session;
  * <p>Three concerns show up in every defensive executor and are centralised here:
  *
  * <ul>
- *   <li>Lazy {@link PlayerBridge}/{@link GamePlayer} initialisation on the session's {@link
- *       ProAi} (constructed bridge-less by {@link
- *       org.triplea.ai.sidecar.session.SessionRegistry}). Required so {@code
- *       AbstractBasePlayer.getGameData()} — called transitively from {@code
+ *   <li>Lazy {@link PlayerBridge}/{@link GamePlayer} initialisation on the session's {@link ProAi}
+ *       (constructed bridge-less by {@link org.triplea.ai.sidecar.session.SessionRegistry}).
+ *       Required so {@code AbstractBasePlayer.getGameData()} — called transitively from {@code
  *       ProData.initialize} — returns the session's cloned {@link GameData} rather than NPE.
- *   <li>Lazy {@link BattleDelegate} re-registration after a {@code GameData} round-trip clears
- *       the delegate map during {@code postDeSerialize}.
- *   <li>Reflective splicing of a {@link SyntheticBattle} into {@link
- *       BattleTracker#pendingBattles pendingBattles} so ProAi entry points that read the
- *       tracker by battle {@link java.util.UUID} see non-null battle state.
+ *   <li>Lazy {@link BattleDelegate} re-registration after a {@code GameData} round-trip clears the
+ *       delegate map during {@code postDeSerialize}.
+ *   <li>Reflective splicing of a {@link SyntheticBattle} into {@link BattleTracker#pendingBattles
+ *       pendingBattles} so ProAi entry points that read the tracker by battle {@link
+ *       java.util.UUID} see non-null battle state.
  * </ul>
  *
  * <p>Package-private: consumed only by executors in this package.
@@ -59,14 +57,14 @@ final class ExecutorSupport {
   private ExecutorSupport() {}
 
   /**
-   * Attach a {@link PlayerBridge} + {@link GamePlayer} to the session's {@link ProAi} on first
-   * use. No-op if already initialised.
+   * Attach a {@link PlayerBridge} + {@link GamePlayer} to the session's {@link ProAi} on first use.
+   * No-op if already initialised.
    *
    * <p>Synchronized on the {@link Session} instance to prevent a check-then-act race: two
-   * concurrent HTTP threads on the same session could both observe {@code
-   * proAi.getGamePlayer() == null} and call {@code initialize} twice, corrupting the ProAi
-   * internal state. The session record is a stable reference shared across all executors on the
-   * same session, so it is a safe monitor.
+   * concurrent HTTP threads on the same session could both observe {@code proAi.getGamePlayer() ==
+   * null} and call {@code initialize} twice, corrupting the ProAi internal state. The session
+   * record is a stable reference shared across all executors on the same session, so it is a safe
+   * monitor.
    */
   static void ensureProAiInitialized(final Session session, final GamePlayer player) {
     synchronized (session) {
@@ -81,8 +79,8 @@ final class ExecutorSupport {
 
   /**
    * Ensure the cloned game data has a registered {@code battle} delegate. {@link
-   * org.triplea.ai.sidecar.CanonicalGameData#cloneForSession} round-trips {@link GameData}
-   * via {@code ObjectOutputStream}; the delegate map is transient and cleared by {@code
+   * org.triplea.ai.sidecar.CanonicalGameData#cloneForSession} round-trips {@link GameData} via
+   * {@code ObjectOutputStream}; the delegate map is transient and cleared by {@code
    * postDeSerialize()}, so a fresh {@link BattleDelegate} is re-registered here on first use.
    */
   static void ensureBattleDelegate(final GameData data) {
@@ -118,14 +116,18 @@ final class ExecutorSupport {
    * Projects a single validated {@link MoveDescription} to one or more {@link CombatMoveOrder}s.
    *
    * <p>Three cases:
+   *
    * <ul>
-   *   <li><b>Load</b> ({@code route.isLoad()}): land → sea zone. {@code unitsToSeaTransports}
-   *       maps cargo→transport. Grouped by transport so each transport emits one order with all
-   *       its cargo. {@code kind="load"}, {@code transportId} = wire ID of the transport.
-   *   <li><b>Unload</b> ({@code route.isUnload()}): sea zone → land. All units are cargo; the
-   *       engine infers the transport from {@code transportedBy}. One order is emitted for the
-   *       whole batch. {@code kind="unload"}, {@code transportId} = wire ID of first sea unit in
-   *       the move (for traceability; engine does not consume it).
+   *   <li><b>Load</b> ({@code route.isLoad()}): land → sea zone. {@code unitsToSeaTransports} maps
+   *       cargo→transport. Aircraft in the move fly independently — they are NOT cargo and must NOT
+   *       be bundled into {@code kind="load"} orders. Non-air ground cargo is grouped by transport
+   *       so each transport emits one order with all its cargo ({@code kind="load"}, {@code
+   *       transportId} = wire ID of the transport). Aircraft emit as a separate plain-move order
+   *       (no {@code kind}, no {@code transportId}).
+   *   <li><b>Unload</b> ({@code route.isUnload()}): sea zone → land. Non-air, non-transport units
+   *       are cargo ({@code kind="unload"}, {@code transportId} = wire ID of first transport in the
+   *       move for traceability). Aircraft in the move fly independently and emit as a separate
+   *       plain-move order.
    *   <li><b>Plain move</b>: single order, {@code kind="move"}.
    * </ul>
    *
@@ -139,52 +141,91 @@ final class ExecutorSupport {
     final String to = move.getRoute().getEnd().getName();
 
     if (move.getRoute().isLoad()) {
-      // Group cargo by transport; emit one order per transport.
+      final List<Unit> airUnits =
+          move.getUnits().stream().filter(u -> u.getUnitAttachment().isAir()).toList();
+
+      // Group non-air cargo by transport; emit one order per transport.
+      // getUnitsToSeaTransports() can include air→carrier pairs in TripleA's internal
+      // representation — skip those so aircraft never appear in a load order.
       final Map<Unit, List<Unit>> cargoByTransport = new LinkedHashMap<>();
       for (final Map.Entry<Unit, Unit> e : move.getUnitsToSeaTransports().entrySet()) {
+        if (e.getKey().getUnitAttachment().isAir()) {
+          continue; // aircraft-on-carrier pairs: aircraft fly, not loaded
+        }
         cargoByTransport.computeIfAbsent(e.getValue(), k -> new ArrayList<>()).add(e.getKey());
       }
-      // If unitsToSeaTransports is empty despite isLoad(), fall through to plain-move.
-      if (!cargoByTransport.isEmpty()) {
-        final List<CombatMoveOrder> orders = new ArrayList<>();
-        for (final Map.Entry<Unit, List<Unit>> e : cargoByTransport.entrySet()) {
-          final String transportWireId = uuidToWireId.get(e.getKey().getId());
-          final List<String> cargoWireIds = e.getValue().stream()
+
+      final List<CombatMoveOrder> orders = new ArrayList<>();
+      for (final Map.Entry<Unit, List<Unit>> e : cargoByTransport.entrySet()) {
+        final String transportWireId = uuidToWireId.get(e.getKey().getId());
+        final List<String> cargoWireIds = wireIds(e.getValue(), uuidToWireId);
+        if (cargoWireIds.isEmpty()) {
+          continue;
+        }
+        orders.add(new CombatMoveOrder(cargoWireIds, from, to, "load", transportWireId));
+      }
+
+      // Aircraft fly — emit as plain move order.
+      if (!airUnits.isEmpty()) {
+        final List<String> airWireIds = wireIds(airUnits, uuidToWireId);
+        if (!airWireIds.isEmpty()) {
+          orders.add(new CombatMoveOrder(airWireIds, from, to));
+        }
+      }
+
+      if (!orders.isEmpty()) {
+        return orders;
+      }
+      // Fall through to plain-move for edge cases where nothing resolved.
+    } else if (move.getRoute().isUnload()) {
+      final List<Unit> airUnits =
+          move.getUnits().stream().filter(u -> u.getUnitAttachment().isAir()).toList();
+
+      // Non-air, non-transport units are ground cargo being unloaded from a sea transport.
+      final List<String> cargoWireIds =
+          move.getUnits().stream()
+              .filter(u -> !u.getUnitAttachment().isAir())
+              .filter(u -> !u.getUnitAttachment().isTransportCapacity())
               .map(u -> uuidToWireId.get(u.getId()))
               .filter(Objects::nonNull)
               .toList();
-          if (cargoWireIds.isEmpty()) {
-            continue;
-          }
-          orders.add(new CombatMoveOrder(cargoWireIds, from, to, "load", transportWireId));
-        }
-        if (!orders.isEmpty()) {
-          return orders;
+
+      final List<CombatMoveOrder> orders = new ArrayList<>();
+      if (!cargoWireIds.isEmpty()) {
+        final String transportWireId =
+            move.getUnits().stream()
+                .filter(u -> u.getUnitAttachment().getTransportCapacity() > 0)
+                .map(u -> uuidToWireId.get(u.getId()))
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        orders.add(new CombatMoveOrder(cargoWireIds, from, to, "unload", transportWireId));
+      }
+
+      // Aircraft fly — emit as plain move order.
+      if (!airUnits.isEmpty()) {
+        final List<String> airWireIds = wireIds(airUnits, uuidToWireId);
+        if (!airWireIds.isEmpty()) {
+          orders.add(new CombatMoveOrder(airWireIds, from, to));
         }
       }
-    } else if (move.getRoute().isUnload()) {
-      // All non-transport units in the move are cargo. Find the transport for traceability.
-      final List<String> cargoWireIds = move.getUnits().stream()
-          .filter(u -> !u.getUnitAttachment().isTransportCapacity())
-          .map(u -> uuidToWireId.get(u.getId()))
-          .filter(Objects::nonNull)
-          .toList();
-      if (!cargoWireIds.isEmpty()) {
-        final String transportWireId = move.getUnits().stream()
-            .filter(u -> u.getUnitAttachment().getTransportCapacity() > 0)
-            .map(u -> uuidToWireId.get(u.getId()))
-            .filter(Objects::nonNull)
-            .findFirst()
-            .orElse(null);
-        return List.of(new CombatMoveOrder(cargoWireIds, from, to, "unload", transportWireId));
+
+      if (!orders.isEmpty()) {
+        return orders;
       }
     }
 
     // Plain move (or load/unload that resolved to no cargo IDs — fall back to full unit list).
-    final List<String> unitIds = move.getUnits().stream()
-        .map(u -> uuidToWireId.get(u.getId()))
-        .filter(Objects::nonNull)
-        .toList();
+    final List<String> unitIds = wireIds(new ArrayList<>(move.getUnits()), uuidToWireId);
     return List.of(new CombatMoveOrder(unitIds, from, to));
+  }
+
+  /**
+   * Maps a list of units to their Map Room wire IDs, dropping any unit whose ID is not present in
+   * the reverse map (e.g. units that were never registered on the wire state).
+   */
+  private static List<String> wireIds(
+      final List<Unit> units, final Map<UUID, String> uuidToWireId) {
+    return units.stream().map(u -> uuidToWireId.get(u.getId())).filter(Objects::nonNull).toList();
   }
 }
