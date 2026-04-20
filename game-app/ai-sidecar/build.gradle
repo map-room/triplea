@@ -6,6 +6,32 @@ plugins {
 application {
     mainClass = "org.triplea.ai.sidecar.SidecarMain"
     applicationName = "ai-sidecar"
+
+    // JVM tuning for the long-running ProAi compute workload.
+    //
+    // -Xmx1G: ~4× triplea's headless bot (-Xmx256M in game-headless). The sidecar
+    //   holds multiple concurrent session GameData clones (typically Germans,
+    //   Italians, Japanese) plus ProTerritoryManager and odds-calc intermediate
+    //   state. 1G is the sweet spot where ZGC's per-byte overhead starts paying off.
+    //
+    // -XX:+UseZGC -XX:+ZGenerational: generational ZGC (JDK 21 feature). Low-pause
+    //   collector with excellent throughput on allocation-heavy workloads. ProAi
+    //   creates millions of short-lived Territory/Unit/ProTerritory intermediates
+    //   during battle simulation and combat-move planning.
+    //
+    // -XX:+UseStringDeduplication: coalesces duplicate char[] backing arrays during
+    //   GC. Sidecar sees massive string duplication across GameData clones
+    //   (territory names, nation names, unit types, step names).
+    //
+    // -Xshare:auto: explicit Class Data Sharing mode (the default on JDK 21).
+    //   Speeds startup by memory-mapping a shared archive of JDK classes.
+    applicationDefaultJvmArgs = [
+        "-Xmx1G",
+        "-XX:+UseZGC",
+        "-XX:+ZGenerational",
+        "-XX:+UseStringDeduplication",
+        "-Xshare:auto",
+    ]
 }
 
 dependencies {
