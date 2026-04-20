@@ -15,6 +15,11 @@ class StepNameMapperTest {
   }
 
   @Test
+  void mapsBattlePhaseToBattleStep() {
+    assertEquals("GermansBattle", StepNameMapper.toJavaStepName("battle", "Germans"));
+  }
+
+  @Test
   void mapsNonCombatMovePhaseToNonCombatMoveStep() {
     assertEquals("GermansNonCombatMove", StepNameMapper.toJavaStepName("nonCombatMove", "Germans"));
   }

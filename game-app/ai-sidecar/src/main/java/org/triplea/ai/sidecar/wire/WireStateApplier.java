@@ -180,10 +180,9 @@ public final class WireStateApplier {
    * is found — which is why the {@link StepNameMapper} contract is narrow.
    */
   private static void applyRoundAndStep(final GameData gameData, final WireState wire) {
-    // StepNameMapper only covers Phase 3 wire phases (purchase / combatMove / nonCombatMove /
-    // place). Legacy / defensive callers may send phase values like "combat" that pre-date
-    // Phase 3; for those we leave the sequence untouched and log a warning — the defensive
-    // executors already tolerate a stale round/step because they dispatch directly into ProAi.
+    // StepNameMapper covers all wired phases (purchase / combatMove / battle / nonCombatMove /
+    // place). Any unmapped phase (e.g. tech, intelligence) leaves the sequence untouched and
+    // logs a warning.
     final String javaStepName;
     try {
       javaStepName = StepNameMapper.toJavaStepName(wire.phase(), wire.currentPlayer());
