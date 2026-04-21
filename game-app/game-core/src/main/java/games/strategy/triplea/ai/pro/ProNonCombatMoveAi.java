@@ -183,6 +183,12 @@ class ProNonCombatMoveAi {
     // Determine where to move infra units
     factoryMoveMap = moveInfraUnits(isCombatMove, factoryMoveMap, infraUnitMoveMap);
 
+    // Rescue air units left on illegal final positions (e.g. just-conquered
+    // territory). Must run before the unmoved-unit warning loop so the pass
+    // can consume entries from unitMoveMap and the warning only fires for
+    // truly unmovable units.
+    evacuateStrandedAir(moveMap, territoryValueMap);
+
     // Log a warning if any units not assigned to a territory (skip infrastructure for now)
     for (final Unit u : territoryManager.getDefendOptions().getUnitMoveMap().keySet()) {
       if (Matches.unitIsInfrastructure().negate().test(u)) {
@@ -2167,6 +2173,123 @@ class ProNonCombatMoveAi {
       Optional.ofNullable(carrierMustMoveWith.get(u))
           .ifPresent(fighters -> to.getTempUnits().addAll(fighters));
     }
+  }
+
+  /**
+   * Rescue pass: for every air unit whose current territory is not a valid landing spot (conquered-
+   * this-turn land, or water without carrier capacity) and which has at least one valid option in
+   * its move map, pick the best destination and assign it. Runs after {@link
+   * #moveUnitsToBestTerritories} and before the unmoved-unit warning loop.
+   *
+   * <p>Two-pass heuristic:
+   *
+   * <ol>
+   *   <li>Defense-maximizer over the unit's valid options — reuses the existing threshold from
+   *       {@code moveUnitsToBestTerritories}.
+   *   <li>Nearest-valid fallback, ties broken by {@code territoryValueMap} (prefer strategically
+   *       useful tiles).
+   * </ol>
+   *
+   * <p>If no valid option exists, the unit is left in place. The Map Room engine's {@code
+   * destroyStrandedAir} path then crashes it per §19.
+   */
+  private void evacuateStrandedAir(
+      final Map<Territory, ProTerritory> moveMap, final Map<Territory, Double> territoryValueMap) {
+    final Map<Unit, Set<Territory>> unitMoveMap =
+        territoryManager.getDefendOptions().getUnitMoveMap();
+    final List<Unit> airStuck = new ArrayList<>();
+    for (final Unit u : unitMoveMap.keySet()) {
+      if (!u.getUnitAttachment().isAir()) {
+        continue;
+      }
+      final Territory currentTerr = unitTerritoryMap.get(u);
+      if (currentTerr == null) {
+        continue;
+      }
+      if (currentTerrIsValidLanding(u, currentTerr, moveMap)) {
+        continue;
+      }
+      if (unitMoveMap.get(u).isEmpty()) {
+        continue;
+      }
+      airStuck.add(u);
+    }
+
+    for (final Unit u : airStuck) {
+      final Territory chosen =
+          pickEvacuationDestination(u, unitMoveMap.get(u), moveMap, territoryValueMap);
+      if (chosen == null) {
+        continue;
+      }
+      moveMap.get(chosen).addUnit(u);
+      unitMoveMap.remove(u);
+      ProLogger.debug(String.format("evacuateStrandedAir: %s moved to %s", u, chosen.getName()));
+    }
+  }
+
+  private boolean currentTerrIsValidLanding(
+      final Unit unit, final Territory t, final Map<Territory, ProTerritory> moveMap) {
+    if (!t.isWater()) {
+      return Matches.airCanLandOnThisAlliedNonConqueredLandTerritory(player).test(t);
+    }
+    final ProTerritory proTerritory = moveMap.get(t);
+    if (proTerritory == null) {
+      return false;
+    }
+    return ProTransportUtils.validateCarrierCapacity(
+        player, t, proTerritory.getAllDefendersForCarrierCalcs(data, player), unit);
+  }
+
+  private Territory pickEvacuationDestination(
+      final Unit unit,
+      final Set<Territory> options,
+      final Map<Territory, ProTerritory> moveMap,
+      final Map<Territory, Double> territoryValueMap) {
+    final List<Territory> validOptions = new ArrayList<>();
+    for (final Territory t : options) {
+      if (currentTerrIsValidLanding(unit, t, moveMap)) {
+        validOptions.add(t);
+      }
+    }
+    if (validOptions.isEmpty()) {
+      return null;
+    }
+
+    // Pass 1: defense-maximizer restricted to valid options.
+    Territory bestByDefense = null;
+    double bestWinPct = -Double.MAX_VALUE;
+    for (final Territory t : validOptions) {
+      final ProTerritory proTerritory = moveMap.get(t);
+      proTerritory.setBattleResultIfNull(
+          () ->
+              calc.estimateDefendBattleResults(
+                  proData, proTerritory, proTerritory.getEligibleDefenders(player)));
+      final ProBattleResult result = proTerritory.getBattleResult();
+      final boolean hasFactory = ProMatches.territoryHasInfraFactoryAndIsLand().test(t);
+      final boolean meetsThreshold =
+          (t.equals(proData.getMyCapital())
+                  && result.getWinPercentage() > (100 - proData.getWinPercentage()))
+              || (hasFactory && result.getWinPercentage() > (100 - proData.getMinWinPercentage()))
+              || result.getTuvSwing() >= 0;
+      if (meetsThreshold && result.getWinPercentage() > bestWinPct) {
+        bestByDefense = t;
+        bestWinPct = result.getWinPercentage();
+      }
+    }
+    if (bestByDefense != null) {
+      return bestByDefense;
+    }
+
+    // Pass 2: nearest-valid fallback, ties broken by territory strategic value.
+    final Territory currentTerr = unitTerritoryMap.get(unit);
+    return validOptions.stream()
+        .min(
+            Comparator.comparingInt(
+                    (Territory t) ->
+                        data.getMap().getDistanceIgnoreEndForCondition(currentTerr, t, any -> true))
+                .thenComparing(
+                    t -> territoryValueMap.getOrDefault(t, 0.0), Comparator.reverseOrder()))
+        .orElse(null);
   }
 
   private Map<Territory, ProTerritory> moveInfraUnits(
