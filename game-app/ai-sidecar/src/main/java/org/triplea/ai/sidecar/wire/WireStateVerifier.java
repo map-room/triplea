@@ -14,8 +14,10 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
@@ -61,9 +63,25 @@ public final class WireStateVerifier {
       final WireState wire,
       final ConcurrentMap<String, UUID> unitIdMap) {
     try {
+      // Build global unit indices for territory-placement and transport-link checks.
+      final Map<UUID, Unit> allUnitsById = new HashMap<>();
+      final Map<UUID, Territory> unitToTerritory = new HashMap<>();
+      for (final Territory t : gameData.getMap().getTerritories()) {
+        for (final Unit u : t.getUnits()) {
+          allUnitsById.put(u.getId(), u);
+          unitToTerritory.put(u.getId(), t);
+        }
+      }
+      // Reverse map: TripleA UUID → wire unit ID, for human-readable transport drift messages.
+      final Map<UUID, String> uuidToWireId = new HashMap<>();
+      for (final Map.Entry<String, UUID> e : unitIdMap.entrySet()) {
+        uuidToWireId.put(e.getValue(), e.getKey());
+      }
+
       int mismatches = 0;
       for (final WireTerritory wt : wire.territories()) {
-        mismatches += verifyTerritory(gameData, wt, unitIdMap);
+        mismatches += verifyTerritory(gameData, wt, unitIdMap,
+            allUnitsById, unitToTerritory, uuidToWireId);
       }
       for (final WirePlayer wp : wire.players()) {
         mismatches += verifyPlayer(gameData, wp);
@@ -89,7 +107,10 @@ public final class WireStateVerifier {
   private static int verifyTerritory(
       final GameData gameData,
       final WireTerritory wt,
-      final ConcurrentMap<String, UUID> unitIdMap) {
+      final ConcurrentMap<String, UUID> unitIdMap,
+      final Map<UUID, Unit> allUnitsById,
+      final Map<UUID, Territory> unitToTerritory,
+      final Map<UUID, String> uuidToWireId) {
     final Territory t = gameData.getMap().getTerritoryOrNull(wt.territoryId());
     if (t == null) {
       return 0;
@@ -135,6 +156,19 @@ public final class WireStateVerifier {
       }
       final Unit unit = findUnitById(t.getUnits(), uuid);
       if (unit == null) {
+        // Unit is known to the id map but not in the expected territory — report where it is.
+        final Territory actual = unitToTerritory.get(uuid);
+        final String actualLocation = actual != null ? actual.getName() : "not-found";
+        LOG.log(
+            Level.WARNING,
+            () ->
+                "apply-drift kind=unit-territory unitId="
+                    + wu.unitId()
+                    + " expected="
+                    + wt.territoryId()
+                    + " actual="
+                    + actualLocation);
+        drift++;
         continue;
       }
 
@@ -189,6 +223,20 @@ public final class WireStateVerifier {
                     + actualUnitOwner);
         drift++;
       }
+
+      // transportedBy — wire says which transport carries this unit; live state must match
+      drift += verifyTransportedBy(wu, unit, unitIdMap, allUnitsById, uuidToWireId,
+          wt.territoryId());
+
+      // combat-phase boolean flags
+      drift += verifyUnitBoolFlag(wu.submerged(), unit.getSubmerged(),
+          "submerged", wt.territoryId(), wu.unitId());
+      drift += verifyUnitBoolFlag(wu.wasInCombat(), unit.getWasInCombat(),
+          "wasInCombat", wt.territoryId(), wu.unitId());
+      drift += verifyUnitBoolFlag(wu.wasLoadedThisTurn(), unit.getWasLoadedThisTurn(),
+          "wasLoadedThisTurn", wt.territoryId(), wu.unitId());
+      drift += verifyUnitBoolFlag(wu.wasUnloadedInCombatPhase(), unit.getWasUnloadedInCombatPhase(),
+          "wasUnloadedInCombatPhase", wt.territoryId(), wu.unitId());
     }
 
     // conquered-this-turn (only checkable if the battle delegate is present)
@@ -210,6 +258,87 @@ public final class WireStateVerifier {
     }
 
     return drift;
+  }
+
+  private static int verifyTransportedBy(
+      final WireUnit wu,
+      final Unit unit,
+      final ConcurrentMap<String, UUID> unitIdMap,
+      final Map<UUID, Unit> allUnitsById,
+      final Map<UUID, String> uuidToWireId,
+      final String territoryId) {
+    final String wireTransportId = wu.transportedBy();
+    final Unit actualTransport = unit.getTransportedBy();
+
+    if (wireTransportId != null) {
+      final UUID transporterUuid = unitIdMap.get(wireTransportId);
+      if (transporterUuid == null) {
+        // Transporter wire ID not yet in idMap — can't verify; skip silently.
+        return 0;
+      }
+      final Unit expectedTransporter = allUnitsById.get(transporterUuid);
+      if (expectedTransporter == null) {
+        return 0;
+      }
+      if (!expectedTransporter.equals(actualTransport)) {
+        final String actualLabel = actualTransport != null
+            ? uuidToWireId.getOrDefault(actualTransport.getId(), "uuid:" + actualTransport.getId())
+            : "null";
+        LOG.log(
+            Level.WARNING,
+            () ->
+                "apply-drift kind=unit-transport-by territory="
+                    + territoryId
+                    + " unitId="
+                    + wu.unitId()
+                    + " expected="
+                    + wireTransportId
+                    + " actual="
+                    + actualLabel);
+        return 1;
+      }
+    } else if (actualTransport != null) {
+      // Wire says no transport, but live unit has one.
+      final String actualLabel =
+          uuidToWireId.getOrDefault(actualTransport.getId(), "uuid:" + actualTransport.getId());
+      LOG.log(
+          Level.WARNING,
+          () ->
+              "apply-drift kind=unit-transport-by territory="
+                  + territoryId
+                  + " unitId="
+                  + wu.unitId()
+                  + " expected=null"
+                  + " actual="
+                  + actualLabel);
+      return 1;
+    }
+    return 0;
+  }
+
+  private static int verifyUnitBoolFlag(
+      final boolean expected,
+      final boolean actual,
+      final String flagName,
+      final String territoryId,
+      final String wireUnitId) {
+    if (expected == actual) {
+      return 0;
+    }
+    LOG.log(
+        Level.WARNING,
+        () ->
+            "apply-drift kind=unit-"
+                + flagName
+                + " territory="
+                + territoryId
+                + " unitId="
+                + wireUnitId
+                + " expected="
+                + expected
+                + " actual="
+                + actual);
+    return 1;
   }
 
   private static int verifyPlayer(final GameData gameData, final WirePlayer wp) {
