@@ -99,6 +99,7 @@ public final class WireStateApplier {
     // Round/step last — GameSequence mutation has no interaction with the earlier branches,
     // but keeping it at the tail means nothing downstream can overwrite it.
     applyRoundAndStep(gameData, wire);
+    WireStateVerifier.verifyApply(gameData, wire, unitIdMap);
   }
 
   /**
