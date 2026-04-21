@@ -603,6 +603,60 @@ class WireStateApplierTest {
     assertThat(liveUnit.getBonusMovement()).isEqualTo(1);
   }
 
+  // ---------- unit owner propagation on existing units (#41) ----------
+
+  @Test
+  void unitOwnerUpdated_whenExistingUnitChangesOwner() {
+    // Simulates a factory/airfield unit that was placed in France by Germans on a prior apply
+    // and then captured by Russians. The second apply carries the same unit UUID but a different
+    // owner field. The applier must update the live unit's owner, not leave it as Germans.
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+
+    final WireState first =
+        new WireState(
+            List.of(
+                new WireTerritory(
+                    "France",
+                    "Germans",
+                    List.of(
+                        WireUnit.of(
+                            "u-fac-1", "factory_major", 0, 0, 0, "Germans",
+                            null, false, false, false, false, 0)))),
+            List.of(),
+            1,
+            "combat",
+            "Germans",
+            List.of());
+    WireStateApplier.apply(gd, first, idMap);
+
+    assertThat(gd.getMap().getTerritoryOrThrow("France").getUnits().iterator().next()
+        .getOwner().getName()).isEqualTo("Germans");
+
+    // Second apply: same unit ID, territory now owned by Russians (captured), unit owner = Russians.
+    final WireState second =
+        new WireState(
+            List.of(
+                new WireTerritory(
+                    "France",
+                    "Russians",
+                    List.of(
+                        WireUnit.of(
+                            "u-fac-1", "factory_major", 0, 0, 0, "Russians",
+                            null, false, false, false, false, 0)))),
+            List.of(),
+            1,
+            "combat",
+            "Russians",
+            List.of());
+    WireStateApplier.apply(gd, second, idMap);
+
+    final Territory france = gd.getMap().getTerritoryOrThrow("France");
+    assertThat(france.getOwner().getName()).isEqualTo("Russians");
+    assertThat(france.getUnits()).hasSize(1);
+    assertThat(france.getUnits().iterator().next().getOwner().getName()).isEqualTo("Russians");
+  }
+
   @Test
   void techFlag_setsAttachmentProperty() {
     final GameData gd = fresh();

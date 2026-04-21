@@ -299,6 +299,12 @@ public final class WireStateApplier {
               ChangeFactory.unitPropertyChange(
                   unit, desiredAlreadyMoved, Unit.PropertyName.ALREADY_MOVED));
         }
+        // Captured infrastructure (factories, airfields) stays in the same territory but
+        // its owner changes to the capturing nation. Without this update the ProAI sees the
+        // old owner on every subsequent apply and the verifier fires drift warnings every turn.
+        if (!unitOwner.equals(unit.getOwner())) {
+          out.add(ChangeFactory.changeOwner(List.of(unit), unitOwner, territory));
+        }
       } else {
         unit = new Unit(uuid, type, unitOwner, gameData);
         // Register with the central UnitsList so {@code GameData.getUnits().get(uuid)}
