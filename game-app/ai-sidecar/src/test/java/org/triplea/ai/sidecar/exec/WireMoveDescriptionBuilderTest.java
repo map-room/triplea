@@ -86,6 +86,36 @@ class WireMoveDescriptionBuilderTest {
     assertThat(result.classifications()).isEmpty();
   }
 
+  @Test
+  void bomberClassifiesAsAirNotTransport() {
+    // Bombers have transportCapacity=2 in Global 1940 XML (paratroop field).
+    // Before the fix, classify() returned {isAir:true, isTransport:true}, causing
+    // the TS translator to split a mixed-air MD into two overlapping moveUnit calls.
+    final Unit bomber = unit("bomber");
+    final Map<UUID, String> wireMap = Map.of(bomber.getId(), "W_bmr");
+    final MoveDescription md =
+        new MoveDescription(List.of(bomber), new Route(germany, sz112), Map.of());
+
+    final WireMoveDescription result = WireMoveDescriptionBuilder.build(md, wireMap);
+
+    assertThat(result.classifications())
+        .containsEntry("W_bmr", new WireUnitClassification(true, false));
+  }
+
+  @Test
+  void seaTransportClassifiesAsTransportNotAir() {
+    final Unit tp = unit("transport");
+    final Map<UUID, String> wireMap = Map.of(tp.getId(), "W_tp");
+    // Route must have distinct start/end territories.
+    final MoveDescription md =
+        new MoveDescription(List.of(tp), new Route(sz112, germany), Map.of());
+
+    final WireMoveDescription result = WireMoveDescriptionBuilder.build(md, wireMap);
+
+    assertThat(result.classifications())
+        .containsEntry("W_tp", new WireUnitClassification(false, true));
+  }
+
   private Unit unit(final String type) {
     return data.getUnitTypeList()
         .getUnitTypeOrThrow(type)

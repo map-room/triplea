@@ -69,7 +69,11 @@ public final class WireMoveDescriptionBuilder {
   }
 
   private static WireUnitClassification classify(final Unit u) {
+    // Bombers have transportCapacity > 0 (paratroop XML field) but are air units,
+    // not sea transports. isTransport must be false for air to prevent the translator
+    // from splitting a mixed-air MD into two overlapping moveUnit dispatches (#1908).
     return new WireUnitClassification(
-        u.getUnitAttachment().isAir(), u.getUnitAttachment().getTransportCapacity() > 0);
+        u.getUnitAttachment().isAir(),
+        u.getUnitAttachment().getTransportCapacity() > 0 && !u.getUnitAttachment().isAir());
   }
 }
