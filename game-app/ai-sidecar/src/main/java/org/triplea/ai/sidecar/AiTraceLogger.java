@@ -31,23 +31,37 @@ public final class AiTraceLogger {
       final MoveDescription move,
       final boolean isBombing,
       final Map<UUID, String> uuidToWireId) {
-    final String kind =
-        isBombing
-            ? "sbr"
-            : move.getRoute().isLoad() ? "load" : move.getRoute().isUnload() ? "unload" : "move";
+    final Collection<Unit> allUnits = move.getUnits();
+    // Air units dispatched from carriers yield route.isUnload() == true on the TripleA side, but
+    // the bot-worker translates them to plain moveUnit calls (not unloadFromTransport). Label the
+    // sidecar trace as "air-move" so the sidecar → bot-worker correspondence reads cleanly.
+    final boolean allAir =
+        !allUnits.isEmpty() && allUnits.stream().allMatch(u -> u.getUnitAttachment().isAir());
+    final String kind;
+    if (isBombing) {
+      kind = "sbr";
+    } else if (move.getRoute().isLoad()) {
+      kind = "load";
+    } else if (move.getRoute().isUnload()) {
+      kind = allAir ? "air-move" : "unload";
+    } else {
+      kind = "move";
+    }
     final String from = maybeQuote(move.getRoute().getStart().getName());
     final String to = maybeQuote(move.getRoute().getEnd().getName());
-    final String units = unitTypeCounts(move.getUnits());
+    final String unitIds = unitWireIds(allUnits, uuidToWireId);
+    final String types = unitTypeCounts(allUnits);
     final String transportId = resolveTransportId(move, uuidToWireId);
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] side=sidecar nation={0} phase={1} kind={2} from={3} to={4} units=[{5}] transportId={6}",
+        "[AI-TRACE] side=sidecar nation={0} phase={1} kind={2} from={3} to={4} unitIds=[{5}] types=[{6}] transportId={7}",
         nation,
         phase,
         kind,
         from,
         to,
-        units,
+        unitIds,
+        types,
         transportId);
   }
 
@@ -82,6 +96,26 @@ public final class AiTraceLogger {
   }
 
   // --- package-private for tests ---
+
+  /**
+   * Build a comma-separated list of Map Room wire IDs for each unit in the given collection, in
+   * iteration order. Falls back to {@code uuid:<java-uuid>} when a unit is not registered in the
+   * reverse map (should not happen in live dispatch but keeps the log non-empty if it does).
+   */
+  static String unitWireIds(final Collection<Unit> units, final Map<UUID, String> uuidToWireId) {
+    if (units.isEmpty()) {
+      return "";
+    }
+    final StringBuilder sb = new StringBuilder();
+    for (final Unit u : units) {
+      if (sb.length() > 0) {
+        sb.append(',');
+      }
+      final String wireId = uuidToWireId.get(u.getId());
+      sb.append(wireId != null ? wireId : "uuid:" + u.getId());
+    }
+    return sb.toString();
+  }
 
   static String unitTypeCounts(final Collection<Unit> units) {
     final Map<String, Integer> counts = new LinkedHashMap<>();
