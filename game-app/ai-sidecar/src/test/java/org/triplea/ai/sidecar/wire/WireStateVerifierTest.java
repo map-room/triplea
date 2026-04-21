@@ -341,6 +341,162 @@ class WireStateVerifierTest {
   }
 
   @Test
+  void unitTerritoryDrift_detectedAfterMovingUnitToWrongTerritory() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final String uid = "u-inf-1";
+    // Wire places the infantry in Germany.
+    final WireState wire =
+        new WireState(
+            List.of(
+                new WireTerritory(
+                    "Germany", "Germans", List.of(new WireUnit(uid, "infantry", 0, 0)))),
+            List.of(),
+            1,
+            "purchase",
+            "Germans",
+            List.of());
+    WireStateApplier.apply(gd, wire, idMap);
+    captured.clear();
+
+    // Move the unit to France to simulate misplacement drift.
+    final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
+    final Territory france = gd.getMap().getTerritoryOrThrow("France");
+    final Unit unit = germany.getUnits().stream()
+        .filter(u -> u.getId().equals(idMap.get(uid))).findFirst().orElseThrow();
+    gd.performChange(
+        games.strategy.engine.data.changefactory.ChangeFactory.moveUnits(
+            germany, france, List.of(unit)));
+
+    WireStateVerifier.verifyApply(gd, wire, idMap);
+
+    assertThat(warnings())
+        .anyMatch(
+            w ->
+                w.contains("apply-drift")
+                    && w.contains("kind=unit-territory")
+                    && w.contains("unitId=" + uid)
+                    && w.contains("expected=Germany")
+                    && w.contains("actual=France"));
+  }
+
+  @Test
+  void transportedByDrift_detectedAfterClearingLink() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final WireUnit transport =
+        WireUnit.of("u-trn-1", "transport", 0, 0, 0, "Germans", null, false, false, false, false, 0);
+    final WireUnit infantry =
+        WireUnit.of("u-inf-1", "infantry", 0, 0, 0, "Germans", "u-trn-1", false, false, false, false, 0);
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(transport, infantry))),
+            List.of(),
+            1,
+            "purchase",
+            "Germans",
+            List.of());
+    WireStateApplier.apply(gd, wire, idMap);
+    captured.clear();
+
+    // Clear the transportedBy link to simulate drift.
+    final Territory seaZone = gd.getMap().getTerritoryOrThrow("112 Sea Zone");
+    final UUID infantryUuid = idMap.get("u-inf-1");
+    final Unit infantryUnit = seaZone.getUnits().stream()
+        .filter(u -> u.getId().equals(infantryUuid)).findFirst().orElseThrow();
+    gd.performChange(
+        games.strategy.engine.data.changefactory.ChangeFactory.unitPropertyChange(
+            infantryUnit, null, Unit.PropertyName.TRANSPORTED_BY));
+
+    WireStateVerifier.verifyApply(gd, wire, idMap);
+
+    assertThat(warnings())
+        .anyMatch(
+            w ->
+                w.contains("apply-drift")
+                    && w.contains("kind=unit-transport-by")
+                    && w.contains("unitId=u-inf-1")
+                    && w.contains("expected=u-trn-1")
+                    && w.contains("actual=null"));
+  }
+
+  @Test
+  void submergedFlagDrift_detectedAfterClearingSubmerged() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final String uid = "u-sub-1";
+    final WireUnit sub =
+        WireUnit.of(uid, "submarine", 0, 0, 0, "Germans", null, true, false, false, false, 0);
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(sub))),
+            List.of(),
+            1,
+            "purchase",
+            "Germans",
+            List.of());
+    WireStateApplier.apply(gd, wire, idMap);
+    captured.clear();
+
+    // Clear submerged flag to simulate drift.
+    final Territory seaZone = gd.getMap().getTerritoryOrThrow("112 Sea Zone");
+    final Unit unit = seaZone.getUnits().stream()
+        .filter(u -> u.getId().equals(idMap.get(uid))).findFirst().orElseThrow();
+    gd.performChange(
+        games.strategy.engine.data.changefactory.ChangeFactory.unitPropertyChange(
+            unit, false, Unit.PropertyName.SUBMERGED));
+
+    WireStateVerifier.verifyApply(gd, wire, idMap);
+
+    assertThat(warnings())
+        .anyMatch(
+            w ->
+                w.contains("apply-drift")
+                    && w.contains("kind=unit-submerged")
+                    && w.contains("unitId=" + uid)
+                    && w.contains("expected=true")
+                    && w.contains("actual=false"));
+  }
+
+  @Test
+  void wasInCombatFlagDrift_detectedAfterClearingWasInCombat() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final String uid = "u-inf-1";
+    final WireUnit infantry =
+        WireUnit.of(uid, "infantry", 0, 0, 0, "Germans", null, false, true, false, false, 0);
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("Germany", "Germans", List.of(infantry))),
+            List.of(),
+            1,
+            "purchase",
+            "Germans",
+            List.of());
+    WireStateApplier.apply(gd, wire, idMap);
+    captured.clear();
+
+    // Clear wasInCombat to simulate drift.
+    final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
+    final Unit unit = germany.getUnits().stream()
+        .filter(u -> u.getId().equals(idMap.get(uid))).findFirst().orElseThrow();
+    gd.performChange(
+        games.strategy.engine.data.changefactory.ChangeFactory.unitPropertyChange(
+            unit, false, Unit.PropertyName.WAS_IN_COMBAT));
+
+    WireStateVerifier.verifyApply(gd, wire, idMap);
+
+    assertThat(warnings())
+        .anyMatch(
+            w ->
+                w.contains("apply-drift")
+                    && w.contains("kind=unit-wasInCombat")
+                    && w.contains("unitId=" + uid)
+                    && w.contains("expected=true")
+                    && w.contains("actual=false"));
+  }
+
+  @Test
   void summaryLine_alwaysEmitted() {
     final GameData gd = fresh();
     final WireState wire =
