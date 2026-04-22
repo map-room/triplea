@@ -3,6 +3,7 @@ package games.strategy.triplea.ai.pro.data;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.GameState;
 import games.strategy.engine.data.Resource;
+import games.strategy.engine.data.Territory;
 import games.strategy.triplea.Constants;
 import org.triplea.java.collections.IntegerMap;
 
@@ -27,6 +28,32 @@ public class ProResourceTracker {
 
   public boolean hasEnough(final IntegerMap<Resource> amount) {
     return getRemaining().greaterThanOrEqualTo(amount);
+  }
+
+  /**
+   * Territory-aware overload. Default implementation ignores the territory and delegates to the
+   * unified {@link #hasEnough(ProPurchaseOption)}. Subclasses that split resources by territory
+   * (see {@code ProSplitResourceTracker}) should override to route the check to the correct pool.
+   */
+  public boolean hasEnough(final ProPurchaseOption ppo, final Territory placeTerr) {
+    return hasEnough(ppo);
+  }
+
+  /** Territory-aware overload; default delegates to {@link #purchase(ProPurchaseOption)}. */
+  public void purchase(final ProPurchaseOption ppo, final Territory placeTerr) {
+    purchase(ppo);
+  }
+
+  /** Territory-aware overload; default delegates to {@link #tempPurchase(ProPurchaseOption)}. */
+  public void tempPurchase(final ProPurchaseOption ppo, final Territory placeTerr) {
+    tempPurchase(ppo);
+  }
+
+  /**
+   * Territory-aware overload; default delegates to {@link #removeTempPurchase(ProPurchaseOption)}.
+   */
+  public void removeTempPurchase(final ProPurchaseOption ppo, final Territory placeTerr) {
+    removeTempPurchase(ppo);
   }
 
   public void purchase(final ProPurchaseOption ppo) {
