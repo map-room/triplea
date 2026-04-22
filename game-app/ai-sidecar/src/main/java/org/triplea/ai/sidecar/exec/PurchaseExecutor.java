@@ -12,6 +12,7 @@ import games.strategy.engine.data.UnitType;
 import games.strategy.engine.delegate.IDelegate;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.ai.pro.ProAi;
+import games.strategy.triplea.ai.pro.data.ProSplitResourceTracker;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import games.strategy.triplea.delegate.EndRoundDelegate;
 import games.strategy.triplea.delegate.MoveDelegate;
@@ -31,7 +32,10 @@ import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RepairOrder;
 import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
+import org.triplea.ai.sidecar.wire.WirePlayer;
+import org.triplea.ai.sidecar.wire.WireState;
 import org.triplea.ai.sidecar.wire.WireStateApplier;
+import org.triplea.ai.sidecar.wire.WireTerritory;
 import org.triplea.java.collections.IntegerMap;
 
 /**
@@ -120,6 +124,11 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     final RecordingPurchaseDelegate recorder = new RecordingPurchaseDelegate();
     recorder.initialize("purchase", "Purchase");
     recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
+
+    // British dual-economy: if the wire state has split IPCs for British plus
+    // per-territory economy tags, prime the ProAi instance with a split-aware
+    // ProResourceTracker for this purchase pass.
+    maybeApplyBritishSplitEconomy(request.state(), proAi, data);
 
     final Future<Void> future =
         session
@@ -254,5 +263,35 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
       }
     }
     return "";
+  }
+
+  private static void maybeApplyBritishSplitEconomy(
+      final WireState wire, final ProAi proAi, final GameData data) {
+    WirePlayer british = null;
+    for (final WirePlayer p : wire.players()) {
+      if ("British".equals(p.playerId()) && p.europePus() != null && p.pacificPus() != null) {
+        british = p;
+        break;
+      }
+    }
+    if (british == null) {
+      return;
+    }
+    final Map<Territory, ProSplitResourceTracker.Pool> poolByTerritory = new HashMap<>();
+    for (final WireTerritory wt : wire.territories()) {
+      if (wt.economy() == null) {
+        continue;
+      }
+      final Territory t = data.getMap().getTerritoryOrNull(wt.territoryId());
+      if (t == null) {
+        continue;
+      }
+      poolByTerritory.put(
+          t,
+          "europe".equals(wt.economy())
+              ? ProSplitResourceTracker.Pool.EUROPE
+              : ProSplitResourceTracker.Pool.PACIFIC);
+    }
+    proAi.setBritishEconomySplit(british.europePus(), british.pacificPus(), poolByTerritory);
   }
 }

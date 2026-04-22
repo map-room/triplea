@@ -56,6 +56,7 @@ import org.triplea.java.collections.IntegerMap;
 /** Pro purchase AI. */
 class ProPurchaseAi {
 
+  private final AbstractProAi ai;
   private final ProOddsCalculator calc;
   private final ProData proData;
   private GameData data;
@@ -66,6 +67,7 @@ class ProPurchaseAi {
   private boolean isBid = false;
 
   ProPurchaseAi(final AbstractProAi ai) {
+    this.ai = ai;
     this.calc = ai.getCalc();
     this.proData = ai.getProData();
   }
@@ -263,7 +265,7 @@ class ProPurchaseAi {
     data = proData.getData();
     this.startOfTurnData = startOfTurnData;
     player = proData.getPlayer();
-    resourceTracker = new ProResourceTracker(player);
+    resourceTracker = ai.createResourceTracker(player, data);
     territoryManager = new ProTerritoryManager(calc, proData);
     isBid = false;
     final ProPurchaseOptionMap purchaseOptions = proData.getPurchaseOptions();
@@ -831,7 +833,7 @@ class ProPurchaseAi {
           }
 
           // Create new temp units
-          resourceTracker.tempPurchase(selectedOption);
+          resourceTracker.tempPurchase(selectedOption, t);
           if (selectedOption.isConstruction()) {
             remainingConstructions -= selectedOption.getQuantity();
           } else {
@@ -1042,7 +1044,7 @@ class ProPurchaseAi {
       ProLogger.trace("Best AA unit: " + bestAaOption.getUnitType().getName());
 
       // Create new temp units
-      resourceTracker.purchase(bestAaOption);
+      resourceTracker.purchase(bestAaOption, t);
       addUnitsToPlace(placeTerritory, bestAaOption.createTempUnits());
     }
   }
@@ -1206,7 +1208,7 @@ class ProPurchaseAi {
         final ProPurchaseOption selectedOption = optionalSelectedOption.get();
 
         // Create new temp units
-        resourceTracker.purchase(selectedOption);
+        resourceTracker.purchase(selectedOption, t);
         remainingUnitProduction -= selectedOption.getQuantity();
         unitsToPlace.addAll(selectedOption.createTempUnits());
         attackAndDefenseDifference += (selectedOption.getAttack() - selectedOption.getDefense());
@@ -1390,7 +1392,7 @@ class ProPurchaseAi {
       final List<ProPurchaseOption> purchaseOptionsForTerritory =
           ProPurchaseValidationUtils.findPurchaseOptionsForTerritory(
               proData, player, purchaseOptions.getFactoryOptions(), maxTerritory, isBid);
-      resourceTracker.removeTempPurchase(maxPlacedOption);
+      resourceTracker.removeTempPurchase(maxPlacedOption, maxTerritory);
       ProPurchaseValidationUtils.removeInvalidPurchaseOptions(
           proData,
           player,
@@ -1424,11 +1426,11 @@ class ProPurchaseAi {
           if (ppt.getTerritory().equals(maxTerritory)) {
             final List<Unit> factory = bestFactoryOption.createTempUnits();
             addUnitsToPlace(ppt, factory);
-            if (resourceTracker.hasEnough(bestFactoryOption)) {
-              resourceTracker.purchase(bestFactoryOption);
+            if (resourceTracker.hasEnough(bestFactoryOption, maxTerritory)) {
+              resourceTracker.purchase(bestFactoryOption, maxTerritory);
               ProLogger.debug(maxTerritory + ", placedFactory=" + factory);
             } else {
-              resourceTracker.purchase(bestFactoryOption);
+              resourceTracker.purchase(bestFactoryOption, maxTerritory);
               resourceTracker.removePurchase(maxPlacedOption);
               if (maxPlacedTerritory != null) {
                 maxPlacedTerritory.getPlaceUnits().remove(maxPlacedUnit);
@@ -1658,7 +1660,7 @@ class ProPurchaseAi {
             }
 
             // Create new temp defenders
-            resourceTracker.tempPurchase(selectedOption);
+            resourceTracker.tempPurchase(selectedOption, t);
             remainingUnitProduction -= selectedOption.getQuantity();
             unitsToPlace.addAll(selectedOption.createTempUnits());
             if (selectedOption.isCarrier() || selectedOption.isAir()) {
@@ -1870,7 +1872,7 @@ class ProPurchaseAi {
           }
 
           // Create new temp units
-          resourceTracker.purchase(selectedOption);
+          resourceTracker.purchase(selectedOption, t);
           remainingUnitProduction -= selectedOption.getQuantity();
           unitsToPlace.addAll(selectedOption.createTempUnits());
           if (selectedOption.isCarrier() || selectedOption.isAir()) {
@@ -2034,7 +2036,7 @@ class ProPurchaseAi {
 
               // Add amphib unit
               amphibUnitsToPlace.addAll(ppo.createTempUnits());
-              resourceTracker.purchase(ppo);
+              resourceTracker.purchase(ppo, landTerritory);
               remainingUnitProduction -= ppo.getQuantity();
               transportCapacity -= ppo.getTransportCost();
               ProLogger.trace("Selected unit=" + ppo.getUnitType().getName());
@@ -2067,7 +2069,7 @@ class ProPurchaseAi {
             // Add transports
             final List<Unit> transports = ppo.createTempUnits();
             transportUnitsToPlace.addAll(transports);
-            resourceTracker.purchase(ppo);
+            resourceTracker.purchase(ppo, t);
             remainingUnitProduction -= ppo.getQuantity();
             transportsThatNeedUnits.addAll(transports);
             ProLogger.trace(
@@ -2189,7 +2191,7 @@ class ProPurchaseAi {
         }
 
         // Purchase unit
-        resourceTracker.purchase(bestAttackOption);
+        resourceTracker.purchase(bestAttackOption, t);
         remainingUnitProduction -= bestAttackOption.getQuantity();
         addUnitsToPlace(placeTerritory, bestAttackOption.createTempUnits());
       }
@@ -2248,7 +2250,7 @@ class ProPurchaseAi {
         final ProPurchaseOption selectedOption = optionalSelectedOption.get();
 
         // Purchase unit
-        resourceTracker.purchase(selectedOption);
+        resourceTracker.purchase(selectedOption, t);
         remainingUnitProduction -= selectedOption.getQuantity();
         addUnitsToPlace(placeTerritory, selectedOption.createTempUnits());
       }
@@ -2315,7 +2317,7 @@ class ProPurchaseAi {
         }
 
         // Remove options that cost too much PUs or production
-        resourceTracker.removeTempPurchase(minPurchaseOption);
+        resourceTracker.removeTempPurchase(minPurchaseOption, t);
         ProPurchaseValidationUtils.removeInvalidPurchaseOptions(
             proData,
             player,
@@ -2388,8 +2390,8 @@ class ProPurchaseAi {
         placeTerritory.getPlaceUnits().removeAll(unitsToRemove);
         ProLogger.trace(t + ", removedUnits=" + unitsToRemove);
         for (int i = 0; i < unitsToRemove.size(); i++) {
-          if (resourceTracker.hasEnough(bestUpgradeOption)) {
-            resourceTracker.purchase(bestUpgradeOption);
+          if (resourceTracker.hasEnough(bestUpgradeOption, t)) {
+            resourceTracker.purchase(bestUpgradeOption, t);
             addUnitsToPlace(placeTerritory, bestUpgradeOption.createTempUnits());
           }
         }
