@@ -81,6 +81,26 @@ public class ProSplitResourceTracker extends ProResourceTracker {
         || poolRemaining(Pool.PACIFIC).greaterThanOrEqualTo(ppo.getCosts());
   }
 
+  /** No-territory purchase: defaults to the Europe pool (unmapped-territory policy). */
+  @Override
+  public void purchase(final ProPurchaseOption ppo) {
+    europeResources.subtract(ppo.getCosts());
+  }
+
+  /** No-territory tempPurchase: defaults to the Europe pool. */
+  @Override
+  public void tempPurchase(final ProPurchaseOption ppo) {
+    tempEurope.add(ppo.getCosts());
+  }
+
+  /** No-territory removeTempPurchase: defaults to the Europe pool. */
+  @Override
+  public void removeTempPurchase(final ProPurchaseOption ppo) {
+    if (ppo != null) {
+      tempEurope.subtract(ppo.getCosts());
+    }
+  }
+
   @Override
   public void confirmTempPurchases() {
     europeResources.subtract(tempEurope);

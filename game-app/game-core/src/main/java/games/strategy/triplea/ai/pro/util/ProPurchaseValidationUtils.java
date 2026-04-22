@@ -144,7 +144,8 @@ public final class ProPurchaseValidationUtils {
                     purchaseOption,
                     resourceTracker,
                     remainingUnitProduction,
-                    remainingConstructions)
+                    remainingConstructions,
+                    territory)
                 || hasReachedMaxUnitBuiltPerPlayer(
                     purchaseOption, player, data, unitsToPlace, purchaseTerritories)
                 || hasReachedConstructionLimits(
@@ -164,8 +165,9 @@ public final class ProPurchaseValidationUtils {
       final ProPurchaseOption purchaseOption,
       final ProResourceTracker resourceTracker,
       final int remainingUnitProduction,
-      final int remainingConstructions) {
-    return resourceTracker.hasEnough(purchaseOption)
+      final int remainingConstructions,
+      final Territory placeTerr) {
+    return resourceTracker.hasEnough(purchaseOption, placeTerr)
         && purchaseOption.getQuantity()
             <= (purchaseOption.isConstruction() ? remainingConstructions : remainingUnitProduction);
   }
