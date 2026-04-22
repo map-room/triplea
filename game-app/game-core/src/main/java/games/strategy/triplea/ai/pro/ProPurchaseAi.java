@@ -56,6 +56,7 @@ import org.triplea.java.collections.IntegerMap;
 /** Pro purchase AI. */
 class ProPurchaseAi {
 
+  private final AbstractProAi ai;
   private final ProOddsCalculator calc;
   private final ProData proData;
   private GameData data;
@@ -66,6 +67,7 @@ class ProPurchaseAi {
   private boolean isBid = false;
 
   ProPurchaseAi(final AbstractProAi ai) {
+    this.ai = ai;
     this.calc = ai.getCalc();
     this.proData = ai.getProData();
   }
@@ -263,7 +265,7 @@ class ProPurchaseAi {
     data = proData.getData();
     this.startOfTurnData = startOfTurnData;
     player = proData.getPlayer();
-    resourceTracker = new ProResourceTracker(player);
+    resourceTracker = ai.createResourceTracker(player, data);
     territoryManager = new ProTerritoryManager(calc, proData);
     isBid = false;
     final ProPurchaseOptionMap purchaseOptions = proData.getPurchaseOptions();
