@@ -17,7 +17,9 @@ import games.strategy.triplea.ai.pro.data.PlaceTerritorySnapshot;
 import games.strategy.triplea.ai.pro.data.ProBattleResult;
 import games.strategy.triplea.ai.pro.data.ProPlaceTerritory;
 import games.strategy.triplea.ai.pro.data.ProPurchaseTerritory;
+import games.strategy.triplea.ai.pro.data.ProResourceTracker;
 import games.strategy.triplea.ai.pro.data.ProSessionSnapshot;
+import games.strategy.triplea.ai.pro.data.ProSplitResourceTracker;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
 import games.strategy.triplea.ai.pro.data.ProTerritorySnapshot;
 import games.strategy.triplea.ai.pro.data.PurchaseTerritorySnapshot;
@@ -79,6 +81,15 @@ public abstract class AbstractProAi extends AbstractAi {
   private List<PoliticalActionAttachment> storedPoliticalActions;
   private List<Territory> storedStrafingTerritories;
 
+  // Sidecar-injected split-economy state for British. Set via
+  // setBritishEconomySplit before invokePurchaseForSidecar; consumed by
+  // createResourceTracker. Clearing between turns is not necessary — the
+  // setter is called every British purchase turn with current values.
+  private int britishEuropePus;
+  private int britishPacificPus;
+  private Map<Territory, ProSplitResourceTracker.Pool> britishPoolByTerritory = new HashMap<>();
+  private boolean britishSplitEconomyActive;
+
   // Sidecar mode: skip the politics step in purchase()'s simulation loop.
   // Politics has already executed on the session GameData before purchase runs;
   // re-rolling here would speculatively declare additional wars not present in
@@ -137,6 +148,36 @@ public abstract class AbstractProAi extends AbstractAi {
   /** Package-private — visible to unit tests only. */
   boolean isSimulatePoliticsInPurchase() {
     return simulatePoliticsInPurchase;
+  }
+
+  /**
+   * Tell this ProAi instance that the next British purchase should use a split resource tracker
+   * with the given pool balances and territory mapping. Called by the sidecar's PurchaseExecutor
+   * from the wire state before invoking purchase planning. Has no effect for non-British players —
+   * the active check lives in {@link #createResourceTracker(GamePlayer, GameState)}.
+   */
+  public void setBritishEconomySplit(
+      final int europePus,
+      final int pacificPus,
+      final Map<Territory, ProSplitResourceTracker.Pool> poolByTerritory) {
+    this.britishEuropePus = europePus;
+    this.britishPacificPus = pacificPus;
+    this.britishPoolByTerritory = poolByTerritory;
+    this.britishSplitEconomyActive = true;
+  }
+
+  /**
+   * Construct the {@link ProResourceTracker} for a purchase-planning pass. Returns a {@link
+   * ProSplitResourceTracker} when British is the active player AND {@link #setBritishEconomySplit}
+   * has been called since the last reset; otherwise the unified {@link ProResourceTracker} matching
+   * current TripleA behavior.
+   */
+  public ProResourceTracker createResourceTracker(final GamePlayer player, final GameState data) {
+    if (britishSplitEconomyActive && "British".equals(player.getName())) {
+      return new ProSplitResourceTracker(
+          britishEuropePus, britishPacificPus, britishPoolByTerritory, data);
+    }
+    return new ProResourceTracker(player);
   }
 
   /**
