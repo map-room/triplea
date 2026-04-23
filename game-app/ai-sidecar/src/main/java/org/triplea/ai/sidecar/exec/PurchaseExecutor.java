@@ -12,6 +12,8 @@ import games.strategy.engine.data.UnitType;
 import games.strategy.engine.delegate.IDelegate;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.ai.pro.ProAi;
+import games.strategy.triplea.ai.pro.data.ProPlaceTerritory;
+import games.strategy.triplea.ai.pro.data.ProPurchaseTerritory;
 import games.strategy.triplea.ai.pro.data.ProSplitResourceTracker;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import games.strategy.triplea.delegate.EndRoundDelegate;
@@ -21,6 +23,7 @@ import games.strategy.triplea.delegate.PoliticsDelegate;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -161,10 +164,19 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     session.unitIdMap().forEach((wireId, uuid) -> wireToUuid.put(wireId, uuid.toString()));
     snapshotStore.save(session.key(), session.proAi().snapshotForSidecar(wireToUuid));
 
-    final IntegerMap<ProductionRule> captured = recorder.capturedPurchase();
-    final IntegerMap<ProductionRule> trimmed = trimToFit(captured, pusToSpend, pus);
-
-    final List<PurchaseOrder> buys = toPurchaseOrders(trimmed);
+    // Prefer per-territory PurchaseOrders from proAi.storedPurchaseTerritories — they carry the
+    // real placement target that Map Room's dual-economy dispatch (British split) needs.
+    // Fall back to the aggregated IntegerMap when storedPurchaseTerritories is unavailable
+    // (rare — would indicate purchase ran with no target territories, typical of empty plans).
+    final Map<Territory, ProPurchaseTerritory> stored = proAi.getStoredPurchaseTerritories();
+    final List<PurchaseOrder> buys;
+    if (stored != null && !stored.isEmpty()) {
+      buys = toPurchaseOrdersFromStored(stored);
+    } else {
+      final IntegerMap<ProductionRule> captured = recorder.capturedPurchase();
+      final IntegerMap<ProductionRule> trimmed = trimToFit(captured, pusToSpend, pus);
+      buys = toPurchaseOrders(trimmed);
+    }
     for (final PurchaseOrder order : buys) {
       AiTraceLogger.logPurchaseOrder(player.getName(), order.unitType(), order.count());
     }
@@ -224,6 +236,34 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
       }
       if (firstUnitResult instanceof UnitType ut) {
         out.add(new PurchaseOrder(ut.getName(), count, null));
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Emit one {@link PurchaseOrder} per (placeTerritory, unitType) pair, aggregating counts across
+   * the {@link ProPlaceTerritory#getPlaceUnits()} list for each territory. Territory names come
+   * from {@link ProPlaceTerritory#getTerritory()} so the bot can route the dispatch to the correct
+   * economy pool for dual-economy players (British).
+   *
+   * <p>Iteration order is insertion order (LinkedHashMap) so the emitted PurchaseOrder sequence is
+   * deterministic across runs given the same input.
+   */
+  private static List<PurchaseOrder> toPurchaseOrdersFromStored(
+      final Map<Territory, ProPurchaseTerritory> stored) {
+    final List<PurchaseOrder> out = new ArrayList<>();
+    for (final ProPurchaseTerritory ppt : stored.values()) {
+      for (final ProPlaceTerritory placeTerr : ppt.getCanPlaceTerritories()) {
+        final String territoryName = placeTerr.getTerritory().getName();
+        final Map<String, Integer> perType = new LinkedHashMap<>();
+        for (final Unit u : placeTerr.getPlaceUnits()) {
+          final String typeName = u.getType().getName();
+          perType.merge(typeName, 1, Integer::sum);
+        }
+        for (final Map.Entry<String, Integer> e : perType.entrySet()) {
+          out.add(new PurchaseOrder(e.getKey(), e.getValue(), territoryName));
+        }
       }
     }
     return out;

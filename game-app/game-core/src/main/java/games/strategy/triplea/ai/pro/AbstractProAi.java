@@ -639,6 +639,21 @@ public abstract class AbstractProAi extends AbstractAi {
     return storedPurchaseTerritories == null;
   }
 
+  /**
+   * Returns the per-territory purchase plan built during the last {@link #invokePurchaseForSidecar}
+   * call. Keys are factory territories (where production is rooted); each {@link
+   * ProPurchaseTerritory} carries a list of {@link
+   * games.strategy.triplea.ai.pro.data.ProPlaceTerritory} entries naming the actual placement
+   * target and the units to place there. Consumed by the sidecar's {@code PurchaseExecutor} to emit
+   * {@code PurchaseOrder(unitType, count, placeTerritory)} tuples with the real territory rather
+   * than {@code null}.
+   *
+   * <p>Returns {@code null} if no purchase has run yet in this session.
+   */
+  public Map<Territory, ProPurchaseTerritory> getStoredPurchaseTerritories() {
+    return storedPurchaseTerritories;
+  }
+
   private static Map<Territory, ProTerritory> restoreTerritoryMap(
       final Map<String, ProTerritorySnapshot> snap, final GameData data) {
     final Map<Territory, ProTerritory> out = new HashMap<>();
