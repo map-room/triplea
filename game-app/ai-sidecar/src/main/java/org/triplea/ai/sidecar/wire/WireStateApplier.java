@@ -416,6 +416,54 @@ public final class WireStateApplier {
               ChangeFactory.unitPropertyChange(
                   unit, wu.bonusMovement(), Unit.PropertyName.BONUS_MOVEMENT));
         }
+        if (wu.wasAmphibious() != unit.getWasAmphibious()) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, wu.wasAmphibious(), Unit.PropertyName.UNLOADED_AMPHIBIOUS));
+        }
+        if (wu.wasScrambled() != unit.getWasScrambled()) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, wu.wasScrambled(), Unit.PropertyName.WAS_SCRAMBLED));
+        }
+        if (wu.wasLoadedAfterCombat() != unit.getWasLoadedAfterCombat()) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, wu.wasLoadedAfterCombat(), Unit.PropertyName.LOADED_AFTER_COMBAT));
+        }
+        if (wu.maxScrambleCount() != null && wu.maxScrambleCount() != unit.getMaxScrambleCount()) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(
+                  unit, wu.maxScrambleCount(), Unit.PropertyName.MAX_SCRAMBLE_COUNT));
+        }
+        if (wu.unloadedTo() != null) {
+          final Territory unloadedToTerritory =
+              gameData.getMap().getTerritoryOrNull(wu.unloadedTo());
+          if (unloadedToTerritory != null && !unloadedToTerritory.equals(unit.getUnloadedTo())) {
+            changes.add(
+                ChangeFactory.unitPropertyChange(
+                    unit, unloadedToTerritory, Unit.PropertyName.UNLOADED_TO));
+          }
+        } else if (unit.getUnloadedTo() != null) {
+          changes.add(
+              ChangeFactory.unitPropertyChange(unit, null, Unit.PropertyName.UNLOADED_TO));
+        }
+        if (wu.unloaded() != null && !wu.unloaded().isEmpty()) {
+          final List<Unit> unloadedUnits = new ArrayList<>();
+          for (final String unloadedId : wu.unloaded()) {
+            final UUID unloadedUuid = unitIdMap.get(unloadedId);
+            if (unloadedUuid != null) {
+              final Unit unloadedUnit = allUnitsById.get(unloadedUuid);
+              if (unloadedUnit != null) {
+                unloadedUnits.add(unloadedUnit);
+              }
+            }
+          }
+          if (!unloadedUnits.isEmpty() && !unloadedUnits.equals(unit.getUnloaded())) {
+            changes.add(
+                ChangeFactory.unitPropertyChange(unit, unloadedUnits, Unit.PropertyName.UNLOADED));
+          }
+        }
 
         final String wireTransportedById = wu.transportedBy();
         final Unit currentTransportedBy = unit.getTransportedBy();
