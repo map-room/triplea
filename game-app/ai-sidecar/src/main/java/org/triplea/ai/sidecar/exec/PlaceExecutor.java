@@ -4,6 +4,7 @@ import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.triplea.attachments.RulesAttachment;
 import games.strategy.triplea.delegate.battle.BattleTracker;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -123,9 +124,15 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
     // targets, and RecordingPlaceDelegate accepts every placeUnits call without
     // validation — so without this filter, freshly conquered territories show up in
     // the plan and the engine rejects the whole place phase, leaving the bot stuck.
+    //
+    // Exception: players with placementAnyTerritory=true (China) may place in any
+    // owned territory including those conquered this turn — do not filter them out.
     final Set<Territory> conqueredThisTurn = collectConqueredThisTurn(data);
+    final RulesAttachment ra = player.getRulesAttachment();
+    final boolean canPlaceInConquered = ra != null && ra.getPlacementAnyTerritory();
 
-    return groupCapturesIntoPlan(recorder.captured(), conqueredThisTurn, session.key().toString());
+    return groupCapturesIntoPlan(
+        recorder.captured(), conqueredThisTurn, session.key().toString(), canPlaceInConquered);
   }
 
   static Set<Territory> collectConqueredThisTurn(final GameData data) {
@@ -138,17 +145,20 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
 
   /**
    * Groups recorded placeUnits captures into a {@link PlacePlan}, dropping any capture whose
-   * territory was conquered this turn. Public-package for direct unit testing.
+   * territory was conquered this turn — unless {@code canPlaceInConquered} is true (e.g. China,
+   * which has {@code placementAnyTerritory=true} and may place in any owned territory including
+   * those captured this turn). Public-package for direct unit testing.
    */
   static PlacePlan groupCapturesIntoPlan(
       final List<RecordingPlaceDelegate.PlaceCapture> captures,
       final Set<Territory> conqueredThisTurn,
-      final String sessionKey) {
+      final String sessionKey,
+      final boolean canPlaceInConquered) {
     final Map<String, List<String>> byTerritory = new LinkedHashMap<>();
     int totalCaptured = 0;
     int droppedConquered = 0;
     for (final RecordingPlaceDelegate.PlaceCapture cap : captures) {
-      if (conqueredThisTurn.contains(cap.territory())) {
+      if (!canPlaceInConquered && conqueredThisTurn.contains(cap.territory())) {
         droppedConquered += cap.units().size();
         continue;
       }
