@@ -5,6 +5,7 @@ import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
+import games.strategy.triplea.attachments.RulesAttachment;
 import games.strategy.triplea.delegate.battle.BattleTracker;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -131,10 +132,18 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
     // conquered-this-turn territories should already be rejected at capture time.
     // This filter is kept as defence-in-depth; if it fires it means the delegate's
     // own validation did not catch the case — a WARNING is logged in groupCapturesIntoPlan.
+    //
+    // Exception: players with placementAnyTerritory=true (China) may place on any
+    // owned territory including those conquered this turn. AbstractPlaceDelegate already
+    // allows this via isPlayerAllowedToPlacementAnyTerritoryOwnedLand — the filter
+    // must not drop those captures or China loses its legally-planned placements.
     final Set<Territory> conqueredThisTurn = collectConqueredThisTurn(data);
+    final RulesAttachment ra = player.getRulesAttachment();
+    final boolean canPlaceInConquered = ra != null && ra.getPlacementAnyTerritory();
 
     final PlacePlan plan =
-        groupCapturesIntoPlan(recorder.captured(), conqueredThisTurn, session.key().toString());
+        groupCapturesIntoPlan(
+            recorder.captured(), conqueredThisTurn, session.key().toString(), canPlaceInConquered);
     for (final PlaceOrder order : plan.placements()) {
       AiTraceLogger.logPlaceOrder(player.getName(), order.territoryName(), order.unitTypes());
     }
@@ -151,17 +160,20 @@ public final class PlaceExecutor implements DecisionExecutor<PlaceRequest, Place
 
   /**
    * Groups recorded placeUnits captures into a {@link PlacePlan}, dropping any capture whose
-   * territory was conquered this turn. Public-package for direct unit testing.
+   * territory was conquered this turn — unless {@code canPlaceInConquered} is true (e.g. China,
+   * which has {@code placementAnyTerritory=true} and may place in any owned territory including
+   * those captured this turn). Public-package for direct unit testing.
    */
   static PlacePlan groupCapturesIntoPlan(
       final List<RecordingPlaceDelegate.PlaceCapture> captures,
       final Set<Territory> conqueredThisTurn,
-      final String sessionKey) {
+      final String sessionKey,
+      final boolean canPlaceInConquered) {
     final Map<String, List<String>> byTerritory = new LinkedHashMap<>();
     int totalCaptured = 0;
     int droppedConquered = 0;
     for (final RecordingPlaceDelegate.PlaceCapture cap : captures) {
-      if (conqueredThisTurn.contains(cap.territory())) {
+      if (!canPlaceInConquered && conqueredThisTurn.contains(cap.territory())) {
         droppedConquered += cap.units().size();
         continue;
       }
