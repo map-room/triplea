@@ -6,8 +6,10 @@ import java.util.Map;
  * Configuration loaded entirely from environment variables.
  *
  * <p>New in v2:
+ *
  * <ul>
- *   <li>{@code SIDECAR_DATA_DIR} — directory for session manifests (default: {@code data/sessions}).
+ *   <li>{@code SIDECAR_DATA_DIR} — directory for session manifests (default: {@code
+ *       data/sessions}).
  *   <li>{@code SIDECAR_SERVER_URL} — base URL of the Map Room server, used by the reaper to check
  *       gameover status (optional; gameover reaping is skipped when unset).
  * </ul>

@@ -13,16 +13,14 @@ import org.sonatype.goodies.prefs.memory.MemoryPreferences;
  * Unit tests for {@link RecordingMoveDelegate}.
  *
  * <p>After the refactor from a no-op interface stub to a validating {@link MoveDelegate} subclass,
- * most capture-path tests now require a fully wired {@link
- * games.strategy.triplea.ai.pro.ProAi} and a {@link games.strategy.engine.data.GameData} whose
- * sequence is set to a valid combat-move or noncombat-move step — those conditions are met by
- * {@code CombatMoveExecutorIntegrationTest} and {@code NoncombatMoveExecutorIntegrationTest},
- * which provide end-to-end capture coverage.
+ * most capture-path tests now require a fully wired {@link games.strategy.triplea.ai.pro.ProAi} and
+ * a {@link games.strategy.engine.data.GameData} whose sequence is set to a valid combat-move or
+ * noncombat-move step — those conditions are met by {@code CombatMoveExecutorIntegrationTest} and
+ * {@code NoncombatMoveExecutorIntegrationTest}, which provide end-to-end capture coverage.
  *
  * <p>This test class only verifies the structural invariant: {@link RecordingMoveDelegate} must
- * extend {@link MoveDelegate} (not just implement the interface) so that
- * {@link RecordingMoveDelegate#performMove} can call {@code super.performMove()} and get real
- * validation.
+ * extend {@link MoveDelegate} (not just implement the interface) so that {@link
+ * RecordingMoveDelegate#performMove} can call {@code super.performMove()} and get real validation.
  */
 class RecordingMoveDelegateTest {
 
@@ -48,8 +46,9 @@ class RecordingMoveDelegateTest {
   // NoncombatMoveExecutorIntegrationTest.
 
   @Test
-  @Disabled("TODO: covers now-illegal input — needs a live ProAi, bridge, and valid game step; "
-      + "rewrite using the integration-test fixture if lightweight unit coverage is needed")
+  @Disabled(
+      "TODO: covers now-illegal input — needs a live ProAi, bridge, and valid game step; "
+          + "rewrite using the integration-test fixture if lightweight unit coverage is needed")
   void capturesMovesInOrder() {}
 
   @Test

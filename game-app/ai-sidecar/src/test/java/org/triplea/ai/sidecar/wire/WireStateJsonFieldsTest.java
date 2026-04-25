@@ -1,6 +1,7 @@
 package org.triplea.ai.sidecar.wire;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +17,8 @@ class WireStateJsonFieldsTest {
 
   @Test
   void wireTerritoryConqueredThisTurnHonoured() throws Exception {
-    String json = "{\"territoryId\":\"Egypt\",\"owner\":\"Germans\",\"units\":[],\"conqueredThisTurn\":true}";
+    String json =
+        "{\"territoryId\":\"Egypt\",\"owner\":\"Germans\",\"units\":[],\"conqueredThisTurn\":true}";
     WireTerritory t = mapper.readValue(json, WireTerritory.class);
     assertTrue(t.conqueredThisTurn());
   }

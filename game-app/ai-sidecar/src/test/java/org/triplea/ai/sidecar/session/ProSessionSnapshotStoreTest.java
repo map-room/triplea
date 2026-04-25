@@ -60,8 +60,9 @@ class ProSessionSnapshotStoreTest {
   @Test
   void restoreUnitIdMapPrePopulatesLiveMap() {
     final UUID fixedUuid = UUID.fromString("11111111-2222-3333-4444-555555555555");
-    final ProSessionSnapshot snap = new ProSessionSnapshot(
-        Map.of(), Map.of(), Map.of(), Map.of("unit-abc", fixedUuid.toString()));
+    final ProSessionSnapshot snap =
+        new ProSessionSnapshot(
+            Map.of(), Map.of(), Map.of(), Map.of("unit-abc", fixedUuid.toString()));
 
     final ConcurrentHashMap<String, UUID> live = new ConcurrentHashMap<>();
     ProSessionSnapshotStore.restoreUnitIdMap(snap, live);
@@ -73,16 +74,17 @@ class ProSessionSnapshotStoreTest {
   void restoreUnitIdMapDoesNotOverwriteExistingEntry() {
     final UUID existingUuid = UUID.randomUUID();
     final UUID snapshotUuid = UUID.fromString("11111111-2222-3333-4444-555555555555");
-    final ProSessionSnapshot snap = new ProSessionSnapshot(
-        Map.of(), Map.of(), Map.of(), Map.of("unit-abc", snapshotUuid.toString()));
+    final ProSessionSnapshot snap =
+        new ProSessionSnapshot(
+            Map.of(), Map.of(), Map.of(), Map.of("unit-abc", snapshotUuid.toString()));
 
     final ConcurrentHashMap<String, UUID> live = new ConcurrentHashMap<>();
     live.put("unit-abc", existingUuid); // already populated in current session
 
     ProSessionSnapshotStore.restoreUnitIdMap(snap, live);
 
-    assertEquals(existingUuid, live.get("unit-abc"),
-        "putIfAbsent must not overwrite existing mapping");
+    assertEquals(
+        existingUuid, live.get("unit-abc"), "putIfAbsent must not overwrite existing mapping");
   }
 
   @Test
@@ -102,11 +104,13 @@ class ProSessionSnapshotStoreTest {
     final SessionRegistry registry =
         new SessionRegistry(org.triplea.ai.sidecar.CanonicalGameData.load(), store);
 
-    final Session session = registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+    final Session session =
+        registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
     store.save(session.key(), emptySnapshot());
     assertTrue(store.load(session.key()).isPresent(), "snapshot should exist before delete");
 
     registry.delete(session.sessionId());
-    assertTrue(store.load(session.key()).isEmpty(), "snapshot should be gone after registry.delete");
+    assertTrue(
+        store.load(session.key()).isEmpty(), "snapshot should be gone after registry.delete");
   }
 }

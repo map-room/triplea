@@ -7,9 +7,9 @@ import org.triplea.ai.sidecar.session.Session;
 /**
  * Stub executor for the {@code engage-stay-hidden} decision kind.
  *
- * <p>Returns the safe default (engage — do not stay hidden) until ProAI integration is wired.
- * TODO: invoke the relevant ProAI helper (likely in {@code ProRetreatAi} or
- * {@code AbstractProAi}) once identified.
+ * <p>Returns the safe default (engage — do not stay hidden) until ProAI integration is wired. TODO:
+ * invoke the relevant ProAI helper (likely in {@code ProRetreatAi} or {@code AbstractProAi}) once
+ * identified.
  */
 public final class EngageStayHiddenExecutor
     implements DecisionExecutor<EngageStayHiddenRequest, EngageStayHiddenPlan> {

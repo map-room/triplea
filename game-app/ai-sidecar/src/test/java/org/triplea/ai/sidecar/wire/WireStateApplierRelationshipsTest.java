@@ -105,8 +105,7 @@ class WireStateApplierRelationshipsTest {
     final RelationshipType before =
         data.getRelationshipTracker().getRelationshipType(germans, russians);
 
-    final WireState wire =
-        new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of());
+    final WireState wire = new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of());
     WireStateApplier.apply(data, wire, new ConcurrentHashMap<>());
 
     assertThat(data.getRelationshipTracker().getRelationshipType(germans, russians))

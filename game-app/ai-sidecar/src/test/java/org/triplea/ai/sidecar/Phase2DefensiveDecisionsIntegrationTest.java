@@ -1,7 +1,6 @@
 package org.triplea.ai.sidecar;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -40,6 +39,7 @@ class Phase2DefensiveDecisionsIntegrationTest {
 
   /** Attacker's nation — set as currentPlayer in WireState (defender's turn via activePlayers). */
   private static final String ATTACKER = "Russians";
+
   /** Defender's nation — the session nation being queried for defensive decisions. */
   private static final String DEFENDER = "Germans";
 
@@ -47,9 +47,7 @@ class Phase2DefensiveDecisionsIntegrationTest {
   static void startServiceAndCreateSession() throws Exception {
     ClientSetting.setPreferences(new MemoryPreferences());
 
-    svc =
-        SidecarMain.startForTest(
-            Map.of("SIDECAR_BIND_HOST", "127.0.0.1", "SIDECAR_PORT", "0"));
+    svc = SidecarMain.startForTest(Map.of("SIDECAR_BIND_HOST", "127.0.0.1", "SIDECAR_PORT", "0"));
     final int port = svc.boundPort();
     client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     base = "http://127.0.0.1:" + port;
@@ -66,8 +64,13 @@ class Phase2DefensiveDecisionsIntegrationTest {
                 .header("Authorization", auth)
                 .POST(
                     HttpRequest.BodyPublishers.ofString(
-                        "{\"sessionId\":\"" + sessionId + "\",\"gameId\":\"" + gameId
-                            + "\",\"nation\":\"" + DEFENDER + "\",\"seed\":42}"))
+                        "{\"sessionId\":\""
+                            + sessionId
+                            + "\",\"gameId\":\""
+                            + gameId
+                            + "\",\"nation\":\""
+                            + DEFENDER
+                            + "\",\"seed\":42}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
     assertEquals(200, create.statusCode(), "Session create must return 200");

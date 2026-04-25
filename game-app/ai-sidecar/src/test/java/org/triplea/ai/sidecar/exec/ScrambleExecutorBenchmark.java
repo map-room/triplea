@@ -25,14 +25,14 @@ import org.triplea.ai.sidecar.wire.WireUnit;
 /**
  * Latency benchmark for {@link ScrambleExecutor}.
  *
- * <p>Measures the honest cold path (fresh {@link Session} + fresh {@link ProAi} + first
- * {@code execute()} call) and the warm path (same session, repeated calls) and reports p50/p95
- * for each to stdout. Gated by {@code spec §5} at <b>500 ms cold p95</b>; the spec asks us to
- * report a violation rather than bump the budget.
+ * <p>Measures the honest cold path (fresh {@link Session} + fresh {@link ProAi} + first {@code
+ * execute()} call) and the warm path (same session, repeated calls) and reports p50/p95 for each to
+ * stdout. Gated by {@code spec §5} at <b>500 ms cold p95</b>; the spec asks us to report a
+ * violation rather than bump the budget.
  *
  * <p>Tagged {@code benchmark} so CI can exclude via {@code excludeTags} if we ever add such a
- * filter; by default it runs as part of the normal test task, so the numbers land in every
- * green build log.
+ * filter; by default it runs as part of the normal test task, so the numbers land in every green
+ * build log.
  */
 @Tag("benchmark")
 class ScrambleExecutorBenchmark {

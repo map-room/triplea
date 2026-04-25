@@ -61,9 +61,7 @@ class WireStateApplierTest {
         new WireState(
             List.of(
                 new WireTerritory(
-                    "Germany",
-                    "Germans",
-                    List.of(new WireUnit("u-inf-1", "infantry", 0, 0)))),
+                    "Germany", "Germans", List.of(new WireUnit("u-inf-1", "infantry", 0, 0)))),
             List.of(),
             1,
             "combat",
@@ -87,8 +85,7 @@ class WireStateApplierTest {
             "Germans",
             List.of());
     WireStateApplier.apply(gd, wire, freshIdMap());
-    assertThat(
-            gd.getPlayerList().getPlayerId("Germans").getResources().getQuantity("PUs"))
+    assertThat(gd.getPlayerList().getPlayerId("Germans").getResources().getQuantity("PUs"))
         .isEqualTo(42);
   }
 
@@ -121,8 +118,7 @@ class WireStateApplierTest {
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     assertThat(germany.getUnits()).hasSize(3);
     final Map<String, Unit> byType =
-        germany.getUnits().stream()
-            .collect(Collectors.toMap(u -> u.getType().getName(), u -> u));
+        germany.getUnits().stream().collect(Collectors.toMap(u -> u.getType().getName(), u -> u));
     assertThat(byType.keySet()).containsExactlyInAnyOrder("infantry", "artillery", "armour");
 
     assertThat(idMap).containsKeys("u-inf-1", "u-art-1", "u-tank-1");
@@ -148,9 +144,7 @@ class WireStateApplierTest {
                         new WireUnit("u-atk-inf-1", "infantry", 0, 0),
                         new WireUnit("u-atk-tank-1", "armour", 0, 0))),
                 new WireTerritory(
-                    "Germany",
-                    "Germans",
-                    List.of(new WireUnit("u-def-inf-1", "infantry", 0, 0)))),
+                    "Germany", "Germans", List.of(new WireUnit("u-def-inf-1", "infantry", 0, 0)))),
             List.of(),
             1,
             "combat",
@@ -160,8 +154,7 @@ class WireStateApplierTest {
 
     assertThat(gd.getMap().getTerritoryOrThrow("France").getUnits()).hasSize(2);
     assertThat(gd.getMap().getTerritoryOrThrow("Germany").getUnits()).hasSize(1);
-    assertThat(idMap)
-        .containsKeys("u-atk-inf-1", "u-atk-tank-1", "u-def-inf-1");
+    assertThat(idMap).containsKeys("u-atk-inf-1", "u-atk-tank-1", "u-def-inf-1");
   }
 
   @Test
@@ -186,8 +179,7 @@ class WireStateApplierTest {
     WireStateApplier.apply(gd, wire, idMap);
 
     final Territory wg = gd.getMap().getTerritoryOrThrow("Western Germany");
-    assertThat(
-            wg.getUnits().stream().map(u -> u.getType().getName()).collect(Collectors.toSet()))
+    assertThat(wg.getUnits().stream().map(u -> u.getType().getName()).collect(Collectors.toSet()))
         .contains("fighter", "tactical_bomber");
     assertThat(idMap).containsKeys("u-ftr-1", "u-tac-1");
   }
@@ -220,9 +212,7 @@ class WireStateApplierTest {
         new WireState(
             List.of(
                 new WireTerritory(
-                    "Germany",
-                    "Russians",
-                    List.of(new WireUnit("u-inf-1", "infantry", 0, 0)))),
+                    "Germany", "Russians", List.of(new WireUnit("u-inf-1", "infantry", 0, 0)))),
             List.of(),
             1,
             "combat",
@@ -234,8 +224,7 @@ class WireStateApplierTest {
     assertThat(germany.getOwner().getName()).isEqualTo("Russians");
     // Only u-inf-1 survives; u-inf-2 was pruned because it was absent from wire B.
     assertThat(germany.getUnits()).hasSize(1);
-    assertThat(germany.getUnits().iterator().next().getId())
-        .isEqualTo(idMap.get("u-inf-1"));
+    assertThat(germany.getUnits().iterator().next().getId()).isEqualTo(idMap.get("u-inf-1"));
   }
 
   @Test
@@ -246,9 +235,7 @@ class WireStateApplierTest {
         new WireState(
             List.of(
                 new WireTerritory(
-                    "Germany",
-                    "Germans",
-                    List.of(new WireUnit("u-inf-1", "infantry", 0, 0)))),
+                    "Germany", "Germans", List.of(new WireUnit("u-inf-1", "infantry", 0, 0)))),
             List.of(),
             1,
             "combat",
@@ -307,9 +294,7 @@ class WireStateApplierTest {
         new WireState(
             List.of(
                 new WireTerritory(
-                    "Germany",
-                    "Germans",
-                    List.of(new WireUnit("u-x", "deathstar", 0, 0)))),
+                    "Germany", "Germans", List.of(new WireUnit("u-x", "deathstar", 0, 0)))),
             List.of(),
             1,
             "combat",
@@ -323,10 +308,9 @@ class WireStateApplierTest {
   // ---------- per-unit owner (#1776 regression fence) ----------
 
   /**
-   * Sea zone with ships from two different nations: the unit's owner must come from the
-   * per-unit {@code owner} field, not the territory owner (Neutral). This is the regression
-   * fence for the bug where ProAI saw Italian ally ships as enemies because they were all
-   * attributed to Neutral.
+   * Sea zone with ships from two different nations: the unit's owner must come from the per-unit
+   * {@code owner} field, not the territory owner (Neutral). This is the regression fence for the
+   * bug where ProAI saw Italian ally ships as enemies because they were all attributed to Neutral.
    */
   @Test
   void perUnitOwner_seaZoneMultiNation_assignsCorrectOwners() {
@@ -334,12 +318,14 @@ class WireStateApplierTest {
     // 112 Sea Zone: territory owner is Germans but the cruiser belongs to Italians.
     // This mirrors the bug scenario where sea zones hold ships from allied nations.
     final WireUnit germanSub =
-        WireUnit.of("u-sub-1", "submarine", 0, 0, 0, "Germans", null, false, false, false, false, 0);
+        WireUnit.of(
+            "u-sub-1", "submarine", 0, 0, 0, "Germans", null, false, false, false, false, 0);
     final WireUnit italianCruiser =
         WireUnit.of("u-cru-1", "cruiser", 0, 0, 0, "Italians", null, false, false, false, false, 0);
     final WireState wire =
         new WireState(
-            List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(germanSub, italianCruiser))),
+            List.of(
+                new WireTerritory("112 Sea Zone", "Germans", List.of(germanSub, italianCruiser))),
             List.of(),
             1,
             "combat",
@@ -353,9 +339,7 @@ class WireStateApplierTest {
     assertThat(seaZone).isNotNull();
     final Map<String, String> unitOwners =
         seaZone.getUnits().stream()
-            .collect(Collectors.toMap(
-                u -> u.getType().getName(),
-                u -> u.getOwner().getName()));
+            .collect(Collectors.toMap(u -> u.getType().getName(), u -> u.getOwner().getName()));
     assertThat(unitOwners).containsEntry("submarine", "Germans");
     assertThat(unitOwners).containsEntry("cruiser", "Italians");
   }
@@ -436,9 +420,11 @@ class WireStateApplierTest {
   void transportedBy_unitIdOnWire_linksInfantryToTransport() {
     final GameData gd = fresh();
     final WireUnit transport =
-        WireUnit.of("u-trn-1", "transport", 0, 0, 0, "Germans", null, false, false, false, false, 0);
+        WireUnit.of(
+            "u-trn-1", "transport", 0, 0, 0, "Germans", null, false, false, false, false, 0);
     final WireUnit infantry =
-        WireUnit.of("u-inf-1", "infantry", 0, 0, 0, "Germans", "u-trn-1", false, false, false, false, 0);
+        WireUnit.of(
+            "u-inf-1", "infantry", 0, 0, 0, "Germans", "u-trn-1", false, false, false, false, 0);
     final WireState wire =
         new WireState(
             List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(transport, infantry))),
@@ -508,9 +494,7 @@ class WireStateApplierTest {
         new WireState(
             List.of(
                 new WireTerritory(
-                    "Germany",
-                    "Germans",
-                    List.of(new WireUnit("u-fighter-1", "fighter", 0, 0)))),
+                    "Germany", "Germans", List.of(new WireUnit("u-fighter-1", "fighter", 0, 0)))),
             List.of(),
             1,
             "combat",
@@ -521,9 +505,7 @@ class WireStateApplierTest {
         new WireState(
             List.of(
                 new WireTerritory(
-                    "Germany",
-                    "Germans",
-                    List.of(new WireUnit("u-fighter-1", "fighter", 0, 3)))),
+                    "Germany", "Germans", List.of(new WireUnit("u-fighter-1", "fighter", 0, 3)))),
             List.of(),
             1,
             "noncombat",
@@ -535,7 +517,8 @@ class WireStateApplierTest {
     assertThat(fighter.getAlreadyMoved()).isEqualTo(new java.math.BigDecimal(3));
   }
 
-  // ---------- wasLoadedThisTurn / wasUnloadedInCombatPhase / bonusMovement hydration (#1832) ----------
+  // ---------- wasLoadedThisTurn / wasUnloadedInCombatPhase / bonusMovement hydration (#1832)
+  // ----------
 
   @Test
   void wasLoadedThisTurn_trueOnWire_setsWasLoadedThisTurnOnUnit() {
@@ -621,8 +604,18 @@ class WireStateApplierTest {
                     "Germans",
                     List.of(
                         WireUnit.of(
-                            "u-fac-1", "factory_major", 0, 0, 0, "Germans",
-                            null, false, false, false, false, 0)))),
+                            "u-fac-1",
+                            "factory_major",
+                            0,
+                            0,
+                            0,
+                            "Germans",
+                            null,
+                            false,
+                            false,
+                            false,
+                            false,
+                            0)))),
             List.of(),
             1,
             "combat",
@@ -630,10 +623,18 @@ class WireStateApplierTest {
             List.of());
     WireStateApplier.apply(gd, first, idMap);
 
-    assertThat(gd.getMap().getTerritoryOrThrow("France").getUnits().iterator().next()
-        .getOwner().getName()).isEqualTo("Germans");
+    assertThat(
+            gd.getMap()
+                .getTerritoryOrThrow("France")
+                .getUnits()
+                .iterator()
+                .next()
+                .getOwner()
+                .getName())
+        .isEqualTo("Germans");
 
-    // Second apply: same unit ID, territory now owned by Russians (captured), unit owner = Russians.
+    // Second apply: same unit ID, territory now owned by Russians (captured), unit owner =
+    // Russians.
     final WireState second =
         new WireState(
             List.of(
@@ -642,8 +643,18 @@ class WireStateApplierTest {
                     "Russians",
                     List.of(
                         WireUnit.of(
-                            "u-fac-1", "factory_major", 0, 0, 0, "Russians",
-                            null, false, false, false, false, 0)))),
+                            "u-fac-1",
+                            "factory_major",
+                            0,
+                            0,
+                            0,
+                            "Russians",
+                            null,
+                            false,
+                            false,
+                            false,
+                            false,
+                            0)))),
             List.of(),
             1,
             "combat",

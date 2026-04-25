@@ -1,7 +1,7 @@
 package org.triplea.ai.sidecar.exec;
 
-import games.strategy.engine.data.RepairRule;
 import games.strategy.engine.data.ProductionRule;
+import games.strategy.engine.data.RepairRule;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.delegate.PurchaseDelegate;
 import java.util.Map;
@@ -9,20 +9,20 @@ import javax.annotation.Nullable;
 import org.triplea.java.collections.IntegerMap;
 
 /**
- * {@link PurchaseDelegate} subclass that captures the purchase and repair maps passed to
- * {@link #purchase} and {@link #purchaseRepair}, without forwarding to {@code super}.
+ * {@link PurchaseDelegate} subclass that captures the purchase and repair maps passed to {@link
+ * #purchase} and {@link #purchaseRepair}, without forwarding to {@code super}.
  *
  * <p><b>Why super is NOT called here:</b> {@link PurchaseDelegate#purchase(IntegerMap)} mutates
- * {@code GameData} by deducting PUs and adding purchased units to {@code player.getUnitCollection()}
- * via {@code bridge.addChange()}. The sidecar's {@link PlaceExecutor} later calls
- * {@code AbstractProAi.invokePlaceForSidecar()}, which explicitly injects units from
- * {@code storedPurchaseTerritories} into the player's holding pool before {@code purchaseAi.place()}
- * runs. If {@code super.purchase()} were called here, those units would be injected a second time
- * (since {@link org.triplea.ai.sidecar.wire.WireStateApplier#apply} does not clear the player's
- * holding pool). Fixing this would require coordinated changes to
- * {@code AbstractProAi.invokePlaceForSidecar} in {@code game-core}; that is tracked as a
- * follow-up. For now, budget validation is the responsibility of the {@link PurchaseExecutor}
- * {@code trimToFit} backstop.
+ * {@code GameData} by deducting PUs and adding purchased units to {@code
+ * player.getUnitCollection()} via {@code bridge.addChange()}. The sidecar's {@link PlaceExecutor}
+ * later calls {@code AbstractProAi.invokePlaceForSidecar()}, which explicitly injects units from
+ * {@code storedPurchaseTerritories} into the player's holding pool before {@code
+ * purchaseAi.place()} runs. If {@code super.purchase()} were called here, those units would be
+ * injected a second time (since {@link org.triplea.ai.sidecar.wire.WireStateApplier#apply} does not
+ * clear the player's holding pool). Fixing this would require coordinated changes to {@code
+ * AbstractProAi.invokePlaceForSidecar} in {@code game-core}; that is tracked as a follow-up. For
+ * now, budget validation is the responsibility of the {@link PurchaseExecutor} {@code trimToFit}
+ * backstop.
  *
  * <p><b>Thread-safety:</b> not thread-safe. Each {@code PurchaseExecutor.execute} call creates a
  * fresh instance and the session-scoped executor serialises access on the Java side.

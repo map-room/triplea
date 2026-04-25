@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Validating {@link PlaceDelegate} subclass that captures every successful {@link #placeUnits}
- * call made by {@link games.strategy.triplea.ai.pro.ProPurchaseAi#place}.
+ * Validating {@link PlaceDelegate} subclass that captures every successful {@link #placeUnits} call
+ * made by {@link games.strategy.triplea.ai.pro.ProPurchaseAi#place}.
  *
  * <p>Each call is forwarded to {@code super.placeUnits()} first, which enforces §20 production
  * rules (wasConquered, factory ownership, capacity). Only placements that pass validation are
@@ -18,15 +18,17 @@ import java.util.Optional;
  * re-plan if needed.
  *
  * <p>Callers must set up the bridge before use:
+ *
  * <ol>
  *   <li>{@code recorder.initialize("place", "Place")}
- *   <li>{@code recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data))}
+ *   <li>{@code recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player,
+ *       data))}
  * </ol>
  *
  * <p>{@code ProPurchaseAi.doPlace()} calls {@code del.placeUnits(List.of(unit), t, NOT_BID)} once
- * per unit, so captures accumulate as a flat list of single-unit {@link PlaceCapture} records.
- * The {@link PlaceExecutor} groups them by territory when building the
- * {@link org.triplea.ai.sidecar.dto.PlacePlan}.
+ * per unit, so captures accumulate as a flat list of single-unit {@link PlaceCapture} records. The
+ * {@link PlaceExecutor} groups them by territory when building the {@link
+ * org.triplea.ai.sidecar.dto.PlacePlan}.
  */
 public final class RecordingPlaceDelegate extends PlaceDelegate {
 

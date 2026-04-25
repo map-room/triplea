@@ -6,8 +6,7 @@ import org.triplea.ai.sidecar.wire.WireState;
 import org.triplea.ai.sidecar.wire.WireUnit;
 
 @JsonIgnoreProperties("kind")
-public record InterceptRequest(WireState state, InterceptBattle battle)
-    implements DecisionRequest {
+public record InterceptRequest(WireState state, InterceptBattle battle) implements DecisionRequest {
   public record InterceptBattle(
       String battleId,
       String territory,

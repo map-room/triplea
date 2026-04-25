@@ -31,8 +31,7 @@ import org.triplea.ai.sidecar.wire.WireState;
  */
 class CombatMoveExecutorIntegrationTest {
 
-  @TempDir
-  Path snapshotDir;
+  @TempDir Path snapshotDir;
 
   private static CanonicalGameData canonical;
 
@@ -62,17 +61,23 @@ class CombatMoveExecutorIntegrationTest {
 
     // Run purchase — this calls think() which populates storedCombatMoveMap
     final PurchaseExecutor purchaseExecutor = new PurchaseExecutor(store);
-    purchaseExecutor.execute(session,
-        new PurchaseRequest(new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of())));
+    purchaseExecutor.execute(
+        session,
+        new PurchaseRequest(
+            new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of())));
 
     // storedCombatMoveMap is now set; run combat-move on same session
     final CombatMoveExecutor combatMoveExecutor = new CombatMoveExecutor(store);
-    final CombatMovePlan plan = combatMoveExecutor.execute(session,
-        new CombatMoveRequest(new WireState(List.of(), List.of(), 1, "combatMove", "Germans", List.of())));
+    final CombatMovePlan plan =
+        combatMoveExecutor.execute(
+            session,
+            new CombatMoveRequest(
+                new WireState(List.of(), List.of(), 1, "combatMove", "Germans", List.of())));
 
     assertNotNull(plan);
     // Germans on turn 1 have combat moves (they border enemy territories)
-    assertFalse(plan.moves().isEmpty(),
+    assertFalse(
+        plan.moves().isEmpty(),
         "Germans should have at least one combat move on turn 1; got: " + plan.moves());
   }
 
@@ -81,11 +86,18 @@ class CombatMoveExecutorIntegrationTest {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
     final Session session = freshSession("Germans");
 
-    new PurchaseExecutor(store).execute(session,
-        new PurchaseRequest(new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of())));
+    new PurchaseExecutor(store)
+        .execute(
+            session,
+            new PurchaseRequest(
+                new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of())));
 
-    final CombatMovePlan plan = new CombatMoveExecutor(store).execute(session,
-        new CombatMoveRequest(new WireState(List.of(), List.of(), 1, "combatMove", "Germans", List.of())));
+    final CombatMovePlan plan =
+        new CombatMoveExecutor(store)
+            .execute(
+                session,
+                new CombatMoveRequest(
+                    new WireState(List.of(), List.of(), 1, "combatMove", "Germans", List.of())));
 
     assertNotNull(plan, "plan must not be null");
   }

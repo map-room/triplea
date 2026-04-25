@@ -27,38 +27,37 @@ import org.triplea.util.Tuple;
  * Executes a {@code scramble} decision by invoking {@link
  * AbstractProAi#scrambleUnitsQuery(Territory, Map)}.
  *
- * <p>Symmetric with {@link RetreatQueryExecutor} and {@link SelectCasualtiesExecutor}: applies
- * the embedded {@link org.triplea.ai.sidecar.wire.WireState}, synthesises a pending {@link
- * IBattle} at the scramble-to territory so {@code ProScrambleAi} can find it via {@code
+ * <p>Symmetric with {@link RetreatQueryExecutor} and {@link SelectCasualtiesExecutor}: applies the
+ * embedded {@link org.triplea.ai.sidecar.wire.WireState}, synthesises a pending {@link IBattle} at
+ * the scramble-to territory so {@code ProScrambleAi} can find it via {@code
  * BattleTracker.getPendingBattle}, dispatches into ProAi, and maps the resulting {@code
  * Map<Territory, Collection<Unit>>} back to a wire-shaped {@link ScramblePlan} keyed by source
  * territory name with Map Room unit IDs.
  *
  * <h2>Airbase resolution — why the wire {@code maxCount} is advisory</h2>
  *
- * <p>ProScrambleAi constructs a per-source {@code Tuple<Collection<Unit>, Collection<Unit>>}
- * where the {@code First} collection is the set of <b>airbases</b> on the source territory (see
- * {@code ScrambleLogic#getMaxScrambleCount} which requires every member to match {@code
- * Matches.unitIsAirBase()}). The {@code Second} collection is the air units eligible to
- * scramble. The task description's gloss about "max N scramblers" in First is a simplification:
- * the real TripleA contract is airbases-in-first, and the cap is computed by summing
- * per-airbase {@code maxScrambleCount}.
+ * <p>ProScrambleAi constructs a per-source {@code Tuple<Collection<Unit>, Collection<Unit>>} where
+ * the {@code First} collection is the set of <b>airbases</b> on the source territory (see {@code
+ * ScrambleLogic#getMaxScrambleCount} which requires every member to match {@code
+ * Matches.unitIsAirBase()}). The {@code Second} collection is the air units eligible to scramble.
+ * The task description's gloss about "max N scramblers" in First is a simplification: the real
+ * TripleA contract is airbases-in-first, and the cap is computed by summing per-airbase {@code
+ * maxScrambleCount}.
  *
  * <p>This executor therefore derives {@code First} directly from the live source territory by
- * matching {@code unitIsAirBase()}, and {@code Second} from the wire-supplied
- * {@code ScrambleSource.units} resolved via the session unit id map. The wire
- * {@code ScrambleSource.maxCount} field is intentionally not enforced here — it is advisory for
- * Map Room's own pre-flight and the authoritative cap comes from TripleA's airbase attachments.
- * A source with no airbase on the live territory is skipped (ProScrambleAi would throw on it),
- * which is consistent with Map Room only requesting a scramble when at least one air-base is
- * present.
+ * matching {@code unitIsAirBase()}, and {@code Second} from the wire-supplied {@code
+ * ScrambleSource.units} resolved via the session unit id map. The wire {@code
+ * ScrambleSource.maxCount} field is intentionally not enforced here — it is advisory for Map Room's
+ * own pre-flight and the authoritative cap comes from TripleA's airbase attachments. A source with
+ * no airbase on the live territory is skipped (ProScrambleAi would throw on it), which is
+ * consistent with Map Room only requesting a scramble when at least one air-base is present.
  *
  * <h2>Empty {@code possibleScramblers} short-circuit</h2>
  *
- * <p>If the wire request has no source territories we return an empty {@link ScramblePlan}
- * without invoking ProAi — ProScrambleAi would short-circuit to {@code null} on its first
- * {@code calculateBattleResults} loop anyway, and avoiding the call path keeps the no-op fast
- * and removes a needless {@code BattleTracker} round-trip.
+ * <p>If the wire request has no source territories we return an empty {@link ScramblePlan} without
+ * invoking ProAi — ProScrambleAi would short-circuit to {@code null} on its first {@code
+ * calculateBattleResults} loop anyway, and avoiding the call path keeps the no-op fast and removes
+ * a needless {@code BattleTracker} round-trip.
  */
 public final class ScrambleExecutor implements DecisionExecutor<ScrambleRequest, ScramblePlan> {
 

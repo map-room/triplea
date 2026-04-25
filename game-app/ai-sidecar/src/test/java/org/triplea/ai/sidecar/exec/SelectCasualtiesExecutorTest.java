@@ -104,7 +104,8 @@ class SelectCasualtiesExecutorTest {
 
     assertThat(plan.killed()).hasSize(2);
     // Every killed id must be one of the originally-selectable ids.
-    assertThat(plan.killed()).allSatisfy(id -> assertThat(List.of("u-inf-1", "u-art-1", "u-tank-1")).contains(id));
+    assertThat(plan.killed())
+        .allSatisfy(id -> assertThat(List.of("u-inf-1", "u-art-1", "u-tank-1")).contains(id));
     // Infantry is cheapest (3) and artillery is next (4), so the bubble-sort-on-cost path
     // should surface those two before the armour (6).
     assertThat(plan.killed()).containsExactlyInAnyOrder("u-inf-1", "u-art-1");
@@ -180,8 +181,7 @@ class SelectCasualtiesExecutorTest {
 
     final List<WireUnit> selectFrom =
         List.of(
-            new WireUnit("u-bb-1", "battleship", 0, 0),
-            new WireUnit("u-cr-1", "cruiser", 0, 0));
+            new WireUnit("u-bb-1", "battleship", 0, 0), new WireUnit("u-cr-1", "cruiser", 0, 0));
 
     final SelectCasualtiesRequest req =
         new SelectCasualtiesRequest(
@@ -227,8 +227,7 @@ class SelectCasualtiesExecutorTest {
 
     final List<WireUnit> stack =
         List.of(
-            new WireUnit("u-inf-1", "infantry", 0, 0),
-            new WireUnit("u-inf-2", "infantry", 0, 0));
+            new WireUnit("u-inf-1", "infantry", 0, 0), new WireUnit("u-inf-2", "infantry", 0, 0));
 
     // hitCount=2 but only 1 defaultCasualty — protocol violation.
     final SelectCasualtiesRequest req =
@@ -249,8 +248,7 @@ class SelectCasualtiesExecutorTest {
                 false));
 
     org.junit.jupiter.api.Assertions.assertThrows(
-        IllegalArgumentException.class,
-        () -> new SelectCasualtiesExecutor().execute(session, req));
+        IllegalArgumentException.class, () -> new SelectCasualtiesExecutor().execute(session, req));
   }
 
   // ------------------------------------------------------------------------

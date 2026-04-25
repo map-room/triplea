@@ -52,8 +52,8 @@ class ExecutorSupportTest {
   /**
    * Fix 1 regression: {@link ExecutorSupport#ensureProAiInitialized} must initialize {@link ProAi}
    * exactly once under concurrent load on the same {@link Session}. Without synchronization, two
-   * threads that both observe {@code getGamePlayer() == null} before either calls {@code initialize}
-   * would both proceed — double-initializing and potentially corrupting ProAi state.
+   * threads that both observe {@code getGamePlayer() == null} before either calls {@code
+   * initialize} would both proceed — double-initializing and potentially corrupting ProAi state.
    */
   @Test
   void ensureProAiInitialized_initializesExactlyOnceUnderConcurrentLoad() throws Exception {

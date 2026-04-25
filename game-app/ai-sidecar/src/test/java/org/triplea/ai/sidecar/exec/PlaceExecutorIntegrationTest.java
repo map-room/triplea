@@ -40,8 +40,7 @@ import org.triplea.ai.sidecar.wire.WireState;
  */
 class PlaceExecutorIntegrationTest {
 
-  @TempDir
-  Path snapshotDir;
+  @TempDir Path snapshotDir;
 
   private static CanonicalGameData canonical;
 
@@ -78,45 +77,51 @@ class PlaceExecutorIntegrationTest {
   }
 
   /**
-   * Full pipeline: purchase → combat-move → noncombat-move → place. Asserts the returned
-   * PlacePlan is non-null and has at least one placement entry.
+   * Full pipeline: purchase → combat-move → noncombat-move → place. Asserts the returned PlacePlan
+   * is non-null and has at least one placement entry.
    */
   @Test
   void germansPlaceAfterFullPipeline() {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
     final Session session = freshSession("Germans");
 
-    new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
-    new NoncombatMoveExecutor(store).execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+    new PurchaseExecutor(store)
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+    new CombatMoveExecutor(store)
+        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
+    new NoncombatMoveExecutor(store)
+        .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
-    final PlacePlan plan = new PlaceExecutor(store).execute(
-        session, new PlaceRequest(placeWireState("Germans")));
+    final PlacePlan plan =
+        new PlaceExecutor(store).execute(session, new PlaceRequest(placeWireState("Germans")));
 
     assertNotNull(plan, "place plan must not be null");
-    assertFalse(plan.placements().isEmpty(),
+    assertFalse(
+        plan.placements().isEmpty(),
         "Germans should have at least one placement on turn 1; got: " + plan.placements());
   }
 
-  /**
-   * Each placement entry must have a non-null territory name and a non-empty unit-types list.
-   */
+  /** Each placement entry must have a non-null territory name and a non-empty unit-types list. */
   @Test
   void placementEntriesHaveNonEmptyUnitTypes() {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
     final Session session = freshSession("Germans");
 
-    new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
-    new NoncombatMoveExecutor(store).execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+    new PurchaseExecutor(store)
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+    new CombatMoveExecutor(store)
+        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
+    new NoncombatMoveExecutor(store)
+        .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
-    final PlacePlan plan = new PlaceExecutor(store).execute(
-        session, new PlaceRequest(placeWireState("Germans")));
+    final PlacePlan plan =
+        new PlaceExecutor(store).execute(session, new PlaceRequest(placeWireState("Germans")));
 
     assertNotNull(plan);
     for (final var placement : plan.placements()) {
       assertNotNull(placement.territoryName(), "territory name must not be null");
-      assertFalse(placement.unitTypes().isEmpty(),
+      assertFalse(
+          placement.unitTypes().isEmpty(),
           "unit types must not be empty for territory " + placement.territoryName());
     }
   }
@@ -131,10 +136,12 @@ class PlaceExecutorIntegrationTest {
     final Session session = freshSession("Germans");
     // Do NOT run purchase — storedPurchaseTerritories remains null
 
-    final IllegalStateException ex = assertThrows(
-        IllegalStateException.class,
-        () -> new PlaceExecutor(store).execute(
-            session, new PlaceRequest(placeWireState("Germans"))));
+    final IllegalStateException ex =
+        assertThrows(
+            IllegalStateException.class,
+            () ->
+                new PlaceExecutor(store)
+                    .execute(session, new PlaceRequest(placeWireState("Germans"))));
 
     assertTrue(
         ex.getMessage().contains("place called without preceding purchase"),
@@ -143,8 +150,8 @@ class PlaceExecutorIntegrationTest {
 
   /**
    * Stale-snapshot resilience: if storedPurchaseTerritories carries unit types not present in the
-   * player's live UnitCollection, ProPurchaseAi.place() silently places an empty list. The
-   * executor must return a plan (possibly empty) without throwing.
+   * player's live UnitCollection, ProPurchaseAi.place() silently places an empty list. The executor
+   * must return a plan (possibly empty) without throwing.
    *
    * <p>This exercises the stale-snapshot path by saving a snapshot whose purchaseTerritories
    * reference a type ("infantry") that may or may not be in the player's collection at this point
@@ -157,15 +164,18 @@ class PlaceExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     // Run purchase through noncombat-move to establish session state
-    new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
-    new NoncombatMoveExecutor(store).execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+    new PurchaseExecutor(store)
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+    new CombatMoveExecutor(store)
+        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
+    new NoncombatMoveExecutor(store)
+        .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
     // At this point storedPurchaseTerritories is still populated in-memory from purchase.
     // The executor uses the in-memory value, so it should complete normally even if the
     // snapshot on disk is stale.
-    final PlacePlan plan = new PlaceExecutor(store).execute(
-        session, new PlaceRequest(placeWireState("Germans")));
+    final PlacePlan plan =
+        new PlaceExecutor(store).execute(session, new PlaceRequest(placeWireState("Germans")));
 
     assertNotNull(plan, "plan must not be null even after stale-snapshot scenario");
   }

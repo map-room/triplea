@@ -1,7 +1,6 @@
 package org.triplea.ai.sidecar.session;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -12,11 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * TDD tests for SessionStore disk persistence.
- * - save/load round-trip
- * - atomic rename (no .tmp left behind on save)
- * - delete removes file
- * - loadAll loads every manifest in the data dir
+ * TDD tests for SessionStore disk persistence. - save/load round-trip - atomic rename (no .tmp left
+ * behind on save) - delete removes file - loadAll loads every manifest in the data dir
  */
 class SessionStoreTest {
 
@@ -42,10 +38,7 @@ class SessionStoreTest {
   void noTmpFilesLeftAfterSave() throws IOException {
     final SessionStore store = new SessionStore(dataDir);
     store.save(new SessionManifest("g-1:Germans", "g-1", "Germans", 42L, 1000L, 1000L));
-    final long tmpCount =
-        Files.walk(dataDir)
-            .filter(p -> p.toString().endsWith(".tmp"))
-            .count();
+    final long tmpCount = Files.walk(dataDir).filter(p -> p.toString().endsWith(".tmp")).count();
     assertEquals(0, tmpCount, "temp files remain after save");
   }
 

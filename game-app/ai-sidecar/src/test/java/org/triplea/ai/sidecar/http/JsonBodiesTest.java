@@ -19,7 +19,8 @@ class JsonBodiesTest {
 
   @Test
   void writeValueSerializes() throws Exception {
-    final String s = JsonBodies.writeValue(new SessionCreateRequest("g-1:Germans", "g-1", "Germans", 7));
+    final String s =
+        JsonBodies.writeValue(new SessionCreateRequest("g-1:Germans", "g-1", "Germans", 7));
     assertTrue(s.contains("\"gameId\":\"g-1\""));
     assertTrue(s.contains("\"sessionId\":\"g-1:Germans\""));
   }

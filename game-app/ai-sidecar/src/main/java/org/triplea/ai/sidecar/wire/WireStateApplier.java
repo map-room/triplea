@@ -32,22 +32,22 @@ import org.triplea.java.collections.IntegerMap;
  * Applies a {@link WireState} onto a session's cloned {@link GameData}, mutating it to reflect
  * territory ownership, unit layout, player PU totals, and tech flags sent by Map Room.
  *
- * <p><b>Scope:</b> this is the <em>static</em> state applier. It reconstructs the board (who
- * owns what, which units stand where, how many PUs each player has, which techs are unlocked).
- * It deliberately <b>does not</b> populate {@code BattleTracker} or construct any {@code
- * IBattle}. Battle / air-battle / combat-phase transient state is the responsibility of the
- * per-kind executors (Tasks 22–24), each of which synthesizes an {@code IBattle}, registers it
- * with {@code BattleDelegate.getBattleTracker()}, and then invokes the appropriate ProAi
- * method (see {@code AbstractProAi.selectCasualties / retreatQuery / scrambleUnitsQuery}).
+ * <p><b>Scope:</b> this is the <em>static</em> state applier. It reconstructs the board (who owns
+ * what, which units stand where, how many PUs each player has, which techs are unlocked). It
+ * deliberately <b>does not</b> populate {@code BattleTracker} or construct any {@code IBattle}.
+ * Battle / air-battle / combat-phase transient state is the responsibility of the per-kind
+ * executors (Tasks 22–24), each of which synthesizes an {@code IBattle}, registers it with {@code
+ * BattleDelegate.getBattleTracker()}, and then invokes the appropriate ProAi method (see {@code
+ * AbstractProAi.selectCasualties / retreatQuery / scrambleUnitsQuery}).
  *
  * <p><b>Mutation idiom:</b> all mutations go through {@link ChangeFactory} + {@link
- * GameData#performChange(Change)} — not direct setters — because that is the only path that
- * fires the game-data change listeners TripleA code relies on elsewhere.
+ * GameData#performChange(Change)} — not direct setters — because that is the only path that fires
+ * the game-data change listeners TripleA code relies on elsewhere.
  *
  * <p><b>Unit identity:</b> Map Room addresses units by a stable string {@code unitId}; TripleA
- * addresses them by {@link UUID}. The applier is handed a concurrent map that it populates
- * lazily on first encounter with a given Map Room unit ID and reuses on subsequent applies so
- * that the same Map Room unit always resolves to the same TripleA {@link Unit#getId()}.
+ * addresses them by {@link UUID}. The applier is handed a concurrent map that it populates lazily
+ * on first encounter with a given Map Room unit ID and reuses on subsequent applies so that the
+ * same Map Room unit always resolves to the same TripleA {@link Unit#getId()}.
  */
 public final class WireStateApplier {
 
@@ -56,8 +56,8 @@ public final class WireStateApplier {
   private WireStateApplier() {}
 
   /**
-   * Mutates {@code gameData} in place so it matches {@code wire}. Round / phase / currentPlayer
-   * are treated as read-only metadata: a mismatch logs a warning but does not throw.
+   * Mutates {@code gameData} in place so it matches {@code wire}. Round / phase / currentPlayer are
+   * treated as read-only metadata: a mismatch logs a warning but does not throw.
    *
    * <p>Callers must not invoke {@code apply()} concurrently on the same {@code (gameData,
    * unitIdMap)} pair; serialise per-session.
@@ -67,9 +67,7 @@ public final class WireStateApplier {
    *     recoverable condition.
    */
   public static void apply(
-      final GameData gameData,
-      final WireState wire,
-      final ConcurrentMap<String, UUID> unitIdMap) {
+      final GameData gameData, final WireState wire, final ConcurrentMap<String, UUID> unitIdMap) {
     final CompositeChange changes = new CompositeChange();
 
     for (final WireTerritory wt : wire.territories()) {
@@ -103,15 +101,14 @@ public final class WireStateApplier {
   }
 
   /**
-   * Register every {@link WireTerritory#conqueredThisTurn()} territory with the session's
-   * {@link BattleTracker#getConquered() conquered} set so that TripleA predicates such as
-   * {@code AbstractPlaceDelegate.wasConquered(t)} gate placement / production as they would
-   * during a real turn.
+   * Register every {@link WireTerritory#conqueredThisTurn()} territory with the session's {@link
+   * BattleTracker#getConquered() conquered} set so that TripleA predicates such as {@code
+   * AbstractPlaceDelegate.wasConquered(t)} gate placement / production as they would during a real
+   * turn.
    *
-   * <p>We cannot use {@code ChangeFactory.attachmentPropertyChange} here because TripleA does
-   * not model conquered-this-turn as a {@link
-   * games.strategy.triplea.attachments.TerritoryAttachment} field — it lives entirely on the
-   * (transient) {@link BattleTracker}.
+   * <p>We cannot use {@code ChangeFactory.attachmentPropertyChange} here because TripleA does not
+   * model conquered-this-turn as a {@link games.strategy.triplea.attachments.TerritoryAttachment}
+   * field — it lives entirely on the (transient) {@link BattleTracker}.
    */
   private static void applyConqueredThisTurn(final GameData gameData, final WireState wire) {
     boolean needTracker = false;
@@ -141,13 +138,11 @@ public final class WireStateApplier {
   /**
    * Apply {@link WireUnit#bombingDamage()} to every unit on every territory whose wire damage
    * differs from the live {@link Unit#getUnitDamage()} value. {@link
-   * ChangeFactory#bombingUnitDamage} semantics are <em>set, not add</em> — the {@link
-   * IntegerMap} values are absolute new damage counts.
+   * ChangeFactory#bombingUnitDamage} semantics are <em>set, not add</em> — the {@link IntegerMap}
+   * values are absolute new damage counts.
    */
   private static void applyOperationalDamage(
-      final GameData gameData,
-      final WireState wire,
-      final ConcurrentMap<String, UUID> unitIdMap) {
+      final GameData gameData, final WireState wire, final ConcurrentMap<String, UUID> unitIdMap) {
     for (final WireTerritory wt : wire.territories()) {
       final Territory t = gameData.getMap().getTerritoryOrNull(wt.territoryId());
       if (t == null) {
@@ -175,10 +170,10 @@ public final class WireStateApplier {
   }
 
   /**
-   * Advance {@link GameData#getSequence()} to the wire-supplied round and step. This mirrors
-   * what {@code GameSequence.setRoundAndStep} does for save-game export: the {@code display
-   * name} lookup is case-insensitive and falls back to index 0 with an error log if no match
-   * is found — which is why the {@link StepNameMapper} contract is narrow.
+   * Advance {@link GameData#getSequence()} to the wire-supplied round and step. This mirrors what
+   * {@code GameSequence.setRoundAndStep} does for save-game export: the {@code display name} lookup
+   * is case-insensitive and falls back to index 0 with an error log if no match is found — which is
+   * why the {@link StepNameMapper} contract is narrow.
    */
   private static void applyRoundAndStep(final GameData gameData, final WireState wire) {
     // StepNameMapper covers all wired phases (purchase / combatMove / battle / nonCombatMove /
@@ -190,8 +185,7 @@ public final class WireStateApplier {
     } catch (final IllegalArgumentException e) {
       LOG.log(
           Level.WARNING,
-          () ->
-              "WireState phase '" + wire.phase() + "' not mappable; skipping round/step apply");
+          () -> "WireState phase '" + wire.phase() + "' not mappable; skipping round/step apply");
       return;
     }
     final GamePlayer player = gameData.getPlayerList().getPlayerId(wire.currentPlayer());
@@ -206,8 +200,7 @@ public final class WireStateApplier {
     // existing API resolves to the correct step index.
     GameStep target = null;
     for (final GameStep step : gameData.getSequence().getSteps()) {
-      if (javaStepName.equalsIgnoreCase(step.getName())
-          && player.equals(step.getPlayerId())) {
+      if (javaStepName.equalsIgnoreCase(step.getName()) && player.equals(step.getPlayerId())) {
         target = step;
         break;
       }
@@ -227,9 +220,9 @@ public final class WireStateApplier {
   }
 
   /**
-   * Re-register a fresh {@link BattleDelegate} if {@code postDeSerialize} cleared it on the
-   * cloned {@link GameData}. Mirrors {@code ExecutorSupport.ensureBattleDelegate} which lives
-   * in the {@code exec} package and is not visible here.
+   * Re-register a fresh {@link BattleDelegate} if {@code postDeSerialize} cleared it on the cloned
+   * {@link GameData}. Mirrors {@code ExecutorSupport.ensureBattleDelegate} which lives in the
+   * {@code exec} package and is not visible here.
    */
   private static void ensureBattleDelegate(final GameData gameData) {
     if (gameData.getDelegateOptional("battle").isPresent()) {
@@ -262,13 +255,11 @@ public final class WireStateApplier {
     // are still mutated directly below (pre-add, before any listeners can observe them).
     final IntegerMap<Unit> existingUnitHitDeltas = new IntegerMap<>();
     for (final WireUnit wu : wt.units()) {
-      final UUID uuid =
-          unitIdMap.computeIfAbsent(wu.unitId(), k -> UUID.randomUUID());
+      final UUID uuid = unitIdMap.computeIfAbsent(wu.unitId(), k -> UUID.randomUUID());
       desiredIds.add(uuid);
       final UnitType type = gameData.getUnitTypeList().getUnitType(wu.unitType()).orElse(null);
       if (type == null) {
-        throw new IllegalArgumentException(
-            "Unknown unit type in WireState: " + wu.unitType());
+        throw new IllegalArgumentException("Unknown unit type in WireState: " + wu.unitType());
       }
       // Per-unit owner: use the explicit owner from the wire when present, otherwise fall back
       // to the territory owner. The fallback preserves backward compatibility with clients that
@@ -326,9 +317,7 @@ public final class WireStateApplier {
       desired.add(unit);
     }
     if (!existingUnitHitDeltas.isEmpty()) {
-      out.add(
-          ChangeFactory.unitsHit(
-              existingUnitHitDeltas, Collections.singletonList(territory)));
+      out.add(ChangeFactory.unitsHit(existingUnitHitDeltas, Collections.singletonList(territory)));
     }
 
     // Remove any live units not in the wire set.
@@ -364,9 +353,7 @@ public final class WireStateApplier {
    * referenced by transportedBy are guaranteed to exist in game data.
    */
   private static void applyUnitProperties(
-      final GameData gameData,
-      final WireState wire,
-      final ConcurrentMap<String, UUID> unitIdMap) {
+      final GameData gameData, final WireState wire, final ConcurrentMap<String, UUID> unitIdMap) {
     // Index every live unit by UUID for O(1) transport resolution across territories.
     final Map<UUID, Unit> allUnitsById = new HashMap<>();
     for (final Territory t : gameData.getMap().getTerritories()) {
@@ -393,8 +380,7 @@ public final class WireStateApplier {
 
         if (wu.submerged() != unit.getSubmerged()) {
           changes.add(
-              ChangeFactory.unitPropertyChange(
-                  unit, wu.submerged(), Unit.PropertyName.SUBMERGED));
+              ChangeFactory.unitPropertyChange(unit, wu.submerged(), Unit.PropertyName.SUBMERGED));
         }
         if (wu.wasInCombat() != unit.getWasInCombat()) {
           changes.add(
@@ -445,8 +431,7 @@ public final class WireStateApplier {
                     unit, unloadedToTerritory, Unit.PropertyName.UNLOADED_TO));
           }
         } else if (unit.getUnloadedTo() != null) {
-          changes.add(
-              ChangeFactory.unitPropertyChange(unit, null, Unit.PropertyName.UNLOADED_TO));
+          changes.add(ChangeFactory.unitPropertyChange(unit, null, Unit.PropertyName.UNLOADED_TO));
         }
         if (wu.unloaded() != null && !wu.unloaded().isEmpty()) {
           final List<Unit> unloadedUnits = new ArrayList<>();
@@ -501,8 +486,7 @@ public final class WireStateApplier {
       final GameData gameData, final WirePlayer wp, final CompositeChange out) {
     final GamePlayer player = resolvePlayer(gameData, wp.playerId());
 
-    final Resource pus =
-        gameData.getResourceList().getResourceOrThrow("PUs");
+    final Resource pus = gameData.getResourceList().getResourceOrThrow("PUs");
     final int current = player.getResources().getQuantity(pus);
     final int delta = wp.pus() - current;
     if (delta != 0) {
@@ -540,13 +524,12 @@ public final class WireStateApplier {
   /**
    * Hydrate {@link games.strategy.engine.data.RelationshipTracker} from the wire's {@code
    * relationships} list. Each pair is set unconditionally via the tracker's direct setter so the
-   * mutation is visible immediately to in-memory readers — the sidecar's politics step runs next
-   * on this same tracker and must see the current state (see map-room#1824 phase-ordering
-   * constraint).
+   * mutation is visible immediately to in-memory readers — the sidecar's politics step runs next on
+   * this same tracker and must see the current state (see map-room#1824 phase-ordering constraint).
    *
-   * <p>Pairs whose nations don't exist in the loaded GameData are skipped with a warning
-   * (defensive — the TS side should already filter to TRIPLEA_KNOWN_PLAYERS, but stale fixtures
-   * shouldn't blow up the applier).
+   * <p>Pairs whose nations don't exist in the loaded GameData are skipped with a warning (defensive
+   * — the TS side should already filter to TRIPLEA_KNOWN_PLAYERS, but stale fixtures shouldn't blow
+   * up the applier).
    */
   private static void applyRelationships(final GameData gameData, final WireState wire) {
     if (wire.relationships().isEmpty()) {

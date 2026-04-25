@@ -53,32 +53,93 @@ class HealthHandlerTest {
   private static HttpExchange throwingGetExchange(final String errorMessage) {
     return new HttpExchange() {
       private final Headers responseHeaders = new Headers();
-      @Override public String getRequestMethod() { return "GET"; }
-      @Override public URI getRequestURI() { return URI.create("/health"); }
-      @Override public Headers getRequestHeaders() { return new Headers(); }
-      @Override public Headers getResponseHeaders() { return responseHeaders; }
-      @Override public void sendResponseHeaders(final int code, final long length) {}
-      @Override public OutputStream getResponseBody() {
+
+      @Override
+      public String getRequestMethod() {
+        return "GET";
+      }
+
+      @Override
+      public URI getRequestURI() {
+        return URI.create("/health");
+      }
+
+      @Override
+      public Headers getRequestHeaders() {
+        return new Headers();
+      }
+
+      @Override
+      public Headers getResponseHeaders() {
+        return responseHeaders;
+      }
+
+      @Override
+      public void sendResponseHeaders(final int code, final long length) {}
+
+      @Override
+      public OutputStream getResponseBody() {
         return new OutputStream() {
-          @Override public void write(final int b) throws IOException {
+          @Override
+          public void write(final int b) throws IOException {
             throw new IOException(errorMessage);
           }
-          @Override public void write(final byte[] b) throws IOException {
+
+          @Override
+          public void write(final byte[] b) throws IOException {
             throw new IOException(errorMessage);
           }
         };
       }
-      @Override public InputStream getRequestBody() { return new ByteArrayInputStream(new byte[0]); }
-      @Override public HttpContext getHttpContext() { return null; }
-      @Override public void close() {}
-      @Override public InetSocketAddress getRemoteAddress() { return null; }
-      @Override public int getResponseCode() { return -1; }
-      @Override public InetSocketAddress getLocalAddress() { return null; }
-      @Override public String getProtocol() { return "HTTP/1.1"; }
-      @Override public Object getAttribute(final String name) { return null; }
-      @Override public void setAttribute(final String name, final Object value) {}
-      @Override public void setStreams(final InputStream i, final OutputStream o) {}
-      @Override public HttpPrincipal getPrincipal() { return null; }
+
+      @Override
+      public InputStream getRequestBody() {
+        return new ByteArrayInputStream(new byte[0]);
+      }
+
+      @Override
+      public HttpContext getHttpContext() {
+        return null;
+      }
+
+      @Override
+      public void close() {}
+
+      @Override
+      public InetSocketAddress getRemoteAddress() {
+        return null;
+      }
+
+      @Override
+      public int getResponseCode() {
+        return -1;
+      }
+
+      @Override
+      public InetSocketAddress getLocalAddress() {
+        return null;
+      }
+
+      @Override
+      public String getProtocol() {
+        return "HTTP/1.1";
+      }
+
+      @Override
+      public Object getAttribute(final String name) {
+        return null;
+      }
+
+      @Override
+      public void setAttribute(final String name, final Object value) {}
+
+      @Override
+      public void setStreams(final InputStream i, final OutputStream o) {}
+
+      @Override
+      public HttpPrincipal getPrincipal() {
+        return null;
+      }
     };
   }
 }

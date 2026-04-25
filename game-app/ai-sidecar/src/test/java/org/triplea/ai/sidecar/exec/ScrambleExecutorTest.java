@@ -103,8 +103,7 @@ class ScrambleExecutorTest {
     assertThat(plan.scramblers()).isNotNull();
     if (!plan.scramblers().isEmpty()) {
       assertThat(plan.scramblers()).containsOnlyKeys("Western Germany");
-      assertThat(plan.scramblers().get("Western Germany"))
-          .isSubsetOf("u-ger-ftr-1", "u-ger-ftr-2");
+      assertThat(plan.scramblers().get("Western Germany")).isSubsetOf("u-ger-ftr-1", "u-ger-ftr-2");
     }
     assertThat(pendingBattles(session)).isEmpty();
   }
@@ -194,8 +193,7 @@ class ScrambleExecutorTest {
             List.of());
 
     final ScrambleRequest req =
-        new ScrambleRequest(
-            wire, new ScrambleRequest.ScrambleBattle("112 Sea Zone", Map.of()));
+        new ScrambleRequest(wire, new ScrambleRequest.ScrambleBattle("112 Sea Zone", Map.of()));
 
     final ScramblePlan plan = new ScrambleExecutor().execute(session, req);
     assertThat(plan).isNotNull();

@@ -6,6 +6,7 @@ import games.strategy.engine.data.GameData;
 import games.strategy.triplea.ai.pro.ProAi;
 import games.strategy.triplea.settings.ClientSetting;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -20,24 +21,21 @@ import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionKey;
-import org.triplea.ai.sidecar.wire.WireRelationship;
 import org.triplea.ai.sidecar.wire.WireState;
-
-import java.util.List;
 
 /**
  * Smoke test for {@link PoliticsExecutor}.
  *
- * <p>Verifies the executor wires up correctly: it runs {@code invokePoliticsForSidecar},
- * captures declarations through {@link PoliticsObserver}, and returns a well-formed
- * {@link PoliticsPlan} with {@code kind="politics"} and a non-null declarations list.
+ * <p>Verifies the executor wires up correctly: it runs {@code invokePoliticsForSidecar}, captures
+ * declarations through {@link PoliticsObserver}, and returns a well-formed {@link PoliticsPlan}
+ * with {@code kind="politics"} and a non-null declarations list.
  *
- * <p><b>What this test does NOT verify:</b> that {@code ProPoliticsAi.politicalActions()}
- * actually elects to declare war in any given scripted scenario. That depends on ProAi
- * heuristics (round, power ratios, enemy adjacency, seeded RNG) which are not stable to
- * force from unit-test inputs. The end-to-end behaviour "AI Germany declares on Russia
- * at round ≥ 3 and invades same turn" is instead covered by the 🧑 Manual gate in the PR
- * test plan, with a screenshot of a live multiplayer match.
+ * <p><b>What this test does NOT verify:</b> that {@code ProPoliticsAi.politicalActions()} actually
+ * elects to declare war in any given scripted scenario. That depends on ProAi heuristics (round,
+ * power ratios, enemy adjacency, seeded RNG) which are not stable to force from unit-test inputs.
+ * The end-to-end behaviour "AI Germany declares on Russia at round ≥ 3 and invades same turn" is
+ * instead covered by the 🧑 Manual gate in the PR test plan, with a screenshot of a live
+ * multiplayer match.
  */
 class PoliticsExecutorTest {
 
@@ -70,15 +68,18 @@ class PoliticsExecutorTest {
     final Session session = freshSession("Germans");
 
     // Purchase first to populate storedCombatMoveMap (required for ProAi initialization).
-    new PurchaseExecutor(store).execute(
-        session,
-        new PurchaseRequest(new WireState(List.of(), List.of(), 1, "purchase", "Germans",
-            List.of())));
+    new PurchaseExecutor(store)
+        .execute(
+            session,
+            new PurchaseRequest(
+                new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of())));
 
-    final PoliticsPlan plan = new PoliticsExecutor(store).execute(
-        session,
-        new PoliticsRequest(new WireState(List.of(), List.of(), 1, "politics", "Germans",
-            List.of())));
+    final PoliticsPlan plan =
+        new PoliticsExecutor(store)
+            .execute(
+                session,
+                new PoliticsRequest(
+                    new WireState(List.of(), List.of(), 1, "politics", "Germans", List.of())));
 
     assertThat(plan.kind()).isEqualTo("politics");
     assertThat(plan.declarations()).isNotNull();

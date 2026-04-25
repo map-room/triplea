@@ -17,8 +17,7 @@ class PoliticsPlanTest {
 
   @Test
   void deserializesFromJson() throws Exception {
-    final String json =
-        "{\"kind\":\"politics\",\"declarations\":[{\"target\":\"Russians\"}]}";
+    final String json = "{\"kind\":\"politics\",\"declarations\":[{\"target\":\"Russians\"}]}";
     final DecisionPlan plan = new ObjectMapper().readValue(json, DecisionPlan.class);
     assertThat(plan).isInstanceOf(PoliticsPlan.class);
     assertThat(((PoliticsPlan) plan).declarations())

@@ -18,12 +18,12 @@ import org.triplea.sound.ISound;
  * games.strategy.engine.player.PlayerBridge} that wraps the sidecar session's cloned {@link
  * GameData}.
  *
- * <p>{@code PlayerBridge} calls exactly one method on the {@code IGame} during construction
- * ({@code getData().addGameDataEventListener}) and thereafter uses {@code getData()} for the
- * lookups that {@code AbstractBasePlayer.getGameData()} performs on behalf of the AI. Every
- * other entry point on {@code IGame} is unreachable from the decision-execution path and
- * throws {@link UnsupportedOperationException} so that future accidental reliance on them
- * fails loudly instead of silently mis-wiring message passing / vaults / random sources.
+ * <p>{@code PlayerBridge} calls exactly one method on the {@code IGame} during construction ({@code
+ * getData().addGameDataEventListener}) and thereafter uses {@code getData()} for the lookups that
+ * {@code AbstractBasePlayer.getGameData()} performs on behalf of the AI. Every other entry point on
+ * {@code IGame} is unreachable from the decision-execution path and throws {@link
+ * UnsupportedOperationException} so that future accidental reliance on them fails loudly instead of
+ * silently mis-wiring message passing / vaults / random sources.
  */
 final class HeadlessGame implements IGame {
   private final GameData data;

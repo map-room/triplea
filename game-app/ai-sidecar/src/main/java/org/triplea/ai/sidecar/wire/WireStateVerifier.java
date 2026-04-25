@@ -26,9 +26,9 @@ import java.util.concurrent.ConcurrentMap;
  * Post-apply integrity verifier. Called at the end of {@link WireStateApplier#apply} to detect
  * drift between an incoming {@link WireState} and the live {@link GameData} after apply has run.
  *
- * <p>Logs one {@code WARNING} line per specific mismatch using a grep-friendly
- * {@code apply-drift kind=...} prefix, plus one {@code INFO} summary line per apply. Never throws
- * — this is observational instrumentation, not enforcement.
+ * <p>Logs one {@code WARNING} line per specific mismatch using a grep-friendly {@code apply-drift
+ * kind=...} prefix, plus one {@code INFO} summary line per apply. Never throws — this is
+ * observational instrumentation, not enforcement.
  */
 public final class WireStateVerifier {
 
@@ -55,13 +55,11 @@ public final class WireStateVerifier {
   private WireStateVerifier() {}
 
   /**
-   * Verify that {@code gameData} now reflects every field carried in {@code wire}. Logs one
-   * WARNING per drift and one INFO summary at the end. Never throws.
+   * Verify that {@code gameData} now reflects every field carried in {@code wire}. Logs one WARNING
+   * per drift and one INFO summary at the end. Never throws.
    */
   public static void verifyApply(
-      final GameData gameData,
-      final WireState wire,
-      final ConcurrentMap<String, UUID> unitIdMap) {
+      final GameData gameData, final WireState wire, final ConcurrentMap<String, UUID> unitIdMap) {
     try {
       // Build global unit indices for territory-placement and transport-link checks.
       final Map<UUID, Unit> allUnitsById = new HashMap<>();
@@ -80,8 +78,8 @@ public final class WireStateVerifier {
 
       int mismatches = 0;
       for (final WireTerritory wt : wire.territories()) {
-        mismatches += verifyTerritory(gameData, wt, unitIdMap,
-            allUnitsById, unitToTerritory, uuidToWireId);
+        mismatches +=
+            verifyTerritory(gameData, wt, unitIdMap, allUnitsById, unitToTerritory, uuidToWireId);
       }
       for (final WirePlayer wp : wire.players()) {
         mismatches += verifyPlayer(gameData, wp);
@@ -225,18 +223,34 @@ public final class WireStateVerifier {
       }
 
       // transportedBy — wire says which transport carries this unit; live state must match
-      drift += verifyTransportedBy(wu, unit, unitIdMap, allUnitsById, uuidToWireId,
-          wt.territoryId());
+      drift +=
+          verifyTransportedBy(wu, unit, unitIdMap, allUnitsById, uuidToWireId, wt.territoryId());
 
       // combat-phase boolean flags
-      drift += verifyUnitBoolFlag(wu.submerged(), unit.getSubmerged(),
-          "submerged", wt.territoryId(), wu.unitId());
-      drift += verifyUnitBoolFlag(wu.wasInCombat(), unit.getWasInCombat(),
-          "wasInCombat", wt.territoryId(), wu.unitId());
-      drift += verifyUnitBoolFlag(wu.wasLoadedThisTurn(), unit.getWasLoadedThisTurn(),
-          "wasLoadedThisTurn", wt.territoryId(), wu.unitId());
-      drift += verifyUnitBoolFlag(wu.wasUnloadedInCombatPhase(), unit.getWasUnloadedInCombatPhase(),
-          "wasUnloadedInCombatPhase", wt.territoryId(), wu.unitId());
+      drift +=
+          verifyUnitBoolFlag(
+              wu.submerged(), unit.getSubmerged(), "submerged", wt.territoryId(), wu.unitId());
+      drift +=
+          verifyUnitBoolFlag(
+              wu.wasInCombat(),
+              unit.getWasInCombat(),
+              "wasInCombat",
+              wt.territoryId(),
+              wu.unitId());
+      drift +=
+          verifyUnitBoolFlag(
+              wu.wasLoadedThisTurn(),
+              unit.getWasLoadedThisTurn(),
+              "wasLoadedThisTurn",
+              wt.territoryId(),
+              wu.unitId());
+      drift +=
+          verifyUnitBoolFlag(
+              wu.wasUnloadedInCombatPhase(),
+              unit.getWasUnloadedInCombatPhase(),
+              "wasUnloadedInCombatPhase",
+              wt.territoryId(),
+              wu.unitId());
     }
 
     // conquered-this-turn (only checkable if the battle delegate is present)
@@ -281,9 +295,11 @@ public final class WireStateVerifier {
         return 0;
       }
       if (!expectedTransporter.equals(actualTransport)) {
-        final String actualLabel = actualTransport != null
-            ? uuidToWireId.getOrDefault(actualTransport.getId(), "uuid:" + actualTransport.getId())
-            : "null";
+        final String actualLabel =
+            actualTransport != null
+                ? uuidToWireId.getOrDefault(
+                    actualTransport.getId(), "uuid:" + actualTransport.getId())
+                : "null";
         LOG.log(
             Level.WARNING,
             () ->

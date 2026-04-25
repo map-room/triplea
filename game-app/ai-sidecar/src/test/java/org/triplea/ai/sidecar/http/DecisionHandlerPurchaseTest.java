@@ -14,12 +14,7 @@ import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
-import org.triplea.ai.sidecar.dto.RetreatPlan;
-import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
-import org.triplea.ai.sidecar.dto.ScramblePlan;
-import org.triplea.ai.sidecar.dto.ScrambleRequest;
 import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
-import org.triplea.ai.sidecar.dto.SelectCasualtiesRequest;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionKey;
@@ -45,29 +40,36 @@ class DecisionHandlerPurchaseTest {
       "\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
           + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}";
 
-  private static final String PURCHASE_BODY =
-      "{\"kind\":\"purchase\"," + EMPTY_STATE + "}";
+  private static final String PURCHASE_BODY = "{\"kind\":\"purchase\"," + EMPTY_STATE + "}";
 
   private SessionRegistry newRegistry() {
     return new SessionRegistry(CanonicalGameData.load());
   }
 
   private Session newSession(final SessionRegistry registry) {
-    return registry.createOrGet(new SessionKey("g-purchase-test", "Germans"), "g-purchase-test:Germans", 42L).session();
+    return registry
+        .createOrGet(new SessionKey("g-purchase-test", "Germans"), "g-purchase-test:Germans", 42L)
+        .session();
   }
 
   /**
-   * Creates a {@link DecisionHandler} with stub Phase-2 executors that throw on invocation, and
-   * the supplied purchase executor stub.
+   * Creates a {@link DecisionHandler} with stub Phase-2 executors that throw on invocation, and the
+   * supplied purchase executor stub.
    */
   private DecisionHandler handlerWithPurchaseStub(
       final SessionRegistry registry,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor) {
     return new DecisionHandler(
         registry,
-        (session, req) -> { throw new AssertionError("selectCasualties must not be called"); },
-        (session, req) -> { throw new AssertionError("retreat must not be called"); },
-        (session, req) -> { throw new AssertionError("scramble must not be called"); },
+        (session, req) -> {
+          throw new AssertionError("selectCasualties must not be called");
+        },
+        (session, req) -> {
+          throw new AssertionError("retreat must not be called");
+        },
+        (session, req) -> {
+          throw new AssertionError("scramble must not be called");
+        },
         purchaseExecutor);
   }
 
@@ -108,7 +110,8 @@ class DecisionHandlerPurchaseTest {
 
     final PurchasePlan fixedPlan =
         new PurchasePlan(
-            List.of(new PurchaseOrder("infantry", 2, null), new PurchaseOrder("artillery", 1, null)),
+            List.of(
+                new PurchaseOrder("infantry", 2, null), new PurchaseOrder("artillery", 1, null)),
             List.of());
 
     final DecisionHandler h = handlerWithPurchaseStub(registry, (session, req) -> fixedPlan);
@@ -167,9 +170,15 @@ class DecisionHandlerPurchaseTest {
         new DecisionHandler(
             registry,
             (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
-            (session, req) -> { throw new AssertionError("retreat must not be called"); },
-            (session, req) -> { throw new AssertionError("scramble must not be called"); },
-            (session, req) -> { throw new AssertionError("purchase must not be called"); });
+            (session, req) -> {
+              throw new AssertionError("retreat must not be called");
+            },
+            (session, req) -> {
+              throw new AssertionError("scramble must not be called");
+            },
+            (session, req) -> {
+              throw new AssertionError("purchase must not be called");
+            });
 
     final FakeHttpExchange ex =
         new FakeHttpExchange(

@@ -12,10 +12,10 @@ import org.triplea.ai.sidecar.wire.SessionCreateResponse;
 /**
  * Handles {@code POST /sessions} (v2 contract).
  *
- * <p>The caller supplies a deterministic {@code sessionId = matchID:nation}. The handler
- * validates that {@code sessionId == gameId + ":" + nation} and then delegates to
- * {@link SessionRegistry#createOrGet} which is idempotent — reopening an existing session
- * returns {@code created=false} without reinitialising ProData.
+ * <p>The caller supplies a deterministic {@code sessionId = matchID:nation}. The handler validates
+ * that {@code sessionId == gameId + ":" + nation} and then delegates to {@link
+ * SessionRegistry#createOrGet} which is idempotent — reopening an existing session returns {@code
+ * created=false} without reinitialising ProData.
  */
 public final class SessionCreateHandler implements HttpHandler {
   private final SessionRegistry registry;
@@ -41,15 +41,21 @@ public final class SessionCreateHandler implements HttpHandler {
     }
     // Validate required fields
     if (req.sessionId() == null || req.gameId() == null || req.nation() == null) {
-      writeJson(exchange, 400, JsonBodies.errorBody("bad-request",
-          "sessionId, gameId and nation are required"));
+      writeJson(
+          exchange,
+          400,
+          JsonBodies.errorBody("bad-request", "sessionId, gameId and nation are required"));
       return;
     }
     // Validate deterministic sessionId contract
     final String expectedId = req.gameId() + ":" + req.nation();
     if (!expectedId.equals(req.sessionId())) {
-      writeJson(exchange, 400, JsonBodies.errorBody("bad-request",
-          "sessionId must equal gameId + \":\" + nation (expected \"" + expectedId + "\")"));
+      writeJson(
+          exchange,
+          400,
+          JsonBodies.errorBody(
+              "bad-request",
+              "sessionId must equal gameId + \":\" + nation (expected \"" + expectedId + "\")"));
       return;
     }
 
@@ -62,7 +68,8 @@ public final class SessionCreateHandler implements HttpHandler {
     writeJson(
         exchange,
         200,
-        JsonBodies.writeValue(new SessionCreateResponse(result.session().sessionId(), result.created())));
+        JsonBodies.writeValue(
+            new SessionCreateResponse(result.session().sessionId(), result.created())));
   }
 
   private static void writeJson(final HttpExchange ex, final int status, final String body)

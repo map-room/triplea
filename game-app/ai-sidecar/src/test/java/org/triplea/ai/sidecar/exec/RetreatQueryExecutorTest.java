@@ -110,9 +110,7 @@ class RetreatQueryExecutorTest {
         new WireState(
             List.of(
                 new WireTerritory(
-                    "Poland",
-                    "Germans",
-                    List.of(new WireUnit("u-ger-inf-1", "infantry", 0, 0)))),
+                    "Poland", "Germans", List.of(new WireUnit("u-ger-inf-1", "infantry", 0, 0)))),
             List.of(),
             1,
             "combat",
