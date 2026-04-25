@@ -40,12 +40,13 @@ import org.triplea.ai.sidecar.CanonicalGameData;
 
 /**
  * Verifies that every {@link Snapshotted}-annotated field in the ProAi data classes:
+ *
  * <ol>
  *   <li>Appears in the correct snapshot DTO.
  *   <li>Survives a Jackson JSON round-trip with its structure intact.
- *   <li>Can be restored from a real {@link ProSessionSnapshot} produced by
- *       {@link AbstractProAi#snapshotForSidecar} after a real {@code invokePurchaseForSidecar}
- *       call on the canonical Global 1940 map.
+ *   <li>Can be restored from a real {@link ProSessionSnapshot} produced by {@link
+ *       AbstractProAi#snapshotForSidecar} after a real {@code invokePurchaseForSidecar} call on the
+ *       canonical Global 1940 map.
  * </ol>
  */
 class ProSessionSnapshotRoundTripTest {
@@ -69,21 +70,25 @@ class ProSessionSnapshotRoundTripTest {
         }
       }
     }
-    assertEquals(8, snapshottedFields.size(),
-        "Expected exactly 8 @Snapshotted fields; found: " + snapshottedFields.stream()
-            .map(f -> f.getDeclaringClass().getSimpleName() + "." + f.getName())
-            .toList());
+    assertEquals(
+        8,
+        snapshottedFields.size(),
+        "Expected exactly 8 @Snapshotted fields; found: "
+            + snapshottedFields.stream()
+                .map(f -> f.getDeclaringClass().getSimpleName() + "." + f.getName())
+                .toList());
   }
 
   /** Verify the 4-arg DTO constructor serializes and deserializes via Jackson correctly. */
   @Test
   void snapshotDtosRoundTripThroughJackson() throws Exception {
-    final ProTerritorySnapshot territorySnap = new ProTerritorySnapshot(
-        List.of("aaaa-bbbb-cccc-dddd"),
-        List.of("eeee-ffff-0000-1111"),
-        Map.of("transport-uuid", List.of("carried-uuid-1", "carried-uuid-2")),
-        Map.of("transport-uuid", "Sea Zone 5"),
-        Map.of("bombard-uuid", "Western Germany"));
+    final ProTerritorySnapshot territorySnap =
+        new ProTerritorySnapshot(
+            List.of("aaaa-bbbb-cccc-dddd"),
+            List.of("eeee-ffff-0000-1111"),
+            Map.of("transport-uuid", List.of("carried-uuid-1", "carried-uuid-2")),
+            Map.of("transport-uuid", "Sea Zone 5"),
+            Map.of("bombard-uuid", "Western Germany"));
 
     final PlaceTerritorySnapshot placeSnap =
         new PlaceTerritorySnapshot("Western Germany", List.of("infantry", "artillery"));
@@ -91,33 +96,36 @@ class ProSessionSnapshotRoundTripTest {
     final PurchaseTerritorySnapshot purchaseSnap =
         new PurchaseTerritorySnapshot(List.of(placeSnap));
 
-    final ProSessionSnapshot original = new ProSessionSnapshot(
-        Map.of("Eastern Germany", territorySnap),
-        Map.of("France", territorySnap),
-        Map.of("Germany", purchaseSnap),
-        Map.of("wire-unit-1", "aaaa-bbbb-cccc-dddd"));
+    final ProSessionSnapshot original =
+        new ProSessionSnapshot(
+            Map.of("Eastern Germany", territorySnap),
+            Map.of("France", territorySnap),
+            Map.of("Germany", purchaseSnap),
+            Map.of("wire-unit-1", "aaaa-bbbb-cccc-dddd"));
 
     final String json = MAPPER.writeValueAsString(original);
     final ProSessionSnapshot restored = MAPPER.readValue(json, ProSessionSnapshot.class);
 
     assertNotNull(restored);
     assertEquals(1, restored.combatMoveMap().size());
-    assertEquals(List.of("aaaa-bbbb-cccc-dddd"),
-        restored.combatMoveMap().get("Eastern Germany").unitIds());
+    assertEquals(
+        List.of("aaaa-bbbb-cccc-dddd"), restored.combatMoveMap().get("Eastern Germany").unitIds());
     assertEquals(1, restored.purchaseTerritories().size());
-    assertEquals("Western Germany",
+    assertEquals(
+        "Western Germany",
         restored.purchaseTerritories().get("Germany").canPlaceTerritories().get(0).territoryName());
     assertEquals(Map.of("wire-unit-1", "aaaa-bbbb-cccc-dddd"), restored.unitIdMap());
   }
 
   /**
-   * Real ProAi round-trip: run {@code invokePurchaseForSidecar} for Germans on the canonical
-   * Global 1940 map, snapshot, JSON round-trip, then verify that:
+   * Real ProAi round-trip: run {@code invokePurchaseForSidecar} for Germans on the canonical Global
+   * 1940 map, snapshot, JSON round-trip, then verify that:
+   *
    * <ul>
    *   <li>The purchase snapshot is non-empty (stored maps were populated).
    *   <li>unitIdMap is non-empty.
-   *   <li>After pre-populating a fresh unitIdMap and applying WireStateApplier,
-   *       {@code restorePurchaseTerritoriesFromSnapshot} produces a non-null, non-empty map.
+   *   <li>After pre-populating a fresh unitIdMap and applying WireStateApplier, {@code
+   *       restorePurchaseTerritoriesFromSnapshot} produces a non-null, non-empty map.
    *   <li>Every entry in the restored map has non-empty {@code canPlaceTerritories}.
    * </ul>
    */
@@ -158,7 +166,8 @@ class ProSessionSnapshotRoundTripTest {
     final ProSessionSnapshot snap = proAi.snapshotForSidecar(wireToUuid);
 
     // purchaseTerritories must be non-empty (ProAi populated them)
-    assertFalse(snap.purchaseTerritories().isEmpty(),
+    assertFalse(
+        snap.purchaseTerritories().isEmpty(),
         "storedPurchaseTerritories must be non-empty after purchase");
 
     // unitIdMap must be present
@@ -181,8 +190,7 @@ class ProSessionSnapshotRoundTripTest {
 
     // After restore: verify the map is non-null and has entries with non-empty canPlaceTerritories
     // We access via reflection since storedPurchaseTerritories is private
-    final Field storedField =
-        AbstractProAi.class.getDeclaredField("storedPurchaseTerritories");
+    final Field storedField = AbstractProAi.class.getDeclaredField("storedPurchaseTerritories");
     storedField.setAccessible(true);
     @SuppressWarnings("unchecked")
     final Map<Territory, ProPurchaseTerritory> restored =
@@ -192,23 +200,26 @@ class ProSessionSnapshotRoundTripTest {
     assertFalse(restored.isEmpty(), "storedPurchaseTerritories must be non-empty after restore");
 
     for (final Map.Entry<Territory, ProPurchaseTerritory> e : restored.entrySet()) {
-      assertFalse(e.getValue().getCanPlaceTerritories().isEmpty(),
+      assertFalse(
+          e.getValue().getCanPlaceTerritories().isEmpty(),
           "canPlaceTerritories must be non-empty for " + e.getKey().getName());
     }
   }
 
   /**
-   * Verify that the per-phase restore methods are independent — restoring only
-   * {@code storedPurchaseTerritories} does not accidentally populate {@code storedCombatMoveMap}.
+   * Verify that the per-phase restore methods are independent — restoring only {@code
+   * storedPurchaseTerritories} does not accidentally populate {@code storedCombatMoveMap}.
    */
   @Test
   void perPhaseRestoreIsIndependent() throws Exception {
-    final ProSessionSnapshot snap = new ProSessionSnapshot(
-        Map.of("Eastern Germany", new ProTerritorySnapshot(
-            List.of(), List.of(), Map.of(), Map.of(), Map.of())),
-        Map.of(),
-        Map.of(),
-        Map.of());
+    final ProSessionSnapshot snap =
+        new ProSessionSnapshot(
+            Map.of(
+                "Eastern Germany",
+                new ProTerritorySnapshot(List.of(), List.of(), Map.of(), Map.of(), Map.of())),
+            Map.of(),
+            Map.of(),
+            Map.of());
 
     final ProAi freshProAi = new ProAi("test-fresh", "Germans");
     final GameData data = CanonicalGameData.load().cloneForSession();
@@ -217,37 +228,37 @@ class ProSessionSnapshotRoundTripTest {
     freshProAi.restorePurchaseTerritoriesFromSnapshot(snap, data);
     final Field combatField = AbstractProAi.class.getDeclaredField("storedCombatMoveMap");
     combatField.setAccessible(true);
-    assertTrue(combatField.get(freshProAi) == null,
+    assertTrue(
+        combatField.get(freshProAi) == null,
         "restorePurchaseTerritoriesFromSnapshot must not populate storedCombatMoveMap");
 
     // restoreCombatMoveMapFromSnapshot should populate it
     freshProAi.restoreCombatMoveMapFromSnapshot(snap, data);
-    assertNotNull(combatField.get(freshProAi),
+    assertNotNull(
+        combatField.get(freshProAi),
         "restoreCombatMoveMapFromSnapshot must populate storedCombatMoveMap");
   }
 
   /**
-   * Stale-transport resilience: a {@code storedCombatMoveMap} snapshot whose
-   * {@code amphibAttackMap} references a transport UUID that is absent from the live
-   * {@link GameData} must not throw — the defensive drop in
-   * {@link AbstractProAi#restoreCombatMoveMapFromSnapshot} silently omits that entry.
+   * Stale-transport resilience: a {@code storedCombatMoveMap} snapshot whose {@code
+   * amphibAttackMap} references a transport UUID that is absent from the live {@link GameData} must
+   * not throw — the defensive drop in {@link AbstractProAi#restoreCombatMoveMapFromSnapshot}
+   * silently omits that entry.
    */
   @Test
   void staleCombatMoveMapTransportUuidIsDroppedSilently() {
     final String staleTransportUuid = UUID.randomUUID().toString();
-    final ProTerritorySnapshot snapWithStale = new ProTerritorySnapshot(
-        List.of(),
-        List.of(),
-        // amphibAttackMap carries a stale transport UUID
-        Map.of(staleTransportUuid, List.of(UUID.randomUUID().toString())),
-        Map.of(staleTransportUuid, "Sea Zone 5"),
-        Map.of());
+    final ProTerritorySnapshot snapWithStale =
+        new ProTerritorySnapshot(
+            List.of(),
+            List.of(),
+            // amphibAttackMap carries a stale transport UUID
+            Map.of(staleTransportUuid, List.of(UUID.randomUUID().toString())),
+            Map.of(staleTransportUuid, "Sea Zone 5"),
+            Map.of());
 
-    final ProSessionSnapshot snap = new ProSessionSnapshot(
-        Map.of("Germany", snapWithStale),
-        Map.of(),
-        Map.of(),
-        Map.of());
+    final ProSessionSnapshot snap =
+        new ProSessionSnapshot(Map.of("Germany", snapWithStale), Map.of(), Map.of(), Map.of());
 
     final ProAi freshProAi = new ProAi("test-stale", "Germans");
     final GameData data;
@@ -270,15 +281,19 @@ class ProSessionSnapshotRoundTripTest {
       // The territory entry is present, but the amphibAttackMap for it must be empty
       // (stale transport was dropped)
       @SuppressWarnings("unchecked")
-      final java.util.Map<games.strategy.engine.data.Territory,
-          games.strategy.triplea.ai.pro.data.ProTerritory> combatMap =
-          (java.util.Map<games.strategy.engine.data.Territory,
-              games.strategy.triplea.ai.pro.data.ProTerritory>) restored;
-      assertFalse(combatMap.isEmpty(),
-          "storedCombatMoveMap must have an entry for Eastern Germany");
+      final java.util.Map<
+              games.strategy.engine.data.Territory, games.strategy.triplea.ai.pro.data.ProTerritory>
+          combatMap =
+              (java.util.Map<
+                      games.strategy.engine.data.Territory,
+                      games.strategy.triplea.ai.pro.data.ProTerritory>)
+                  restored;
+      assertFalse(
+          combatMap.isEmpty(), "storedCombatMoveMap must have an entry for Eastern Germany");
       final games.strategy.triplea.ai.pro.data.ProTerritory pt =
           combatMap.values().iterator().next();
-      assertTrue(pt.getAmphibAttackMap().isEmpty(),
+      assertTrue(
+          pt.getAmphibAttackMap().isEmpty(),
           "stale transport entry must be absent from restored amphibAttackMap");
     } catch (final Exception e) {
       throw new RuntimeException(e);

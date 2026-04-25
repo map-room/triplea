@@ -14,13 +14,13 @@ import org.triplea.ai.sidecar.CanonicalGameData;
 /**
  * In-memory registry of active sidecar sessions, backed by disk persistence.
  *
- * <p>Sessions are keyed by their deterministic {@code sessionId} ({@code matchID:nation}).
- * On startup, call {@link #rehydrate()} to restore sessions from disk. On session create,
- * the manifest is written atomically via {@link SessionStore}.
+ * <p>Sessions are keyed by their deterministic {@code sessionId} ({@code matchID:nation}). On
+ * startup, call {@link #rehydrate()} to restore sessions from disk. On session create, the manifest
+ * is written atomically via {@link SessionStore}.
  *
- * <p>Thread safety: {@code createOrGet}, {@code delete}, {@code deleteByKey}, and
- * {@code rehydrate} are {@code synchronized} to prevent concurrent create/delete races.
- * Read operations ({@code get}) use the underlying {@code ConcurrentHashMap} directly.
+ * <p>Thread safety: {@code createOrGet}, {@code delete}, {@code deleteByKey}, and {@code rehydrate}
+ * are {@code synchronized} to prevent concurrent create/delete races. Read operations ({@code get})
+ * use the underlying {@code ConcurrentHashMap} directly.
  */
 public final class SessionRegistry {
   private final CanonicalGameData canonical;
@@ -36,16 +36,13 @@ public final class SessionRegistry {
     this(
         canonical,
         Path.of("data", "sessions"),
-        new ProSessionSnapshotStore(Path.of(
-            System.getProperty("java.io.tmpdir"), "sidecar-snapshots")));
+        new ProSessionSnapshotStore(
+            Path.of(System.getProperty("java.io.tmpdir"), "sidecar-snapshots")));
   }
 
   /** Constructor accepting a custom data dir (used in tests and via SidecarConfig). */
   public SessionRegistry(final CanonicalGameData canonical, final Path dataDir) {
-    this(
-        canonical,
-        dataDir,
-        new ProSessionSnapshotStore(dataDir.resolve("snapshots")));
+    this(canonical, dataDir, new ProSessionSnapshotStore(dataDir.resolve("snapshots")));
   }
 
   private SessionRegistry(
@@ -59,21 +56,22 @@ public final class SessionRegistry {
 
   /** Test-only constructor that accepts an explicit snapshot store. */
   public SessionRegistry(
-      final CanonicalGameData canonical,
-      final ProSessionSnapshotStore snapshotStore) {
+      final CanonicalGameData canonical, final ProSessionSnapshotStore snapshotStore) {
     this.canonical = canonical;
     this.snapshotStore = snapshotStore;
-    this.sessionStore = new SessionStore(Path.of(
-        System.getProperty("java.io.tmpdir"), "sidecar-manifests-" + System.nanoTime()));
+    this.sessionStore =
+        new SessionStore(
+            Path.of(
+                System.getProperty("java.io.tmpdir"), "sidecar-manifests-" + System.nanoTime()));
   }
 
   /**
-   * Creates a new session for {@code (key, sessionId, seed)} or returns the existing one if
-   * {@code sessionId} already exists.
+   * Creates a new session for {@code (key, sessionId, seed)} or returns the existing one if {@code
+   * sessionId} already exists.
    *
-   * @param key      the (gameId, nation) pair
+   * @param key the (gameId, nation) pair
    * @param sessionId deterministic ID supplied by the caller ({@code matchID:nation})
-   * @param seed     randomness seed for ProAi
+   * @param seed randomness seed for ProAi
    * @return a {@link CreateResult} with the session and whether it was newly created
    */
   public synchronized CreateResult createOrGet(
@@ -91,8 +89,8 @@ public final class SessionRegistry {
   }
 
   /**
-   * Rehydrates sessions from disk. Call once at startup before accepting requests.
-   * Sessions already in memory (e.g. from a test) are not overwritten.
+   * Rehydrates sessions from disk. Call once at startup before accepting requests. Sessions already
+   * in memory (e.g. from a test) are not overwritten.
    */
   public synchronized void rehydrate() {
     final List<SessionManifest> manifests = sessionStore.loadAll();
@@ -143,8 +141,8 @@ public final class SessionRegistry {
   }
 
   /**
-   * Returns all session keys whose {@code updatedAt} is strictly before {@code beforeMs}.
-   * Used by {@link SessionReaper}.
+   * Returns all session keys whose {@code updatedAt} is strictly before {@code beforeMs}. Used by
+   * {@link SessionReaper}.
    */
   public List<SessionKey> findStale(final long beforeMs) {
     final List<SessionKey> stale = new ArrayList<>();
@@ -162,8 +160,8 @@ public final class SessionRegistry {
   }
 
   /**
-   * Test-only: override the updatedAt for a session key to simulate staleness.
-   * Also updates the on-disk manifest so that reaper can read it.
+   * Test-only: override the updatedAt for a session key to simulate staleness. Also updates the
+   * on-disk manifest so that reaper can read it.
    */
   public void setUpdatedAtForTesting(final SessionKey key, final long updatedAt) {
     updatedAtMap.put(key, updatedAt);
@@ -183,7 +181,8 @@ public final class SessionRegistry {
               t.setDaemon(true);
               return t;
             });
-    return new Session(sessionId, key, seed, proAi, data, new ConcurrentHashMap<>(), offensiveExecutor);
+    return new Session(
+        sessionId, key, seed, proAi, data, new ConcurrentHashMap<>(), offensiveExecutor);
   }
 
   private void register(final Session session) {

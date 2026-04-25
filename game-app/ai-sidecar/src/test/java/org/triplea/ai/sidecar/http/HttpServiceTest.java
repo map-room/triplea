@@ -25,15 +25,19 @@ class HttpServiceTest {
 
   @Test
   void healthEndpointReturns200OverHttp() throws Exception {
-    final SidecarConfig cfg = new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
+    final SidecarConfig cfg =
+        new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
     final SessionRegistry reg = new SessionRegistry(CanonicalGameData.load());
     final HttpService svc = HttpService.start(cfg, reg);
     try {
       final int port = svc.boundPort();
-      final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+      final HttpClient client =
+          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
       final HttpResponse<String> health =
           client.send(
-              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/health")).GET().build(),
+              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/health"))
+                  .GET()
+                  .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, health.statusCode());
       assertTrue(health.body().contains("\"status\":\"ok\""));
@@ -44,17 +48,20 @@ class HttpServiceTest {
 
   @Test
   void sessionsEndpointRequiresAuth() throws Exception {
-    final SidecarConfig cfg = new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
+    final SidecarConfig cfg =
+        new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
     final SessionRegistry reg = new SessionRegistry(CanonicalGameData.load());
     final HttpService svc = HttpService.start(cfg, reg);
     try {
       final int port = svc.boundPort();
-      final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+      final HttpClient client =
+          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
       final HttpResponse<String> unauth =
           client.send(
               HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/sessions"))
-                  .POST(HttpRequest.BodyPublishers.ofString(
-                      "{\"sessionId\":\"g:Germans\",\"gameId\":\"g\",\"nation\":\"Germans\",\"seed\":1}"))
+                  .POST(
+                      HttpRequest.BodyPublishers.ofString(
+                          "{\"sessionId\":\"g:Germans\",\"gameId\":\"g\",\"nation\":\"Germans\",\"seed\":1}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(401, unauth.statusCode());
@@ -63,8 +70,9 @@ class HttpServiceTest {
           client.send(
               HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/sessions"))
                   .header("Authorization", "Bearer test-token")
-                  .POST(HttpRequest.BodyPublishers.ofString(
-                      "{\"sessionId\":\"g:Germans\",\"gameId\":\"g\",\"nation\":\"Germans\",\"seed\":1}"))
+                  .POST(
+                      HttpRequest.BodyPublishers.ofString(
+                          "{\"sessionId\":\"g:Germans\",\"gameId\":\"g\",\"nation\":\"Germans\",\"seed\":1}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, ok.statusCode());

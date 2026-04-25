@@ -32,7 +32,10 @@ class CanonicalGameDataTest {
     final GameData b = canonical.cloneForSession();
     assertNotSame(a, b);
     // PU mutation on A must not leak into B
-    a.getPlayerList().getPlayerId("Germans").getResources().addResource(a.getResourceList().getResourceOrThrow("PUs"), 100);
+    a.getPlayerList()
+        .getPlayerId("Germans")
+        .getResources()
+        .addResource(a.getResourceList().getResourceOrThrow("PUs"), 100);
     final int bPus = b.getPlayerList().getPlayerId("Germans").getResources().getQuantity("PUs");
     assertEquals(30, bPus);
   }

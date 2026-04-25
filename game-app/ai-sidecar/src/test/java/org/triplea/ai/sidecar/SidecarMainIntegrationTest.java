@@ -25,15 +25,19 @@ class SidecarMainIntegrationTest {
 
   @Test
   void bootsEndToEnd() throws Exception {
-    final SidecarConfig cfg = SidecarConfig.fromEnv(Map.of("SIDECAR_PORT", "0", "SIDECAR_BIND_HOST", "127.0.0.1"));
+    final SidecarConfig cfg =
+        SidecarConfig.fromEnv(Map.of("SIDECAR_PORT", "0", "SIDECAR_BIND_HOST", "127.0.0.1"));
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load());
     final HttpService svc = HttpService.start(cfg, registry);
     try {
       final int port = svc.boundPort();
-      final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+      final HttpClient client =
+          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
       final HttpResponse<String> health =
           client.send(
-              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/health")).GET().build(),
+              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/health"))
+                  .GET()
+                  .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, health.statusCode());
 
@@ -41,8 +45,9 @@ class SidecarMainIntegrationTest {
           client.send(
               HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/sessions"))
                   .header("Authorization", "Bearer dev-token")
-                  .POST(HttpRequest.BodyPublishers.ofString(
-                      "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
+                  .POST(
+                      HttpRequest.BodyPublishers.ofString(
+                          "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, create.statusCode());

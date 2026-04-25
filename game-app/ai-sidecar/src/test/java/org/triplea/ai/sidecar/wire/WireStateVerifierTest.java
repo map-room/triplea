@@ -70,9 +70,14 @@ class WireStateVerifierTest {
   private List<String> warnings() {
     return captured.stream()
         .filter(r -> r.getLevel().intValue() >= Level.WARNING.intValue())
-        .map(r -> r.getMessage() != null ? r.getMessage() : r.getParameters() != null
-            ? String.format(r.getMessage() == null ? "%s" : r.getMessage(), r.getParameters())
-            : "(null)")
+        .map(
+            r ->
+                r.getMessage() != null
+                    ? r.getMessage()
+                    : r.getParameters() != null
+                        ? String.format(
+                            r.getMessage() == null ? "%s" : r.getMessage(), r.getParameters())
+                        : "(null)")
         .collect(Collectors.toList());
   }
 
@@ -142,8 +147,7 @@ class WireStateVerifierTest {
     captured.clear();
     gd.performChange(
         ChangeFactory.changeOwner(
-            gd.getMap().getTerritoryOrThrow("Germany"),
-            gd.getPlayerList().getPlayerId("Germans")));
+            gd.getMap().getTerritoryOrThrow("Germany"), gd.getPlayerList().getPlayerId("Germans")));
     // Run verifier directly (not via apply) to check the mutated state.
     WireStateVerifier.verifyApply(gd, wire, idMap);
 
@@ -166,9 +170,7 @@ class WireStateVerifierTest {
         new WireState(
             List.of(
                 new WireTerritory(
-                    "Germany",
-                    "Germans",
-                    List.of(new WireUnit(uid, "infantry", 1, 0)))),
+                    "Germany", "Germans", List.of(new WireUnit(uid, "infantry", 1, 0)))),
             List.of(),
             1,
             "purchase",
@@ -180,8 +182,8 @@ class WireStateVerifierTest {
     // Mutate the unit's hits to 0 to simulate drift from wire's expected 1.
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     final UUID uuid = idMap.get(uid);
-    final Unit unit = germany.getUnits().stream().filter(u -> u.getId().equals(uuid))
-        .findFirst().orElseThrow();
+    final Unit unit =
+        germany.getUnits().stream().filter(u -> u.getId().equals(uuid)).findFirst().orElseThrow();
     final org.triplea.java.collections.IntegerMap<Unit> hitMap =
         new org.triplea.java.collections.IntegerMap<>();
     hitMap.put(unit, 0);
@@ -208,9 +210,7 @@ class WireStateVerifierTest {
         new WireState(
             List.of(
                 new WireTerritory(
-                    "Germany",
-                    "Germans",
-                    List.of(new WireUnit(uid, "armour", 0, 2)))),
+                    "Germany", "Germans", List.of(new WireUnit(uid, "armour", 0, 2)))),
             List.of(),
             1,
             "purchase",
@@ -222,8 +222,8 @@ class WireStateVerifierTest {
     // Reset alreadyMoved to 0 to simulate drift from wire's expected 2.
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     final UUID uuid = idMap.get(uid);
-    final Unit unit = germany.getUnits().stream().filter(u -> u.getId().equals(uuid))
-        .findFirst().orElseThrow();
+    final Unit unit =
+        germany.getUnits().stream().filter(u -> u.getId().equals(uuid)).findFirst().orElseThrow();
     gd.performChange(
         ChangeFactory.unitPropertyChange(
             unit, java.math.BigDecimal.ZERO, Unit.PropertyName.ALREADY_MOVED));
@@ -292,9 +292,12 @@ class WireStateVerifierTest {
     // Mutate the relationship to "allied" to simulate drift.
     final var a = gd.getPlayerList().getPlayerId("Germans");
     final var b = gd.getPlayerList().getPlayerId("Russians");
-    final var alliedType = gd.getRelationshipTypeList().getAllRelationshipTypes().stream()
-        .filter(r -> "allied".equalsIgnoreCase(r.getRelationshipTypeAttachment().getArcheType()))
-        .findFirst().orElseThrow();
+    final var alliedType =
+        gd.getRelationshipTypeList().getAllRelationshipTypes().stream()
+            .filter(
+                r -> "allied".equalsIgnoreCase(r.getRelationshipTypeAttachment().getArcheType()))
+            .findFirst()
+            .orElseThrow();
     gd.getRelationshipTracker().setRelationship(a, b, alliedType);
 
     WireStateVerifier.verifyApply(gd, wire, idMap);
@@ -362,8 +365,11 @@ class WireStateVerifierTest {
     // Move the unit to France to simulate misplacement drift.
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     final Territory france = gd.getMap().getTerritoryOrThrow("France");
-    final Unit unit = germany.getUnits().stream()
-        .filter(u -> u.getId().equals(idMap.get(uid))).findFirst().orElseThrow();
+    final Unit unit =
+        germany.getUnits().stream()
+            .filter(u -> u.getId().equals(idMap.get(uid)))
+            .findFirst()
+            .orElseThrow();
     gd.performChange(
         games.strategy.engine.data.changefactory.ChangeFactory.moveUnits(
             germany, france, List.of(unit)));
@@ -385,9 +391,11 @@ class WireStateVerifierTest {
     final GameData gd = fresh();
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     final WireUnit transport =
-        WireUnit.of("u-trn-1", "transport", 0, 0, 0, "Germans", null, false, false, false, false, 0);
+        WireUnit.of(
+            "u-trn-1", "transport", 0, 0, 0, "Germans", null, false, false, false, false, 0);
     final WireUnit infantry =
-        WireUnit.of("u-inf-1", "infantry", 0, 0, 0, "Germans", "u-trn-1", false, false, false, false, 0);
+        WireUnit.of(
+            "u-inf-1", "infantry", 0, 0, 0, "Germans", "u-trn-1", false, false, false, false, 0);
     final WireState wire =
         new WireState(
             List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(transport, infantry))),
@@ -402,8 +410,11 @@ class WireStateVerifierTest {
     // Clear the transportedBy link to simulate drift.
     final Territory seaZone = gd.getMap().getTerritoryOrThrow("112 Sea Zone");
     final UUID infantryUuid = idMap.get("u-inf-1");
-    final Unit infantryUnit = seaZone.getUnits().stream()
-        .filter(u -> u.getId().equals(infantryUuid)).findFirst().orElseThrow();
+    final Unit infantryUnit =
+        seaZone.getUnits().stream()
+            .filter(u -> u.getId().equals(infantryUuid))
+            .findFirst()
+            .orElseThrow();
     gd.performChange(
         games.strategy.engine.data.changefactory.ChangeFactory.unitPropertyChange(
             infantryUnit, null, Unit.PropertyName.TRANSPORTED_BY));
@@ -440,8 +451,11 @@ class WireStateVerifierTest {
 
     // Clear submerged flag to simulate drift.
     final Territory seaZone = gd.getMap().getTerritoryOrThrow("112 Sea Zone");
-    final Unit unit = seaZone.getUnits().stream()
-        .filter(u -> u.getId().equals(idMap.get(uid))).findFirst().orElseThrow();
+    final Unit unit =
+        seaZone.getUnits().stream()
+            .filter(u -> u.getId().equals(idMap.get(uid)))
+            .findFirst()
+            .orElseThrow();
     gd.performChange(
         games.strategy.engine.data.changefactory.ChangeFactory.unitPropertyChange(
             unit, false, Unit.PropertyName.SUBMERGED));
@@ -478,8 +492,11 @@ class WireStateVerifierTest {
 
     // Clear wasInCombat to simulate drift.
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
-    final Unit unit = germany.getUnits().stream()
-        .filter(u -> u.getId().equals(idMap.get(uid))).findFirst().orElseThrow();
+    final Unit unit =
+        germany.getUnits().stream()
+            .filter(u -> u.getId().equals(idMap.get(uid)))
+            .findFirst()
+            .orElseThrow();
     gd.performChange(
         games.strategy.engine.data.changefactory.ChangeFactory.unitPropertyChange(
             unit, false, Unit.PropertyName.WAS_IN_COMBAT));
@@ -499,8 +516,7 @@ class WireStateVerifierTest {
   @Test
   void summaryLine_alwaysEmitted() {
     final GameData gd = fresh();
-    final WireState wire =
-        new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of());
+    final WireState wire = new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of());
     WireStateVerifier.verifyApply(gd, wire, freshIdMap());
     assertThat(infos()).anyMatch(m -> m.contains("apply-verify"));
   }

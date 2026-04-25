@@ -22,7 +22,8 @@ public final class HealthHandler implements HttpHandler {
       os.write(body);
     } catch (final IOException e) {
       if (isClientDisconnect(e)) {
-        LOG.log(System.Logger.Level.DEBUG, "Health probe client hung up before body write completed");
+        LOG.log(
+            System.Logger.Level.DEBUG, "Health probe client hung up before body write completed");
       } else {
         throw e;
       }

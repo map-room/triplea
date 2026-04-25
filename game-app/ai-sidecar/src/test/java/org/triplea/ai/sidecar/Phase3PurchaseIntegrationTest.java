@@ -1,7 +1,6 @@
 package org.triplea.ai.sidecar;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -28,6 +27,7 @@ import org.triplea.ai.sidecar.http.HttpService;
  * visible in the Gradle test report.
  *
  * <p>Asserts:
+ *
  * <ul>
  *   <li>{@code status == "ready"}
  *   <li>{@code plan.kind == "purchase"}
@@ -66,9 +66,7 @@ class Phase3PurchaseIntegrationTest {
   static void startServiceAndCreateSession() throws Exception {
     ClientSetting.setPreferences(new MemoryPreferences());
 
-    svc =
-        SidecarMain.startForTest(
-            Map.of("SIDECAR_BIND_HOST", "127.0.0.1", "SIDECAR_PORT", "0"));
+    svc = SidecarMain.startForTest(Map.of("SIDECAR_BIND_HOST", "127.0.0.1", "SIDECAR_PORT", "0"));
     final int port = svc.boundPort();
     client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     base = "http://127.0.0.1:" + port;
@@ -82,8 +80,13 @@ class Phase3PurchaseIntegrationTest {
                 .header("Authorization", auth)
                 .POST(
                     HttpRequest.BodyPublishers.ofString(
-                        "{\"sessionId\":\"" + sessionId + "\",\"gameId\":\"" + gameId
-                            + "\",\"nation\":\"" + NATION + "\",\"seed\":42}"))
+                        "{\"sessionId\":\""
+                            + sessionId
+                            + "\",\"gameId\":\""
+                            + gameId
+                            + "\",\"nation\":\""
+                            + NATION
+                            + "\",\"seed\":42}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
     assertEquals(200, create.statusCode(), "Session create must return 200");
@@ -111,8 +114,7 @@ class Phase3PurchaseIntegrationTest {
     assertEquals(200, resp.statusCode(), "purchase must return 200; body=" + resp.body());
 
     final JsonNode envelope = MAPPER.readTree(resp.body());
-    assertEquals(
-        "ready", envelope.path("status").asText(), "envelope status must be 'ready'");
+    assertEquals("ready", envelope.path("status").asText(), "envelope status must be 'ready'");
 
     final JsonNode plan = envelope.path("plan");
     assertEquals("purchase", plan.path("kind").asText(), "plan.kind must be 'purchase'");
@@ -142,7 +144,8 @@ class Phase3PurchaseIntegrationTest {
 
     System.out.println("[Phase3PurchaseIntegrationTest] warm call elapsed: " + elapsedMs + " ms");
 
-    assertEquals(200, resp.statusCode(), "purchase must return 200 on warm call; body=" + resp.body());
+    assertEquals(
+        200, resp.statusCode(), "purchase must return 200 on warm call; body=" + resp.body());
 
     final JsonNode envelope = MAPPER.readTree(resp.body());
     assertEquals("ready", envelope.path("status").asText());

@@ -18,34 +18,34 @@ import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.wire.WireStateApplier;
 
 /**
- * Executes a {@code retreat-or-press} decision by invoking {@link
- * AbstractProAi#retreatQuery(UUID, boolean, Territory, Collection, String)}.
+ * Executes a {@code retreat-or-press} decision by invoking {@link AbstractProAi#retreatQuery(UUID,
+ * boolean, Territory, Collection, String)}.
  *
  * <p>Symmetric with {@link SelectCasualtiesExecutor}: applies the embedded {@code WireState},
  * synthesises a pending {@link IBattle} in the session {@link BattleTracker}, dispatches into
- * ProAi, and maps the {@code Optional<Territory>} result back to a wire-shaped {@link
- * RetreatPlan} carrying the territory name (or {@code null} if ProAi decides to press).
+ * ProAi, and maps the {@code Optional<Territory>} result back to a wire-shaped {@link RetreatPlan}
+ * carrying the territory name (or {@code null} if ProAi decides to press).
  *
- * <p>The request DTO intentionally does <b>not</b> carry attacker/defender/unit collections —
- * per the Phase 2 detector contract ({@code detectRetreatQuery}) the retreating player is
- * always the session nation playing the attacker role. This executor therefore derives:
+ * <p>The request DTO intentionally does <b>not</b> carry attacker/defender/unit collections — per
+ * the Phase 2 detector contract ({@code detectRetreatQuery}) the retreating player is always the
+ * session nation playing the attacker role. This executor therefore derives:
  *
  * <ul>
- *   <li>{@code attacker}  = the session's {@link GamePlayer}
+ *   <li>{@code attacker} = the session's {@link GamePlayer}
  *   <li>{@code attackingUnits} = units on {@code battleTerritory} owned by the attacker
- *   <li>{@code defender}  = first non-allied unit owner on {@code battleTerritory}, or the
+ *   <li>{@code defender} = first non-allied unit owner on {@code battleTerritory}, or the
  *       session-nation enemy list's head if the territory is currently unit-less (e.g. fully
  *       amphibious stack not yet resolved)
  *   <li>{@code defendingUnits} = all other units on {@code battleTerritory}
  *   <li>{@code isAmphibious} = always {@code false} (if the detector fires, it is a standard
- *       retreat decision; amphibious retreats short-circuit to {@code Optional.empty()} in
- *       ProAi anyway)
+ *       retreat decision; amphibious retreats short-circuit to {@code Optional.empty()} in ProAi
+ *       anyway)
  * </ul>
  *
- * <p>If {@code possibleRetreatTerritories} is empty the executor returns a {@link RetreatPlan}
- * with {@code retreatTo = null} without even calling ProAi — ProRetreatAi's retreat loop over
- * an empty collection would return {@code Optional.empty()} anyway, but short-circuiting here
- * keeps the no-op fast and avoids needing a valid synthesised battle for the degenerate case.
+ * <p>If {@code possibleRetreatTerritories} is empty the executor returns a {@link RetreatPlan} with
+ * {@code retreatTo = null} without even calling ProAi — ProRetreatAi's retreat loop over an empty
+ * collection would return {@code Optional.empty()} anyway, but short-circuiting here keeps the
+ * no-op fast and avoids needing a valid synthesised battle for the degenerate case.
  */
 public final class RetreatQueryExecutor
     implements DecisionExecutor<RetreatQueryRequest, RetreatPlan> {

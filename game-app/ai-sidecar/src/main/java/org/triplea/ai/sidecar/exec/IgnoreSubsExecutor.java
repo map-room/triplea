@@ -7,8 +7,8 @@ import org.triplea.ai.sidecar.session.Session;
 /**
  * Stub executor for the {@code ignore-subs} decision kind.
  *
- * <p>Returns the safe default (engage subs, do not ignore) until ProAI integration is wired.
- * TODO: invoke the relevant ProAI helper once identified.
+ * <p>Returns the safe default (engage subs, do not ignore) until ProAI integration is wired. TODO:
+ * invoke the relevant ProAI helper once identified.
  */
 public final class IgnoreSubsExecutor
     implements DecisionExecutor<IgnoreSubsRequest, IgnoreSubsPlan> {

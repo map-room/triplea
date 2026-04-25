@@ -32,8 +32,7 @@ public final class SidecarMain {
     registry.rehydrate();
 
     final HttpService svc = HttpService.start(cfg, registry);
-    System.out.printf(
-        "[ai-sidecar] listening on %s:%d%n", cfg.bindHost(), svc.boundPort());
+    System.out.printf("[ai-sidecar] listening on %s:%d%n", cfg.bindHost(), svc.boundPort());
 
     // Start reaper — runs every 5 minutes, cleans stale sessions (>30 days).
     final SessionReaper reaper = new SessionReaper(registry, Clock.systemUTC(), cfg.serverUrl());
@@ -52,8 +51,8 @@ public final class SidecarMain {
   }
 
   /**
-   * Test hook — starts the sidecar with the given env overrides.
-   * Uses SIDECAR_DATA_DIR from env to point to a temp dir so tests are isolated.
+   * Test hook — starts the sidecar with the given env overrides. Uses SIDECAR_DATA_DIR from env to
+   * point to a temp dir so tests are isolated.
    */
   static HttpService startForTest(final Map<String, String> env) throws IOException {
     ClientSetting.initialize();
@@ -93,9 +92,7 @@ public final class SidecarMain {
 
     System.getLogger(SidecarMain.class.getName())
         .log(
-            System.Logger.Level.INFO,
-            "Sidecar logging initialized: level={0}",
-            julLevel.getName());
+            System.Logger.Level.INFO, "Sidecar logging initialized: level={0}", julLevel.getName());
   }
 
   static Level parseJulLevel(final String envValue) {

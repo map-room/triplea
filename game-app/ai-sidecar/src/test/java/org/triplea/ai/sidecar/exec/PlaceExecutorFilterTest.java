@@ -21,8 +21,8 @@ import org.triplea.ai.sidecar.dto.PlacePlan;
  * Unit tests for {@link PlaceExecutor#groupCapturesIntoPlan}: any {@link
  * RecordingPlaceDelegate.PlaceCapture} whose territory was conquered this turn must be dropped from
  * the resulting {@link PlacePlan} for regular nations, since the map-room engine rejects placement
- * at freshly captured territories (rules §16/§20). China (placementAnyTerritory=true) is exempt
- * — it may place on any owned territory including those captured this turn.
+ * at freshly captured territories (rules §16/§20). China (placementAnyTerritory=true) is exempt —
+ * it may place on any owned territory including those captured this turn.
  */
 class PlaceExecutorFilterTest {
 

@@ -10,24 +10,26 @@ import java.util.Optional;
 
 /**
  * Validating {@link MoveDelegate} subclass that captures every {@link MoveDescription} that passes
- * {@code super.performMove()} validation, tagging each with whether it is a
- * strategic-bombing-raid move via {@link ProAi#shouldBomberBomb}.
+ * {@code super.performMove()} validation, tagging each with whether it is a strategic-bombing-raid
+ * move via {@link ProAi#shouldBomberBomb}.
  *
- * <p>Each move is forwarded to {@code super.performMove()} first, which runs the full
- * {@link games.strategy.triplea.delegate.move.validation.MoveValidator} pipeline. Only moves that
- * pass validation are captured; invalid moves return the error {@link Optional} so that ProAi can
+ * <p>Each move is forwarded to {@code super.performMove()} first, which runs the full {@link
+ * games.strategy.triplea.delegate.move.validation.MoveValidator} pipeline. Only moves that pass
+ * validation are captured; invalid moves return the error {@link Optional} so that ProAi can
  * observe the rejection and avoid re-submitting the same move.
  *
  * <p>Callers must set up the bridge before use:
+ *
  * <ol>
  *   <li>{@code recorder.initialize("move", "Move")}
- *   <li>{@code recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data))}
+ *   <li>{@code recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player,
+ *       data))}
  * </ol>
  *
- * <p>{@link ProAi#shouldBomberBomb} is sampled at capture time because
- * {@code ProCombatMoveAi.isBombing} is set to {@code true} exactly during the
- * {@code calculateBombingRoutes} batch call and reset to {@code false} immediately after. The
- * flag is therefore live and correct at the moment {@code performMove} fires.
+ * <p>{@link ProAi#shouldBomberBomb} is sampled at capture time because {@code
+ * ProCombatMoveAi.isBombing} is set to {@code true} exactly during the {@code
+ * calculateBombingRoutes} batch call and reset to {@code false} immediately after. The flag is
+ * therefore live and correct at the moment {@code performMove} fires.
  *
  * <p><b>Thread-safety:</b> not thread-safe. Each executor call creates a fresh instance; the
  * session-scoped executor serialises access on the Java side.

@@ -183,7 +183,6 @@ class PoliticsObserverTest {
         .map(RelationshipType::getName)
         .findFirst()
         .orElseThrow(
-            () ->
-                new IllegalStateException("No relationship type with archeType: " + archeType));
+            () -> new IllegalStateException("No relationship type with archeType: " + archeType));
   }
 }

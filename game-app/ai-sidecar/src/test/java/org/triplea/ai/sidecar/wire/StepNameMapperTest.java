@@ -1,6 +1,7 @@
 package org.triplea.ai.sidecar.wire;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import org.junit.jupiter.api.Test;
 
 class StepNameMapperTest {
@@ -31,7 +32,7 @@ class StepNameMapperTest {
 
   @Test
   void unknownPhaseThrows() {
-    assertThrows(IllegalArgumentException.class,
-        () -> StepNameMapper.toJavaStepName("mystery", "Germans"));
+    assertThrows(
+        IllegalArgumentException.class, () -> StepNameMapper.toJavaStepName("mystery", "Germans"));
   }
 }

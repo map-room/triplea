@@ -54,13 +54,12 @@ import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionRegistry;
 
 /**
- * Dispatches {@code POST /session/{id}/decision} calls to a kind-specific {@link
- * DecisionExecutor}.
+ * Dispatches {@code POST /session/{id}/decision} calls to a kind-specific {@link DecisionExecutor}.
  *
  * <p>The request body is deserialised through the polymorphic {@link DecisionRequest} sealed
- * interface (Jackson discriminator {@code kind}). The concrete request type drives a pattern
- * switch that picks the matching executor; the returned {@link DecisionPlan} is wrapped in a
- * {@code {"status":"ready","plan":{...}}} envelope and sent as the 200 response body.
+ * interface (Jackson discriminator {@code kind}). The concrete request type drives a pattern switch
+ * that picks the matching executor; the returned {@link DecisionPlan} is wrapped in a {@code
+ * {"status":"ready","plan":{...}}} envelope and sent as the 200 response body.
  *
  * <p>All known decision kinds are wired to real executors; unknown kinds (unrecognised {@code kind}
  * discriminator values) return 400 via Jackson deserialization failure.
@@ -112,7 +111,8 @@ public final class DecisionHandler implements HttpHandler {
   public DecisionHandler(
       final SessionRegistry registry,
       final ProSessionSnapshotStore snapshotStore,
-      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> selectCasualtiesExecutor,
+      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
+          selectCasualtiesExecutor,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor) {
     this(
@@ -139,7 +139,8 @@ public final class DecisionHandler implements HttpHandler {
    */
   public DecisionHandler(
       final SessionRegistry registry,
-      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> selectCasualtiesExecutor,
+      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
+          selectCasualtiesExecutor,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor) {
@@ -154,21 +155,31 @@ public final class DecisionHandler implements HttpHandler {
         new InterceptExecutor(),
         new SubmergeExecutor(),
         purchaseExecutor,
-        (session, req) -> { throw new AssertionError("PoliticsExecutor was called unexpectedly"); },
-        (session, req) -> { throw new AssertionError("CombatMoveExecutor was called unexpectedly"); },
-        (session, req) -> { throw new AssertionError("NoncombatMoveExecutor was called unexpectedly"); },
-        (session, req) -> { throw new AssertionError("PlaceExecutor was called unexpectedly"); });
+        (session, req) -> {
+          throw new AssertionError("PoliticsExecutor was called unexpectedly");
+        },
+        (session, req) -> {
+          throw new AssertionError("CombatMoveExecutor was called unexpectedly");
+        },
+        (session, req) -> {
+          throw new AssertionError("NoncombatMoveExecutor was called unexpectedly");
+        },
+        (session, req) -> {
+          throw new AssertionError("PlaceExecutor was called unexpectedly");
+        });
   }
 
   /** Test constructor — full control over all executors. */
   public DecisionHandler(
       final SessionRegistry registry,
-      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> selectCasualtiesExecutor,
+      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
+          selectCasualtiesExecutor,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
       final DecisionExecutor<KamikazeRequest, KamikazePlan> kamikazeExecutor,
       final DecisionExecutor<IgnoreSubsRequest, IgnoreSubsPlan> ignoreSubsExecutor,
-      final DecisionExecutor<EngageStayHiddenRequest, EngageStayHiddenPlan> engageStayHiddenExecutor,
+      final DecisionExecutor<EngageStayHiddenRequest, EngageStayHiddenPlan>
+          engageStayHiddenExecutor,
       final DecisionExecutor<InterceptRequest, InterceptPlan> interceptExecutor,
       final DecisionExecutor<SubmergeRequest, SubmergePlan> submergeExecutor,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor,
@@ -279,10 +290,8 @@ public final class DecisionHandler implements HttpHandler {
           final PlacePlan plan = placeExecutor.execute(session.get(), pr);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
-        case OtherOffensiveRequest oo -> writeJson(
-            exchange,
-            501,
-            JsonBodies.errorBodyWithKind("not-implemented", oo.kind()));
+        case OtherOffensiveRequest oo ->
+            writeJson(exchange, 501, JsonBodies.errorBodyWithKind("not-implemented", oo.kind()));
       }
     } catch (final IllegalArgumentException e) {
       LOG.log(System.Logger.Level.ERROR, "Decision bad-request: IllegalArgumentException", e);

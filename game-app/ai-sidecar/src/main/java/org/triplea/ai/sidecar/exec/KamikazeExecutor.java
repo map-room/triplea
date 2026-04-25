@@ -8,9 +8,9 @@ import org.triplea.ai.sidecar.session.Session;
 /**
  * Stub executor for the {@code kamikaze} decision kind.
  *
- * <p>Returns the safe default (no kamikaze tokens spent) until ProAI integration is wired.
- * TODO: invoke {@code AbstractProAi.selectKamikazeSuicideAttacks} once the ProAI entry point
- * is identified and the session/state wiring is in place.
+ * <p>Returns the safe default (no kamikaze tokens spent) until ProAI integration is wired. TODO:
+ * invoke {@code AbstractProAi.selectKamikazeSuicideAttacks} once the ProAI entry point is
+ * identified and the session/state wiring is in place.
  */
 public final class KamikazeExecutor implements DecisionExecutor<KamikazeRequest, KamikazePlan> {
 

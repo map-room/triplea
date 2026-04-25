@@ -1,7 +1,6 @@
 package org.triplea.ai.sidecar.http;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import games.strategy.triplea.settings.ClientSetting;
@@ -15,14 +14,12 @@ import org.junit.jupiter.api.io.TempDir;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.session.SessionRegistry;
-import org.triplea.ai.sidecar.session.SessionStore;
 
 /**
- * TDD tests for the v2 session-create contract:
- * - sessionId is deterministic and supplied by the caller.
- * - POST /sessions is idempotent: re-opening an existing session returns created=false.
- * - sessionId is validated: must equal gameId + ":" + nation.
- * - Sessions are persisted to disk after creation.
+ * TDD tests for the v2 session-create contract: - sessionId is deterministic and supplied by the
+ * caller. - POST /sessions is idempotent: re-opening an existing session returns created=false. -
+ * sessionId is validated: must equal gameId + ":" + nation. - Sessions are persisted to disk after
+ * creation.
  */
 class SessionCreateHandlerV2Test {
 
@@ -87,9 +84,7 @@ class SessionCreateHandlerV2Test {
     // v1 body without sessionId — must be rejected by v2 handler
     final FakeHttpExchange ex =
         new FakeHttpExchange(
-            "POST",
-            "/sessions",
-            "{\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}");
+            "POST", "/sessions", "{\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}");
     handler.handle(ex);
     assertEquals(400, ex.responseCode());
   }

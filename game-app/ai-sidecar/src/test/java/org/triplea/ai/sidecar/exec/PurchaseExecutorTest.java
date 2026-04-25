@@ -74,7 +74,8 @@ class PurchaseExecutorTest {
     return sum;
   }
 
-  private static ProductionRule findRuleForUnitType(final GameData data, final String unitTypeName) {
+  private static ProductionRule findRuleForUnitType(
+      final GameData data, final String unitTypeName) {
     for (final ProductionRule rule : data.getProductionRuleList().getProductionRules()) {
       for (final NamedAttachable result : rule.getResults().keySet()) {
         if (result instanceof UnitType ut && ut.getName().equals(unitTypeName)) {
@@ -88,7 +89,8 @@ class PurchaseExecutorTest {
   @Test
   void returnsNonEmptyPlanForTurn1Germans() throws Exception {
     final Session session = freshSession("Germans");
-    final PurchasePlan plan = new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final PurchasePlan plan =
+        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
 
     assertThat(plan.buys()).isNotEmpty();
     final int budget = playerPus(session.gameData(), "Germans");
@@ -105,7 +107,8 @@ class PurchaseExecutorTest {
     // Zero out Germans' PUs so any ProAi overrun is clamped to empty by trimToFit.
     data.performChange(ChangeFactory.changeResourcesChange(germans, pus, -current));
 
-    final PurchasePlan plan = new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final PurchasePlan plan =
+        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
 
     assertThat(totalCost(data, plan)).isEqualTo(0);
   }
@@ -113,7 +116,8 @@ class PurchaseExecutorTest {
   @Test
   void translatesProductionRuleToUnitTypeName() throws Exception {
     final Session session = freshSession("Germans");
-    final PurchasePlan plan = new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final PurchasePlan plan =
+        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
 
     for (final PurchaseOrder order : plan.buys()) {
       assertThat(order.unitType()).isNotNull();

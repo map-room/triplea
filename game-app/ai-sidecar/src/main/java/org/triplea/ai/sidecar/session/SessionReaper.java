@@ -9,18 +9,17 @@ import java.util.concurrent.TimeUnit;
 /**
  * Background task that removes stale sessions every 5 minutes.
  *
- * <p>A session is stale if its {@code updatedAt} timestamp is older than 30 days.
- * If {@code serverUrl} is provided (non-null), gameover sessions are also reaped
- * by querying {@code GET {serverUrl}/api/matches/{matchID}} — this is an optional
- * enhancement: gameover reaping is skipped when the server URL is not configured.
+ * <p>A session is stale if its {@code updatedAt} timestamp is older than 30 days. If {@code
+ * serverUrl} is provided (non-null), gameover sessions are also reaped by querying {@code GET
+ * {serverUrl}/api/matches/{matchID}} — this is an optional enhancement: gameover reaping is skipped
+ * when the server URL is not configured.
  *
- * <p>The reaper is started via {@link #start()} and shut down via {@link #stop()}.
- * For testing, {@link #runOnce()} executes one reap cycle synchronously.
+ * <p>The reaper is started via {@link #start()} and shut down via {@link #stop()}. For testing,
+ * {@link #runOnce()} executes one reap cycle synchronously.
  */
 public final class SessionReaper {
 
-  private static final System.Logger LOG =
-      System.getLogger(SessionReaper.class.getName());
+  private static final System.Logger LOG = System.getLogger(SessionReaper.class.getName());
 
   static final long STALE_THRESHOLD_DAYS = 30;
   static final long INTERVAL_MINUTES = 5;
@@ -31,10 +30,7 @@ public final class SessionReaper {
 
   private ScheduledExecutorService scheduler;
 
-  public SessionReaper(
-      final SessionRegistry registry,
-      final Clock clock,
-      final String serverUrl) {
+  public SessionReaper(final SessionRegistry registry, final Clock clock, final String serverUrl) {
     this.registry = registry;
     this.clock = clock;
     this.serverUrl = serverUrl;
@@ -45,16 +41,19 @@ public final class SessionReaper {
     if (scheduler != null) {
       return;
     }
-    scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-      final Thread t = new Thread(r, "sidecar-reaper");
-      t.setDaemon(true);
-      return t;
-    });
+    scheduler =
+        Executors.newSingleThreadScheduledExecutor(
+            r -> {
+              final Thread t = new Thread(r, "sidecar-reaper");
+              t.setDaemon(true);
+              return t;
+            });
     scheduler.scheduleAtFixedRate(
         this::runOnceSafe, INTERVAL_MINUTES, INTERVAL_MINUTES, TimeUnit.MINUTES);
-    LOG.log(System.Logger.Level.INFO,
+    LOG.log(
+        System.Logger.Level.INFO,
         "Session reaper started (interval={0}m, stale_threshold={1}d)",
-        new Object[]{INTERVAL_MINUTES, STALE_THRESHOLD_DAYS});
+        new Object[] {INTERVAL_MINUTES, STALE_THRESHOLD_DAYS});
   }
 
   /** Stops the background reaper. */

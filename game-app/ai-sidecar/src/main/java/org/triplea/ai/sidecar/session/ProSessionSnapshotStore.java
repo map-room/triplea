@@ -13,16 +13,16 @@ import java.util.Optional;
  * Persists a {@link ProSessionSnapshot} to a per-session file so that ProAi stored maps survive
  * across HTTP request boundaries (purchase → combat-move → noncombat-move → place).
  *
- * <p><b>File layout:</b> one file per {@code (gameId, nation)} pair, named
- * {@code <gameId>_<nation>.json} inside a configurable directory. The file is atomically replaced
- * on each save via a tmp-file + rename, so a mid-write crash leaves the previous snapshot intact.
- * The file is deleted when the session is evicted from {@link SessionRegistry}.
+ * <p><b>File layout:</b> one file per {@code (gameId, nation)} pair, named {@code
+ * <gameId>_<nation>.json} inside a configurable directory. The file is atomically replaced on each
+ * save via a tmp-file + rename, so a mid-write crash leaves the previous snapshot intact. The file
+ * is deleted when the session is evicted from {@link SessionRegistry}.
  *
- * <p><b>Thread safety:</b> each {@code (gameId, nation)} pair is written only from the
- * session's single-threaded {@code offensiveExecutor}, so concurrent writes to the same file
- * cannot happen in normal operation. Reads happen on the HTTP request thread after
- * {@code WireStateApplier} has run; they are safe because the write has already completed by the
- * time the next request arrives. No additional synchronization is needed.
+ * <p><b>Thread safety:</b> each {@code (gameId, nation)} pair is written only from the session's
+ * single-threaded {@code offensiveExecutor}, so concurrent writes to the same file cannot happen in
+ * normal operation. Reads happen on the HTTP request thread after {@code WireStateApplier} has run;
+ * they are safe because the write has already completed by the time the next request arrives. No
+ * additional synchronization is needed.
  */
 public final class ProSessionSnapshotStore {
 
@@ -47,7 +47,8 @@ public final class ProSessionSnapshotStore {
       Files.createDirectories(dir);
       MAPPER.writeValue(tmp.toFile(), snapshot);
       try {
-        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        Files.move(
+            tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
       } catch (final AtomicMoveNotSupportedException ex) {
         Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
       }
@@ -79,13 +80,13 @@ public final class ProSessionSnapshotStore {
   }
 
   /**
-   * Pre-populates {@code liveUnitIdMap} with the wire-ID → UUID entries stored in
-   * {@code snapshot.unitIdMap()}, using {@link java.util.concurrent.ConcurrentMap#putIfAbsent} to
-   * avoid overwriting any mappings that were already assigned in the current JVM session.
+   * Pre-populates {@code liveUnitIdMap} with the wire-ID → UUID entries stored in {@code
+   * snapshot.unitIdMap()}, using {@link java.util.concurrent.ConcurrentMap#putIfAbsent} to avoid
+   * overwriting any mappings that were already assigned in the current JVM session.
    *
    * <p>This must be called BEFORE {@code WireStateApplier.apply()} in each offensive executor so
-   * that {@code computeIfAbsent} inside the applier finds the pre-seeded UUIDs and creates
-   * {@code Unit} objects with the same identity as the snapshot's UUID references.
+   * that {@code computeIfAbsent} inside the applier finds the pre-seeded UUIDs and creates {@code
+   * Unit} objects with the same identity as the snapshot's UUID references.
    */
   public static void restoreUnitIdMap(
       final games.strategy.triplea.ai.pro.data.ProSessionSnapshot snapshot,

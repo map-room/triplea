@@ -4,9 +4,9 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * Disk record for a sidecar session. Written atomically to
- * {@code data/sessions/{gameId}/{nation}.json} on creation and update.
- * Re-read on startup to rehydrate the in-memory session registry.
+ * Disk record for a sidecar session. Written atomically to {@code
+ * data/sessions/{gameId}/{nation}.json} on creation and update. Re-read on startup to rehydrate the
+ * in-memory session registry.
  */
 public final class SessionManifest {
   private final String sessionId;
@@ -32,12 +32,35 @@ public final class SessionManifest {
     this.updatedAt = updatedAt;
   }
 
-  @JsonProperty("sessionId") public String sessionId() { return sessionId; }
-  @JsonProperty("gameId") public String gameId() { return gameId; }
-  @JsonProperty("nation") public String nation() { return nation; }
-  @JsonProperty("seed") public long seed() { return seed; }
-  @JsonProperty("createdAt") public long createdAt() { return createdAt; }
-  @JsonProperty("updatedAt") public long updatedAt() { return updatedAt; }
+  @JsonProperty("sessionId")
+  public String sessionId() {
+    return sessionId;
+  }
+
+  @JsonProperty("gameId")
+  public String gameId() {
+    return gameId;
+  }
+
+  @JsonProperty("nation")
+  public String nation() {
+    return nation;
+  }
+
+  @JsonProperty("seed")
+  public long seed() {
+    return seed;
+  }
+
+  @JsonProperty("createdAt")
+  public long createdAt() {
+    return createdAt;
+  }
+
+  @JsonProperty("updatedAt")
+  public long updatedAt() {
+    return updatedAt;
+  }
 
   public SessionManifest withUpdatedAt(final long newUpdatedAt) {
     return new SessionManifest(sessionId, gameId, nation, seed, createdAt, newUpdatedAt);

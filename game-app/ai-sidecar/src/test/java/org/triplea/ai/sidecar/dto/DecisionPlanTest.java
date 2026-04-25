@@ -14,16 +14,16 @@ class DecisionPlanTest {
   void serializesSelectCasualtiesPlan() throws Exception {
     DecisionPlan plan = new SelectCasualtiesPlan(List.of("u1", "u2"), List.of());
     String json = mapper.writeValueAsString(plan);
-    assertThat(json).contains("\"kind\":\"select-casualties\"")
-                    .contains("\"killed\":[\"u1\",\"u2\"]");
+    assertThat(json)
+        .contains("\"kind\":\"select-casualties\"")
+        .contains("\"killed\":[\"u1\",\"u2\"]");
   }
 
   @Test
   void serializesRetreatPlanWithNullRetreatTo() throws Exception {
     DecisionPlan plan = new RetreatPlan(null);
     String json = mapper.writeValueAsString(plan);
-    assertThat(json).contains("\"kind\":\"retreat-or-press\"")
-                    .contains("\"retreatTo\":null");
+    assertThat(json).contains("\"kind\":\"retreat-or-press\"").contains("\"retreatTo\":null");
   }
 
   @Test

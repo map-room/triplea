@@ -40,7 +40,8 @@ public final class SessionLifecycleHandler implements HttpHandler {
     writeJson(exchange, 405, JsonBodies.errorBody("method-not-allowed", method + " " + sub));
   }
 
-  private void handleDelete(final HttpExchange exchange, final String sessionId) throws IOException {
+  private void handleDelete(final HttpExchange exchange, final String sessionId)
+      throws IOException {
     if (!registry.delete(sessionId)) {
       writeJson(exchange, 404, JsonBodies.errorBody("not-found", "unknown session"));
       return;
@@ -49,7 +50,8 @@ public final class SessionLifecycleHandler implements HttpHandler {
     exchange.close();
   }
 
-  private void handleUpdate(final HttpExchange exchange, final String sessionId) throws IOException {
+  private void handleUpdate(final HttpExchange exchange, final String sessionId)
+      throws IOException {
     final Optional<Session> session = registry.get(sessionId);
     if (session.isEmpty()) {
       writeJson(exchange, 404, JsonBodies.errorBody("not-found", "unknown session"));

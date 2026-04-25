@@ -34,23 +34,82 @@ public final class FakeHttpExchange extends HttpExchange {
     return responseBody.toString();
   }
 
-  @Override public Headers getRequestHeaders() { return requestHeaders; }
-  @Override public Headers getResponseHeaders() { return responseHeaders; }
-  @Override public URI getRequestURI() { return uri; }
-  @Override public String getRequestMethod() { return method; }
-  @Override public HttpContext getHttpContext() { return null; }
-  @Override public void close() {}
-  @Override public InputStream getRequestBody() { return requestBody; }
-  @Override public OutputStream getResponseBody() { return responseBody; }
-  @Override public void sendResponseHeaders(final int code, final long length) {
+  @Override
+  public Headers getRequestHeaders() {
+    return requestHeaders;
+  }
+
+  @Override
+  public Headers getResponseHeaders() {
+    return responseHeaders;
+  }
+
+  @Override
+  public URI getRequestURI() {
+    return uri;
+  }
+
+  @Override
+  public String getRequestMethod() {
+    return method;
+  }
+
+  @Override
+  public HttpContext getHttpContext() {
+    return null;
+  }
+
+  @Override
+  public void close() {}
+
+  @Override
+  public InputStream getRequestBody() {
+    return requestBody;
+  }
+
+  @Override
+  public OutputStream getResponseBody() {
+    return responseBody;
+  }
+
+  @Override
+  public void sendResponseHeaders(final int code, final long length) {
     this.responseCode = code;
   }
-  @Override public InetSocketAddress getRemoteAddress() { return null; }
-  @Override public int getResponseCode() { return responseCode; }
-  @Override public InetSocketAddress getLocalAddress() { return null; }
-  @Override public String getProtocol() { return "HTTP/1.1"; }
-  @Override public Object getAttribute(final String name) { return null; }
-  @Override public void setAttribute(final String name, final Object value) {}
-  @Override public void setStreams(final InputStream i, final OutputStream o) {}
-  @Override public HttpPrincipal getPrincipal() { return null; }
+
+  @Override
+  public InetSocketAddress getRemoteAddress() {
+    return null;
+  }
+
+  @Override
+  public int getResponseCode() {
+    return responseCode;
+  }
+
+  @Override
+  public InetSocketAddress getLocalAddress() {
+    return null;
+  }
+
+  @Override
+  public String getProtocol() {
+    return "HTTP/1.1";
+  }
+
+  @Override
+  public Object getAttribute(final String name) {
+    return null;
+  }
+
+  @Override
+  public void setAttribute(final String name, final Object value) {}
+
+  @Override
+  public void setStreams(final InputStream i, final OutputStream o) {}
+
+  @Override
+  public HttpPrincipal getPrincipal() {
+    return null;
+  }
 }

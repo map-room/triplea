@@ -3,7 +3,6 @@ package org.triplea.ai.sidecar.session;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import games.strategy.triplea.settings.ClientSetting;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -16,9 +15,8 @@ import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
 
 /**
- * TDD tests for SessionReaper.
- * - Sessions updated within 30 days are NOT reaped.
- * - Sessions with updatedAt older than 30 days ARE reaped.
+ * TDD tests for SessionReaper. - Sessions updated within 30 days are NOT reaped. - Sessions with
+ * updatedAt older than 30 days ARE reaped.
  */
 class SessionReaperTest {
 

@@ -35,13 +35,15 @@ class SidecarIntegrationTest {
   @Test
   void fullLifecycleRoundTrip() throws Exception {
     final HttpService svc =
-        SidecarMain.startForTest(Map.of(
-            "SIDECAR_BIND_HOST", "127.0.0.1",
-            "SIDECAR_PORT", "0",
-            "SIDECAR_DATA_DIR", tempDir.toString()));
+        SidecarMain.startForTest(
+            Map.of(
+                "SIDECAR_BIND_HOST", "127.0.0.1",
+                "SIDECAR_PORT", "0",
+                "SIDECAR_DATA_DIR", tempDir.toString()));
     try {
       final int port = svc.boundPort();
-      final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+      final HttpClient client =
+          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
       final String base = "http://127.0.0.1:" + port;
       final String auth = "Bearer dev-token";
 
@@ -50,8 +52,9 @@ class SidecarIntegrationTest {
           client.send(
               HttpRequest.newBuilder(URI.create(base + "/sessions"))
                   .header("Authorization", auth)
-                  .POST(HttpRequest.BodyPublishers.ofString(
-                      "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
+                  .POST(
+                      HttpRequest.BodyPublishers.ofString(
+                          "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, create.statusCode());
@@ -103,5 +106,4 @@ class SidecarIntegrationTest {
       svc.stop();
     }
   }
-
 }

@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import games.strategy.engine.data.GameData;
-import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.ProductionRule;
 import games.strategy.engine.data.RepairRule;
 import games.strategy.engine.data.Unit;
@@ -60,7 +59,8 @@ class RecordingPurchaseDelegateTest {
   // NOTE: The former "noOpMethodsDoNotThrow" test called d.start() and d.end() without a bridge.
   // After the refactor RecordingPurchaseDelegate extends PurchaseDelegate → BaseTripleADelegate,
   // so start() and end() fire triggers via bridge.getData() — calling them without a live bridge
-  // will NPE. start()/end() are NOT called by PurchaseExecutor (only purchase() and purchaseRepair()
+  // will NPE. start()/end() are NOT called by PurchaseExecutor (only purchase() and
+  // purchaseRepair()
   // are called by ProAi). The test is therefore removed; start/end coverage is provided by
   // PurchaseExecutorTest and Phase3PurchaseIntegrationTest.
 }

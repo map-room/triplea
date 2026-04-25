@@ -1,6 +1,7 @@
 package org.triplea.ai.sidecar.dto;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -9,7 +10,8 @@ class DecisionRequestTest {
 
   @Test
   void deserializesSelectCasualtiesVariant() throws Exception {
-    String json = """
+    String json =
+        """
       {
         "kind": "select-casualties",
         "state": { "territories": [], "players": [], "round": 1, "phase": "combat", "currentPlayer": "Germans" },
@@ -23,12 +25,14 @@ class DecisionRequestTest {
       }""";
     DecisionRequest req = mapper.readValue(json, DecisionRequest.class);
     assertThat(req).isInstanceOf(SelectCasualtiesRequest.class);
-    assertThat(((SelectCasualtiesRequest) req).battle().defaultCasualties()).containsExactly("u1", "u2");
+    assertThat(((SelectCasualtiesRequest) req).battle().defaultCasualties())
+        .containsExactly("u1", "u2");
   }
 
   @Test
   void deserializesRetreatVariant() throws Exception {
-    String json = """
+    String json =
+        """
       {
         "kind": "retreat-or-press",
         "state": { "territories": [], "players": [], "round": 1, "phase": "combat", "currentPlayer": "Germans" },
@@ -43,7 +47,8 @@ class DecisionRequestTest {
 
   @Test
   void deserializesScrambleVariant() throws Exception {
-    String json = """
+    String json =
+        """
       {
         "kind": "scramble",
         "state": { "territories": [], "players": [], "round": 1, "phase": "combat", "currentPlayer": "Germans" },

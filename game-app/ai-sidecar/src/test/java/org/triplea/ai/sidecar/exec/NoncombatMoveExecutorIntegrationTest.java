@@ -2,7 +2,6 @@ package org.triplea.ai.sidecar.exec;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.triplea.ai.pro.AbstractProAi;
@@ -31,14 +30,12 @@ import org.triplea.ai.sidecar.wire.WireState;
 
 /**
  * Integration tests for {@link NoncombatMoveExecutor}. Runs a full purchase → combat-move →
- * noncombat-move sequence on the same session (purchase populates both
- * {@code storedFactoryMoveMap} and {@code storedPurchaseTerritories}; combat-move consumes
- * {@code storedCombatMoveMap}).
+ * noncombat-move sequence on the same session (purchase populates both {@code storedFactoryMoveMap}
+ * and {@code storedPurchaseTerritories}; combat-move consumes {@code storedCombatMoveMap}).
  */
 class NoncombatMoveExecutorIntegrationTest {
 
-  @TempDir
-  Path snapshotDir;
+  @TempDir Path snapshotDir;
 
   private static CanonicalGameData canonical;
 
@@ -81,19 +78,24 @@ class NoncombatMoveExecutorIntegrationTest {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
     final Session session = freshSession("Germans");
 
-    // Step 1: purchase — populates storedFactoryMoveMap, storedCombatMoveMap, storedPurchaseTerritories
-    new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+    // Step 1: purchase — populates storedFactoryMoveMap, storedCombatMoveMap,
+    // storedPurchaseTerritories
+    new PurchaseExecutor(store)
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
 
     // Step 2: combat-move — consumes storedCombatMoveMap
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
+    new CombatMoveExecutor(store)
+        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
 
     // Step 3: noncombat-move — consumes storedFactoryMoveMap, preserves storedPurchaseTerritories
-    final NoncombatMovePlan plan = new NoncombatMoveExecutor(store).execute(
-        session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+    final NoncombatMovePlan plan =
+        new NoncombatMoveExecutor(store)
+            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
     assertNotNull(plan, "noncombat-move plan must not be null");
     // Germans typically move factories and units on noncombat-move
-    assertFalse(plan.moves().isEmpty(),
+    assertFalse(
+        plan.moves().isEmpty(),
         "Germans should have at least one noncombat move on turn 1; got: " + plan.moves());
   }
 
@@ -107,13 +109,16 @@ class NoncombatMoveExecutorIntegrationTest {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
     final Session session = freshSession("Germans");
 
-    new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
+    new PurchaseExecutor(store)
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+    new CombatMoveExecutor(store)
+        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
 
     // If any captured move had isBombing==true, the executor would throw AssertionError.
     // The plan being returned means the invariant held.
-    final NoncombatMovePlan plan = new NoncombatMoveExecutor(store).execute(
-        session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+    final NoncombatMovePlan plan =
+        new NoncombatMoveExecutor(store)
+            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
     assertNotNull(plan, "plan must not be null (no bombing invariant violation)");
   }
@@ -127,10 +132,12 @@ class NoncombatMoveExecutorIntegrationTest {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
     final Session session = freshSession("Germans");
 
-    new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
-    new NoncombatMoveExecutor(store).execute(
-        session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+    new PurchaseExecutor(store)
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+    new CombatMoveExecutor(store)
+        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
+    new NoncombatMoveExecutor(store)
+        .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
     // storedPurchaseTerritories must still be non-null (not cleared by noncombat-move)
     final Field field = AbstractProAi.class.getDeclaredField("storedPurchaseTerritories");
@@ -140,10 +147,11 @@ class NoncombatMoveExecutorIntegrationTest {
         (java.util.Map<games.strategy.engine.data.Territory, ProPurchaseTerritory>)
             field.get(session.proAi());
 
-    assertNotNull(stored,
+    assertNotNull(
+        stored,
         "storedPurchaseTerritories must not be null after noncombat-move — place executor needs it");
-    assertFalse(stored.isEmpty(),
-        "storedPurchaseTerritories must be non-empty after noncombat-move");
+    assertFalse(
+        stored.isEmpty(), "storedPurchaseTerritories must be non-empty after noncombat-move");
   }
 
   /**
@@ -156,29 +164,35 @@ class NoncombatMoveExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     // Run purchase and combat-move normally to establish the session state
-    new PurchaseExecutor(store).execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store).execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
+    new PurchaseExecutor(store)
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+    new CombatMoveExecutor(store)
+        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
 
     // Inject a stale UUID into the snapshot's factoryMoveMap
     final var staleUuid = UUID.randomUUID().toString();
-    final var staleSnap = new games.strategy.triplea.ai.pro.data.ProSessionSnapshot(
-        java.util.Map.of(),
-        java.util.Map.of("Germany", new games.strategy.triplea.ai.pro.data.ProTerritorySnapshot(
-            java.util.List.of(staleUuid), // stale unit UUID
-            java.util.List.of(),
+    final var staleSnap =
+        new games.strategy.triplea.ai.pro.data.ProSessionSnapshot(
             java.util.Map.of(),
+            java.util.Map.of(
+                "Germany",
+                new games.strategy.triplea.ai.pro.data.ProTerritorySnapshot(
+                    java.util.List.of(staleUuid), // stale unit UUID
+                    java.util.List.of(),
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    java.util.Map.of())),
             java.util.Map.of(),
-            java.util.Map.of())),
-        java.util.Map.of(),
-        java.util.Map.of());
+            java.util.Map.of());
 
     // Save the stale snapshot — noncombat-move executor will try to restore from it
     // But storedFactoryMoveMap is already non-null from the purchase run, so restore is a no-op.
     // Verify the executor still completes without NPE.
     store.save(session.key(), staleSnap);
 
-    final NoncombatMovePlan plan = new NoncombatMoveExecutor(store).execute(
-        session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+    final NoncombatMovePlan plan =
+        new NoncombatMoveExecutor(store)
+            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
     assertNotNull(plan, "plan must not be null even with stale snapshot stored");
   }

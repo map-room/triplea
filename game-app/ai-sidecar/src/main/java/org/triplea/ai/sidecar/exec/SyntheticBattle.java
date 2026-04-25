@@ -15,20 +15,19 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Minimal read-only {@link IBattle} stub registered in the session's {@code BattleTracker} for
- * the duration of a single ProAi decision call.
+ * Minimal read-only {@link IBattle} stub registered in the session's {@code BattleTracker} for the
+ * duration of a single ProAi decision call.
  *
  * <p>{@code AbstractProAi.selectCasualties} (and its sibling decision entry points) fetches the
- * pending battle out of {@code BattleTracker} by {@link UUID} and reads {@code getAttacker},
- * {@code getAttackingUnits}, {@code getDefendingUnits} off it — nothing else. This stub
- * therefore returns the exact collections the sidecar passed in on the wire and throws
- * {@link UnsupportedOperationException} for every mutating / fight-step entry point, so an
- * accidental call into unsupported behaviour fails loudly rather than silently corrupting game
- * state.
+ * pending battle out of {@code BattleTracker} by {@link UUID} and reads {@code getAttacker}, {@code
+ * getAttackingUnits}, {@code getDefendingUnits} off it — nothing else. This stub therefore returns
+ * the exact collections the sidecar passed in on the wire and throws {@link
+ * UnsupportedOperationException} for every mutating / fight-step entry point, so an accidental call
+ * into unsupported behaviour fails loudly rather than silently corrupting game state.
  *
  * <p>Not serialisable in any meaningful sense — the {@code serialVersionUID} exists only so the
- * compiler is happy about {@code implements Serializable} from {@link IBattle}; this class is
- * never persisted.
+ * compiler is happy about {@code implements Serializable} from {@link IBattle}; this class is never
+ * persisted.
  */
 final class SyntheticBattle implements IBattle {
   private static final long serialVersionUID = 1L;

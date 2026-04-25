@@ -25,24 +25,23 @@ import org.triplea.ai.sidecar.wire.WireUnit;
 /**
  * Executes a {@code select-casualties} decision by invoking {@link ProAi#selectCasualties}.
  *
- * <p>The ProAi entry point depends on transient combat-phase state that {@link
- * WireStateApplier} deliberately does <b>not</b> touch: it looks up an {@link IBattle} out of
- * {@code BattleDelegate.getBattleTracker()} by {@link UUID} and reads the attacker,
- * attacking-unit list, and defending-unit list off it. If no pending battle is registered for
- * the supplied {@code battleId}, ProAi silently returns an empty casualty list — which would
- * manifest as garbage flowing back over the wire to Map Room. To prevent that, this executor
- * constructs a minimal read-only {@link SyntheticBattle} carrying the attacker / defender /
- * attacking / defending collections from the request and splices it directly into the
- * tracker's private {@code pendingBattles} set via reflection for the duration of the call.
- * The synthetic battle is removed in a {@code finally} block regardless of outcome so shared
- * game-data state never leaks across executor invocations.
+ * <p>The ProAi entry point depends on transient combat-phase state that {@link WireStateApplier}
+ * deliberately does <b>not</b> touch: it looks up an {@link IBattle} out of {@code
+ * BattleDelegate.getBattleTracker()} by {@link UUID} and reads the attacker, attacking-unit list,
+ * and defending-unit list off it. If no pending battle is registered for the supplied {@code
+ * battleId}, ProAi silently returns an empty casualty list — which would manifest as garbage
+ * flowing back over the wire to Map Room. To prevent that, this executor constructs a minimal
+ * read-only {@link SyntheticBattle} carrying the attacker / defender / attacking / defending
+ * collections from the request and splices it directly into the tracker's private {@code
+ * pendingBattles} set via reflection for the duration of the call. The synthetic battle is removed
+ * in a {@code finally} block regardless of outcome so shared game-data state never leaks across
+ * executor invocations.
  *
  * <p>On first use per session the executor lazily attaches a {@link PlayerBridge} + {@link
  * GamePlayer} to the session's {@link ProAi} (which is constructed bridge-less by {@link
- * org.triplea.ai.sidecar.session.SessionRegistry}). The bridge wraps a no-op {@link
- * HeadlessGame}; it only exists so that {@code AbstractBasePlayer.getGameData()} — called
- * transitively from {@code ProData.initialize} — returns the session's cloned {@link
- * GameData} rather than NPE.
+ * org.triplea.ai.sidecar.session.SessionRegistry}). The bridge wraps a no-op {@link HeadlessGame};
+ * it only exists so that {@code AbstractBasePlayer.getGameData()} — called transitively from {@code
+ * ProData.initialize} — returns the session's cloned {@link GameData} rather than NPE.
  */
 public final class SelectCasualtiesExecutor
     implements DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> {
@@ -77,7 +76,8 @@ public final class SelectCasualtiesExecutor
     final List<Unit> amphibiousLandAttackers =
         resolveUnits(b.amphibiousLandAttackers(), idMap, unitsOnSite);
 
-    final CasualtyList defaultCasualties = buildDefaultCasualties(b.defaultCasualties(), idMap, unitsOnSite, b.hitCount());
+    final CasualtyList defaultCasualties =
+        buildDefaultCasualties(b.defaultCasualties(), idMap, unitsOnSite, b.hitCount());
 
     // AbstractProAi.selectCasualties fetches the pending battle for this UUID; synthesise one
     // and register it in the tracker so the call sees non-null battle state. The ProAi entry

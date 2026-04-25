@@ -10,8 +10,8 @@ import java.util.Set;
 import org.triplea.ai.sidecar.dto.WarDeclaration;
 
 /**
- * Observes politics-attempt calls on the live {@link PoliticsDelegate} during a sidecar
- * combat-move execution and translates captured actions into {@link WarDeclaration}s.
+ * Observes politics-attempt calls on the live {@link PoliticsDelegate} during a sidecar combat-move
+ * execution and translates captured actions into {@link WarDeclaration}s.
  *
  * <p>The observer does NOT intercept the real delegate — {@code attemptAction} still runs its full
  * mutation of the in-memory {@link games.strategy.engine.data.RelationshipTracker} so the
@@ -26,14 +26,22 @@ public final class PoliticsObserver {
 
   /**
    * The 9 primary Map Room nations. TripleA's ww2global40_2nd_edition.xml contains split factions
-   * like {@code UK_Pacific} and {@code Dutch} that are not first-class players in Map Room's engine.
-   * War declarations against these non-primary names are rejected by Map Room with
-   * {@code ERROR: invalid move: declareWar args: <name>}. Filter them out here so only valid
-   * targets are returned by {@link #toWarDeclarations}.
+   * like {@code UK_Pacific} and {@code Dutch} that are not first-class players in Map Room's
+   * engine. War declarations against these non-primary names are rejected by Map Room with {@code
+   * ERROR: invalid move: declareWar args: <name>}. Filter them out here so only valid targets are
+   * returned by {@link #toWarDeclarations}.
    */
   private static final Set<String> MAP_ROOM_PRIMARY_NATIONS =
-      Set.of("Americans", "ANZAC", "British", "Chinese", "French",
-             "Germans", "Italians", "Japanese", "Russians");
+      Set.of(
+          "Americans",
+          "ANZAC",
+          "British",
+          "Chinese",
+          "French",
+          "Germans",
+          "Italians",
+          "Japanese",
+          "Russians");
 
   private final GameData gameData;
   private final PoliticsDelegate original;
@@ -79,8 +87,8 @@ public final class PoliticsObserver {
 
   /**
    * Record an attempted politics action. Called by the {@link ObservingPoliticsDelegate} after
-   * delegating to {@code super.attemptAction}. Also exposed as a test seam so unit tests can
-   * inject actions directly without needing a fully wired {@link
+   * delegating to {@code super.attemptAction}. Also exposed as a test seam so unit tests can inject
+   * actions directly without needing a fully wired {@link
    * games.strategy.engine.delegate.IDelegateBridge}.
    */
   void recordAttempt(final PoliticalActionAttachment action) {
@@ -93,8 +101,8 @@ public final class PoliticsObserver {
    * <p>Walks each action's {@link PoliticalActionAttachment#getRelationshipChanges()}, keeps
    * entries where the new relationship {@link
    * games.strategy.triplea.attachments.RelationshipTypeAttachment#isWar()} AND one of the two
-   * players is {@code actingPlayer}. Returns the other player as the {@link WarDeclaration}
-   * target. Mirrors the warPlayers extraction in {@code ProPoliticsAi}.
+   * players is {@code actingPlayer}. Returns the other player as the {@link WarDeclaration} target.
+   * Mirrors the warPlayers extraction in {@code ProPoliticsAi}.
    */
   public List<WarDeclaration> toWarDeclarations(final GamePlayer actingPlayer) {
     final List<WarDeclaration> out = new ArrayList<>();

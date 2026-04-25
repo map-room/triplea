@@ -26,7 +26,8 @@ class SessionLifecycleHandlerTest {
   @Test
   void updateReturns204ForKnownSession() throws Exception {
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load());
-    final Session s = registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+    final Session s =
+        registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
     final SessionLifecycleHandler h = new SessionLifecycleHandler(registry);
     final FakeHttpExchange ex =
         new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/update", UPDATE_BODY);
@@ -38,7 +39,8 @@ class SessionLifecycleHandlerTest {
   void updateReturns404ForUnknownSession() throws Exception {
     final SessionLifecycleHandler h =
         new SessionLifecycleHandler(new SessionRegistry(CanonicalGameData.load()));
-    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/session/unknown/update", UPDATE_BODY);
+    final FakeHttpExchange ex =
+        new FakeHttpExchange("POST", "/session/unknown/update", UPDATE_BODY);
     h.handle(ex);
     assertEquals(404, ex.responseCode());
   }
@@ -46,7 +48,8 @@ class SessionLifecycleHandlerTest {
   @Test
   void updateRejectsMalformedBody() throws Exception {
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load());
-    final Session s = registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+    final Session s =
+        registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
     final SessionLifecycleHandler h = new SessionLifecycleHandler(registry);
     final FakeHttpExchange ex =
         new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/update", "not-json");
@@ -57,7 +60,8 @@ class SessionLifecycleHandlerTest {
   @Test
   void deleteReturns204ForKnownSession() throws Exception {
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load());
-    final Session s = registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+    final Session s =
+        registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
     final SessionLifecycleHandler h = new SessionLifecycleHandler(registry);
     final FakeHttpExchange ex = new FakeHttpExchange("DELETE", "/session/" + s.sessionId(), null);
     h.handle(ex);
@@ -77,7 +81,8 @@ class SessionLifecycleHandlerTest {
   @Test
   void rejectsUnknownMethod() throws Exception {
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load());
-    final Session s = registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+    final Session s =
+        registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
     final SessionLifecycleHandler h = new SessionLifecycleHandler(registry);
     final FakeHttpExchange ex = new FakeHttpExchange("PUT", "/session/" + s.sessionId(), null);
     h.handle(ex);

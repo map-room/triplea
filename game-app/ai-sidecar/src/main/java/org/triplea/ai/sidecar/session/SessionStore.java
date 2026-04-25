@@ -10,18 +10,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Persists {@link SessionManifest} records to
- * {@code <dataDir>/<gameId>/<nation>.json} using atomic rename.
+ * Persists {@link SessionManifest} records to {@code <dataDir>/<gameId>/<nation>.json} using atomic
+ * rename.
  *
- * <p>Thread safety: callers are responsible for serialising writes to the same
- * {@code (gameId, nation)} key. SessionRegistry's per-instance lock is
- * sufficient — only one thread ever calls {@code save} or {@code delete} for
- * a given key at a time.
+ * <p>Thread safety: callers are responsible for serialising writes to the same {@code (gameId,
+ * nation)} key. SessionRegistry's per-instance lock is sufficient — only one thread ever calls
+ * {@code save} or {@code delete} for a given key at a time.
  */
 public final class SessionStore {
 
-  private static final System.Logger LOG =
-      System.getLogger(SessionStore.class.getName());
+  private static final System.Logger LOG = System.getLogger(SessionStore.class.getName());
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private final Path dataDir;
@@ -30,9 +28,7 @@ public final class SessionStore {
     this.dataDir = dataDir;
   }
 
-  /**
-   * Writes {@code manifest} to disk atomically. Creates parent directories as needed.
-   */
+  /** Writes {@code manifest} to disk atomically. Creates parent directories as needed. */
   public void save(final SessionManifest manifest) {
     final Path target = pathFor(new SessionKey(manifest.gameId(), manifest.nation()));
     final Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
@@ -40,19 +36,26 @@ public final class SessionStore {
       Files.createDirectories(target.getParent());
       MAPPER.writeValue(tmp.toFile(), manifest);
       try {
-        Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        Files.move(
+            tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
       } catch (final AtomicMoveNotSupportedException ex) {
         Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
       }
     } catch (final IOException e) {
-      LOG.log(System.Logger.Level.WARNING, "Failed to save session manifest " + manifest.sessionId(), e);
-      try { Files.deleteIfExists(tmp); } catch (final IOException ignored) {}
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "Failed to save session manifest " + manifest.sessionId(),
+          e);
+      try {
+        Files.deleteIfExists(tmp);
+      } catch (final IOException ignored) {
+      }
     }
   }
 
   /**
-   * Updates only the {@code updatedAt} timestamp in the stored manifest.
-   * No-op if no manifest file exists for the key.
+   * Updates only the {@code updatedAt} timestamp in the stored manifest. No-op if no manifest file
+   * exists for the key.
    */
   public void updateTimestamp(final SessionKey key, final long updatedAt) {
     final Path target = pathFor(key);
@@ -77,8 +80,8 @@ public final class SessionStore {
   }
 
   /**
-   * Loads all session manifests from the data directory tree.
-   * Returns an empty list if the directory does not exist or contains no valid files.
+   * Loads all session manifests from the data directory tree. Returns an empty list if the
+   * directory does not exist or contains no valid files.
    */
   public List<SessionManifest> loadAll() {
     final List<SessionManifest> result = new ArrayList<>();
@@ -92,13 +95,15 @@ public final class SessionStore {
       Files.walk(dataDir, 2)
           .filter(p -> p.getNameCount() == dataDir.getNameCount() + 2)
           .filter(p -> p.toString().endsWith(".json") && !p.toString().endsWith(".tmp"))
-          .forEach(p -> {
-            try {
-              result.add(MAPPER.readValue(p.toFile(), SessionManifest.class));
-            } catch (final IOException e) {
-              LOG.log(System.Logger.Level.WARNING, "Skipping unreadable session manifest: " + p, e);
-            }
-          });
+          .forEach(
+              p -> {
+                try {
+                  result.add(MAPPER.readValue(p.toFile(), SessionManifest.class));
+                } catch (final IOException e) {
+                  LOG.log(
+                      System.Logger.Level.WARNING, "Skipping unreadable session manifest: " + p, e);
+                }
+              });
     } catch (final IOException e) {
       LOG.log(System.Logger.Level.WARNING, "Failed to walk session data directory", e);
     }

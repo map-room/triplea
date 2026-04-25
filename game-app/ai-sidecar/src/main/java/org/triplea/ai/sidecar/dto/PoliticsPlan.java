@@ -8,8 +8,7 @@ import java.util.List;
 public record PoliticsPlan(List<WarDeclaration> declarations) implements DecisionPlan {
 
   @JsonCreator
-  public PoliticsPlan(
-      @JsonProperty("declarations") final List<WarDeclaration> declarations) {
+  public PoliticsPlan(@JsonProperty("declarations") final List<WarDeclaration> declarations) {
     this.declarations = declarations == null ? List.of() : declarations;
   }
 

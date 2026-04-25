@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
-import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RetreatPlan;
 import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
 import org.triplea.ai.sidecar.dto.ScramblePlan;
@@ -201,8 +200,11 @@ class DecisionHandlerTest {
       h.handle(ex);
       assertEquals(501, ex.responseCode(), "kind=" + kind);
       final String responseBody = ex.responseBodyString();
-      assertTrue(responseBody.contains("\"status\":\"error\""), "kind=" + kind + "; body=" + responseBody);
-      assertTrue(responseBody.contains("\"error\":\"not-implemented\""), "kind=" + kind + "; body=" + responseBody);
+      assertTrue(
+          responseBody.contains("\"status\":\"error\""), "kind=" + kind + "; body=" + responseBody);
+      assertTrue(
+          responseBody.contains("\"error\":\"not-implemented\""),
+          "kind=" + kind + "; body=" + responseBody);
       // kind must round-trip in the 501 body so clients can distinguish offensive sub-kinds
       assertTrue(
           responseBody.contains("\"kind\":\"" + kind + "\""),
@@ -242,8 +244,7 @@ class DecisionHandlerTest {
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
     final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", "{not-json");
+        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", "{not-json");
     h.handle(ex);
     assertEquals(400, ex.responseCode());
     final String body = ex.responseBodyString();

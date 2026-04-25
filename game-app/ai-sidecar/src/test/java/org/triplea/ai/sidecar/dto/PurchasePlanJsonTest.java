@@ -1,6 +1,7 @@
 package org.triplea.ai.sidecar.dto;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -10,11 +11,10 @@ class PurchasePlanJsonTest {
 
   @Test
   void purchasePlanRoundTripsWithKindDiscriminator() throws Exception {
-    PurchasePlan plan = new PurchasePlan(
-        List.of(
-            new PurchaseOrder("infantry", 3, null),
-            new PurchaseOrder("armour", 1, null)),
-        List.of(new RepairOrder("Germany", "factory_major", 2)));
+    PurchasePlan plan =
+        new PurchasePlan(
+            List.of(new PurchaseOrder("infantry", 3, null), new PurchaseOrder("armour", 1, null)),
+            List.of(new RepairOrder("Germany", "factory_major", 2)));
     String json = mapper.writeValueAsString((DecisionPlan) plan);
     assertTrue(json.contains("\"kind\":\"purchase\""));
     DecisionPlan decoded = mapper.readValue(json, DecisionPlan.class);

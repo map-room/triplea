@@ -18,8 +18,8 @@ import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.http.HttpService;
 
 /**
- * Integration test: sessions persist to disk and rehydrate after a sidecar "restart"
- * (creating a new HttpService instance with the same data directory).
+ * Integration test: sessions persist to disk and rehydrate after a sidecar "restart" (creating a
+ * new HttpService instance with the same data directory).
  */
 class SidecarPersistenceIntegrationTest {
 
@@ -32,10 +32,11 @@ class SidecarPersistenceIntegrationTest {
 
   @Test
   void sessionSurvivesRestart() throws Exception {
-    final Map<String, String> env = Map.of(
-        "SIDECAR_BIND_HOST", "127.0.0.1",
-        "SIDECAR_PORT", "0",
-        "SIDECAR_DATA_DIR", dataDir.toString());
+    final Map<String, String> env =
+        Map.of(
+            "SIDECAR_BIND_HOST", "127.0.0.1",
+            "SIDECAR_PORT", "0",
+            "SIDECAR_DATA_DIR", dataDir.toString());
     final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
 
     // --- First sidecar instance ---
@@ -43,13 +44,15 @@ class SidecarPersistenceIntegrationTest {
     final int port1 = svc1.boundPort();
     try {
       // Create session
-      final HttpResponse<String> create = client.send(
-          HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port1 + "/sessions"))
-              .header("Authorization", "Bearer dev-token")
-              .POST(HttpRequest.BodyPublishers.ofString(
-                  "{\"sessionId\":\"m1:Germans\",\"gameId\":\"m1\",\"nation\":\"Germans\",\"seed\":42}"))
-              .build(),
-          HttpResponse.BodyHandlers.ofString());
+      final HttpResponse<String> create =
+          client.send(
+              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port1 + "/sessions"))
+                  .header("Authorization", "Bearer dev-token")
+                  .POST(
+                      HttpRequest.BodyPublishers.ofString(
+                          "{\"sessionId\":\"m1:Germans\",\"gameId\":\"m1\",\"nation\":\"Germans\",\"seed\":42}"))
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
       assertEquals(200, create.statusCode());
       assertTrue(create.body().contains("\"created\":true"));
     } finally {
@@ -61,13 +64,15 @@ class SidecarPersistenceIntegrationTest {
     final int port2 = svc2.boundPort();
     try {
       // Re-open session — should return created=false (rehydrated from disk)
-      final HttpResponse<String> reopen = client.send(
-          HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port2 + "/sessions"))
-              .header("Authorization", "Bearer dev-token")
-              .POST(HttpRequest.BodyPublishers.ofString(
-                  "{\"sessionId\":\"m1:Germans\",\"gameId\":\"m1\",\"nation\":\"Germans\",\"seed\":42}"))
-              .build(),
-          HttpResponse.BodyHandlers.ofString());
+      final HttpResponse<String> reopen =
+          client.send(
+              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port2 + "/sessions"))
+                  .header("Authorization", "Bearer dev-token")
+                  .POST(
+                      HttpRequest.BodyPublishers.ofString(
+                          "{\"sessionId\":\"m1:Germans\",\"gameId\":\"m1\",\"nation\":\"Germans\",\"seed\":42}"))
+                  .build(),
+              HttpResponse.BodyHandlers.ofString());
       assertEquals(200, reopen.statusCode());
       assertTrue(
           reopen.body().contains("\"created\":false"),

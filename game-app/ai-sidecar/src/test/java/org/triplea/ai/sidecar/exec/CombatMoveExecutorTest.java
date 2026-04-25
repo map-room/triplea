@@ -27,8 +27,8 @@ import org.triplea.ai.sidecar.wire.WireState;
  * Integration tests for {@link CombatMoveExecutor}.
  *
  * <p>Under the Option X pivot (map-room#1824), politics runs in a separate {@code politics}
- * decision kind ({@link PoliticsExecutor}), not inside {@code CombatMoveExecutor}. The bot sends
- * a fresh post-declaration WireState in the subsequent {@code combat-move} request. These tests
+ * decision kind ({@link PoliticsExecutor}), not inside {@code CombatMoveExecutor}. The bot sends a
+ * fresh post-declaration WireState in the subsequent {@code combat-move} request. These tests
  * verify that combat-move planning runs correctly when given a WireState that already reflects
  * post-politics relationships.
  */
@@ -70,15 +70,18 @@ class CombatMoveExecutorTest {
     final Session session = freshSession("Germans");
 
     // Round 1 purchase populates storedCombatMoveMap (required before combat-move executor runs).
-    new PurchaseExecutor(store).execute(
-        session,
-        new PurchaseRequest(new WireState(List.of(), List.of(), 1, "purchase", "Germans",
-            List.of())));
+    new PurchaseExecutor(store)
+        .execute(
+            session,
+            new PurchaseRequest(
+                new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of())));
 
-    final CombatMovePlan plan = new CombatMoveExecutor(store).execute(
-        session,
-        new CombatMoveRequest(new WireState(List.of(), List.of(), 1, "combatMove", "Germans",
-            List.of())));
+    final CombatMovePlan plan =
+        new CombatMoveExecutor(store)
+            .execute(
+                session,
+                new CombatMoveRequest(
+                    new WireState(List.of(), List.of(), 1, "combatMove", "Germans", List.of())));
 
     assertThat(plan.moves())
         .as("Combat-move must produce at least some moves (end-to-end pipeline check)")
