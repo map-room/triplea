@@ -9,10 +9,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Background task that removes stale sessions every 5 minutes.
  *
- * <p>A session is stale if its {@code updatedAt} timestamp is older than 30 days. If {@code
- * serverUrl} is provided (non-null), gameover sessions are also reaped by querying {@code GET
- * {serverUrl}/api/matches/{matchID}} — this is an optional enhancement: gameover reaping is skipped
- * when the server URL is not configured.
+ * <p>A session is stale if its {@code updatedAt} timestamp is older than 30 days. Gameover-driven
+ * reaping (querying the game server to detect finished matches) is a planned Phase 3 enhancement —
+ * see {@code docs/ai-sidecar-contract-v2.md} — and is not yet wired in.
  *
  * <p>The reaper is started via {@link #start()} and shut down via {@link #stop()}. For testing,
  * {@link #runOnce()} executes one reap cycle synchronously.
@@ -26,14 +25,12 @@ public final class SessionReaper {
 
   private final SessionRegistry registry;
   private final Clock clock;
-  private final String serverUrl; // nullable
 
   private ScheduledExecutorService scheduler;
 
-  public SessionReaper(final SessionRegistry registry, final Clock clock, final String serverUrl) {
+  public SessionReaper(final SessionRegistry registry, final Clock clock) {
     this.registry = registry;
     this.clock = clock;
-    this.serverUrl = serverUrl;
   }
 
   /** Starts the background reaper. Idempotent. */
@@ -79,9 +76,9 @@ public final class SessionReaper {
       registry.deleteByKey(key);
     }
 
-    // TODO(Phase 3): gameover check via GET {serverUrl}/api/matches/{matchID}
-    // when serverUrl != null. Deferred: requires the sidecar to call the game server,
-    // which is otherwise a leaf service. See docs/ai-sidecar-contract-v2.md.
+    // TODO(Phase 3): gameover check via GET {serverUrl}/api/matches/{matchID}.
+    // Deferred: requires the sidecar to call the game server, which is otherwise a
+    // leaf service. See docs/ai-sidecar-contract-v2.md.
   }
 
   private void runOnceSafe() {

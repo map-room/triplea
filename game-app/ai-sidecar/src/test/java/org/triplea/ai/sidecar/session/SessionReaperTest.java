@@ -35,7 +35,7 @@ class SessionReaperTest {
     registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L);
 
     final Clock clock = Clock.fixed(Instant.ofEpochMilli(now), ZoneId.systemDefault());
-    final SessionReaper reaper = new SessionReaper(registry, clock, null);
+    final SessionReaper reaper = new SessionReaper(registry, clock);
     reaper.runOnce();
 
     assertEquals(1, registry.sessionCount(), "recent session should not be reaped");
@@ -52,7 +52,7 @@ class SessionReaperTest {
     registry.setUpdatedAtForTesting(new SessionKey("g-1", "Germans"), stalePast);
 
     final Clock clock = Clock.fixed(Instant.ofEpochMilli(now), ZoneId.systemDefault());
-    final SessionReaper reaper = new SessionReaper(registry, clock, null);
+    final SessionReaper reaper = new SessionReaper(registry, clock);
     reaper.runOnce();
 
     assertEquals(0, registry.sessionCount(), "stale session should be reaped");
