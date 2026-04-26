@@ -17,8 +17,8 @@ import org.junit.jupiter.api.Test;
  * ProPoliticsAi} instances (via the package-private two-arg constructor). Verify the logged
  * sequences are identical, and that different seeds produce different sequences.
  *
- * <p>This test exercises the constructor injection path only — it does NOT run the full
- * {@code politicalActions()} method (which requires live {@link games.strategy.engine.data.GameData}
+ * <p>This test exercises the constructor injection path only — it does NOT run the full {@code
+ * politicalActions()} method (which requires live {@link games.strategy.engine.data.GameData}
  * delegates). Instead it proves that the {@code rng} field is wired and consulted by directly
  * comparing nextDouble() invocations via the logging wrapper.
  */
@@ -84,8 +84,8 @@ class ProPoliticsAiDeterminismTest {
   }
 
   /**
-   * Verifies that {@link ProPoliticsAi} exposes a two-arg constructor that accepts a {@link Random},
-   * ensuring the injection point compiles and is accessible within the package.
+   * Verifies that {@link ProPoliticsAi} exposes a two-arg constructor that accepts a {@link
+   * Random}, ensuring the injection point compiles and is accessible within the package.
    *
    * <p>The full determinism contract (same seed → same {@code politicalActions()} output) is
    * validated at the integration level via {@link

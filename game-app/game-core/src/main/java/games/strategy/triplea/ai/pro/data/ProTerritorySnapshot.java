@@ -12,8 +12,8 @@ import java.util.Map;
  * AbstractProAi.snapshotForSidecar()}.
  *
  * <p>Unit references are encoded as UUID strings. Territory references are encoded as territory
- * names. Type-safe lookup against live {@link games.strategy.engine.data.GameData} is performed
- * by {@code AbstractProAi.restoreFromSnapshot(ProSessionSnapshot, GameData)}.
+ * names. Type-safe lookup against live {@link games.strategy.engine.data.GameData} is performed by
+ * {@code AbstractProAi.restoreFromSnapshot(ProSessionSnapshot, GameData)}.
  *
  * @param unitIds UUIDs of units assigned to this territory ({@code ProTerritory.units})
  * @param bomberIds UUIDs of bomber units assigned to this territory ({@code ProTerritory.bombers})

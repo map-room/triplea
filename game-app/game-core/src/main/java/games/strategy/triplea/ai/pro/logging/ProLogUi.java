@@ -17,6 +17,7 @@ public final class ProLogUi {
   private static ProLogWindow settingsWindow = null;
   private static String currentName = "";
   private static int currentRound = 0;
+
   /**
    * Optional external sink for AI log messages. Set by headless consumers (the AI sidecar) that
    * need to route ProLogger output to stdout / System.Logger instead of the Swing settings window.
