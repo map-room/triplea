@@ -10,15 +10,52 @@ import java.util.UUID;
 /**
  * Emits single-line structured AI-TRACE log entries for sidecar executor decisions.
  *
- * <p>Format: {@code [AI-TRACE] side=sidecar nation=X phase=Y key=value ...} Arrays use {@code
- * [a,b,c]} notation; unit counts use {@code type×N} notation; territory names containing spaces are
- * double-quoted.
+ * <p>Format: {@code [AI-TRACE] matchID=<id> side=sidecar nation=X phase=Y key=value ...} Arrays use
+ * {@code [a,b,c]} notation; unit counts use {@code type×N} notation; territory names containing
+ * spaces are double-quoted.
+ *
+ * <p>The {@code matchID} tag is sourced from {@link #setMatchId(String)}, which the request
+ * boundary in {@code DecisionHandler} sets before dispatching an executor and clears in a finally
+ * block. The system uses a per-thread context (functionally an MDC slot for {@code
+ * System.Logger}-based code) — every executor call site already runs on the HTTP request thread, so
+ * a {@link ThreadLocal} carries the matchID through the executor stack without having to thread it
+ * through every method signature.
+ *
+ * <p>If no matchID is set when an emit happens (e.g. tests, or a background path that never went
+ * through {@code DecisionHandler}), the line is tagged {@code matchID=unknown} so the Loki query
+ * {@code {matchID=~"unknown|..."} } still surfaces those lines for triage.
  */
 public final class AiTraceLogger {
 
   private static final System.Logger LOG = System.getLogger(AiTraceLogger.class.getName());
+  private static final String UNKNOWN_MATCH_ID = "unknown";
+  private static final ThreadLocal<String> MATCH_ID = new ThreadLocal<>();
 
   private AiTraceLogger() {}
+
+  /**
+   * Bind the matchID for the current thread. Call at the request boundary (e.g. start of {@code
+   * DecisionHandler.handle}). Pair with {@link #clearMatchId()} in a finally block so a thread-pool
+   * worker doesn't leak a stale matchID into the next request.
+   */
+  public static void setMatchId(final String matchId) {
+    MATCH_ID.set(matchId);
+  }
+
+  /** Clear the per-thread matchID. Always call from a finally block. */
+  public static void clearMatchId() {
+    MATCH_ID.remove();
+  }
+
+  /**
+   * Read the per-thread matchID, falling back to {@code "unknown"} when no boundary set one. Public
+   * so request-boundary tests can assert that {@code DecisionHandler} binds and clears the matchID
+   * around executor dispatch.
+   */
+  public static String currentMatchId() {
+    final String v = MATCH_ID.get();
+    return v == null ? UNKNOWN_MATCH_ID : v;
+  }
 
   /**
    * Log a captured move from CombatMoveExecutor or NoncombatMoveExecutor.
@@ -54,7 +91,8 @@ public final class AiTraceLogger {
     final String transportId = resolveTransportId(move, uuidToWireId);
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] side=sidecar nation={0} phase={1} kind={2} from={3} to={4} unitIds=[{5}] types=[{6}] transportId={7}",
+        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase={2} kind={3} from={4} to={5} unitIds=[{6}] types=[{7}] transportId={8}",
+        currentMatchId(),
         nation,
         phase,
         kind,
@@ -69,7 +107,8 @@ public final class AiTraceLogger {
   public static void logPurchaseOrder(final String nation, final String unitType, final int count) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] side=sidecar nation={0} phase=purchase units=[{1}×{2}]",
+        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=purchase units=[{2}×{3}]",
+        currentMatchId(),
         nation,
         unitType,
         count);
@@ -80,7 +119,8 @@ public final class AiTraceLogger {
       final String nation, final String territory, final Collection<String> unitTypes) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] side=sidecar nation={0} phase=place territory={1} units=[{2}]",
+        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=place territory={2} units=[{3}]",
+        currentMatchId(),
         nation,
         maybeQuote(territory),
         stringTypeCounts(unitTypes));
@@ -90,7 +130,8 @@ public final class AiTraceLogger {
   public static void logWarDeclaration(final String nation, final String target) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] side=sidecar nation={0} phase=politics target={1}",
+        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=politics target={2}",
+        currentMatchId(),
         nation,
         target);
   }
