@@ -47,6 +47,7 @@ import org.triplea.ai.sidecar.exec.PoliticsExecutor;
 import org.triplea.ai.sidecar.exec.PurchaseExecutor;
 import org.triplea.ai.sidecar.exec.RetreatQueryExecutor;
 import org.triplea.ai.sidecar.exec.ScrambleExecutor;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.exec.SelectCasualtiesExecutor;
 import org.triplea.ai.sidecar.exec.SubmergeExecutor;
 import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
@@ -236,6 +237,12 @@ public final class DecisionHandler implements HttpHandler {
       return;
     }
 
+    // Bind the matchID for this request thread so AiTraceLogger emits include
+    // matchID=<id> on every per-order line. Required for the Loki/Promtail design
+    // (#1968): {matchID="X"} queries must surface every per-order trace for the
+    // match. Clear in finally so a thread-pool worker doesn't leak a stale matchID
+    // into the next request.
+    AiTraceLogger.setMatchId(session.get().key().gameId());
     try {
       switch (request) {
         case SelectCasualtiesRequest sc -> {
@@ -299,6 +306,8 @@ public final class DecisionHandler implements HttpHandler {
     } catch (final RuntimeException e) {
       LOG.log(System.Logger.Level.ERROR, "Decision handler internal error", e);
       writeJson(exchange, 500, JsonBodies.errorBody("internal"));
+    } finally {
+      AiTraceLogger.clearMatchId();
     }
   }
 

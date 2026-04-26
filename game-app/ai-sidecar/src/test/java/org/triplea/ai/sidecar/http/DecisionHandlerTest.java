@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.RetreatPlan;
@@ -286,6 +287,71 @@ class DecisionHandlerTest {
             "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("tech"));
     h.handle(ex);
     assertEquals(400, ex.responseCode());
+  }
+
+  // ---------------------------------------------------------------------
+  // matchID context (#2004) — DecisionHandler must bind the session's gameId
+  // into AiTraceLogger for the duration of the dispatch, then clear it.
+  // ---------------------------------------------------------------------
+
+  @Test
+  void matchIdIsBoundDuringDispatchAndClearedAfter() throws Exception {
+    final SessionRegistry registry = newRegistry();
+    final Session s = newSession(registry); // SessionKey gameId = "g-1"
+    final AtomicReference<String> seenInExecutor = new AtomicReference<>();
+    final DecisionHandler h =
+        handler(
+            registry,
+            (session, req) -> {
+              seenInExecutor.set(AiTraceLogger.currentMatchId());
+              return new SelectCasualtiesPlan(List.of(), List.of());
+            },
+            (session, req) -> {
+              throw new AssertionError();
+            },
+            (session, req) -> {
+              throw new AssertionError();
+            });
+
+    AiTraceLogger.clearMatchId();
+    final FakeHttpExchange ex =
+        new FakeHttpExchange(
+            "POST", "/session/" + s.sessionId() + "/decision", SELECT_CASUALTIES_BODY);
+    h.handle(ex);
+
+    // During dispatch the executor saw the session's matchID.
+    assertEquals("g-1", seenInExecutor.get());
+    // After dispatch the per-thread context is cleared so a thread-pool
+    // worker reused for the next request doesn't leak the previous matchID.
+    assertEquals("unknown", AiTraceLogger.currentMatchId());
+  }
+
+  @Test
+  void matchIdIsClearedEvenWhenExecutorThrows() throws Exception {
+    final SessionRegistry registry = newRegistry();
+    final Session s = newSession(registry);
+    final DecisionHandler h =
+        handler(
+            registry,
+            (session, req) -> {
+              throw new IllegalArgumentException("simulated bad-request");
+            },
+            (session, req) -> {
+              throw new AssertionError();
+            },
+            (session, req) -> {
+              throw new AssertionError();
+            });
+
+    AiTraceLogger.clearMatchId();
+    final FakeHttpExchange ex =
+        new FakeHttpExchange(
+            "POST", "/session/" + s.sessionId() + "/decision", SELECT_CASUALTIES_BODY);
+    h.handle(ex);
+
+    assertEquals(400, ex.responseCode());
+    // finally block must clear the matchID even when the executor throws.
+    assertEquals("unknown", AiTraceLogger.currentMatchId());
   }
 
   @Test

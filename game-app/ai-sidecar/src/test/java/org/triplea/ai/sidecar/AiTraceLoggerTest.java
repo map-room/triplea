@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
@@ -77,5 +78,55 @@ class AiTraceLoggerTest {
             new Unit(UUID.randomUUID(), armour, germans, gd));
 
     assertThat(AiTraceLogger.unitTypeCounts(units)).isEqualTo("infantry×2,armour×1");
+  }
+
+  // ---------------------------------------------------------------------------
+  // matchID context (#2004)
+  //
+  // The ThreadLocal-based matchID context backs every per-order [AI-TRACE] line
+  // emitted by sidecar executors. The integration assertion (matchID actually
+  // appears in the log line) is exercised by the executor suites; here we cover
+  // the per-thread isolation, fallback, and clear semantics that DecisionHandler
+  // relies on for safe thread-pool reuse.
+  // ---------------------------------------------------------------------------
+
+  @AfterEach
+  void clearMatchIdContext() {
+    AiTraceLogger.clearMatchId();
+  }
+
+  @Test
+  void currentMatchId_unset_returnsUnknown() {
+    AiTraceLogger.clearMatchId();
+    assertThat(AiTraceLogger.currentMatchId()).isEqualTo("unknown");
+  }
+
+  @Test
+  void setAndClearMatchId_roundTrip() {
+    AiTraceLogger.setMatchId("match-abc-123");
+    assertThat(AiTraceLogger.currentMatchId()).isEqualTo("match-abc-123");
+    AiTraceLogger.clearMatchId();
+    assertThat(AiTraceLogger.currentMatchId()).isEqualTo("unknown");
+  }
+
+  @Test
+  void matchId_isolatedAcrossThreads() throws Exception {
+    AiTraceLogger.setMatchId("main-thread-match");
+
+    final java.util.concurrent.atomic.AtomicReference<String> seenInWorker =
+        new java.util.concurrent.atomic.AtomicReference<>();
+    final Thread worker =
+        new Thread(
+            () -> {
+              // Worker has no inherited matchID — must see "unknown".
+              seenInWorker.set(AiTraceLogger.currentMatchId());
+              AiTraceLogger.setMatchId("worker-thread-match");
+            });
+    worker.start();
+    worker.join();
+
+    assertThat(seenInWorker.get()).isEqualTo("unknown");
+    // Main thread context was never touched by worker's setMatchId — still its own value.
+    assertThat(AiTraceLogger.currentMatchId()).isEqualTo("main-thread-match");
   }
 }
