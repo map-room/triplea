@@ -11,6 +11,11 @@ import java.util.Map;
  *
  * <p>This mapping is a contract between Map Room and the sidecar. Keep it in sync with the phase
  * names in {@code packages/shared/src/engine/game-def.ts}.
+ *
+ * <p>{@link #PLAYER_PHASE_OVERRIDES} lists XML step names that deviate from the generic
+ * {@code playerName + suffix} pattern. The only current exception is British placement, whose XML
+ * delegate is {@code placeNoAirCheck} and whose step name is therefore {@code
+ * britishNoAirCheckPlace} rather than the expected {@code britishPlace}.
  */
 public final class StepNameMapper {
   private static final Map<String, String> PHASE_SUFFIX =
@@ -21,10 +26,18 @@ public final class StepNameMapper {
           "nonCombatMove", "NonCombatMove",
           "place", "Place");
 
+  // Keyed by "playerName:phase" — takes precedence over the generic suffix pattern.
+  private static final Map<String, String> PLAYER_PHASE_OVERRIDES =
+      Map.of("British:place", "britishNoAirCheckPlace");
+
   private StepNameMapper() {}
 
   public static String toJavaStepName(String mapRoomPhase, String playerName) {
-    String suffix = PHASE_SUFFIX.get(mapRoomPhase);
+    final String override = PLAYER_PHASE_OVERRIDES.get(playerName + ":" + mapRoomPhase);
+    if (override != null) {
+      return override;
+    }
+    final String suffix = PHASE_SUFFIX.get(mapRoomPhase);
     if (suffix == null) {
       throw new IllegalArgumentException("Unmapped Map Room phase: " + mapRoomPhase);
     }

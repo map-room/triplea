@@ -31,6 +31,19 @@ class StepNameMapperTest {
   }
 
   @Test
+  void mapsBritishPlacePhaseToNoAirCheckStep() {
+    // British placement uses the placeNoAirCheck delegate, so the XML step name is
+    // britishNoAirCheckPlace — not britishPlace. Regression fence for #2012.
+    assertEquals("britishNoAirCheckPlace", StepNameMapper.toJavaStepName("place", "British"));
+  }
+
+  @Test
+  void mapsBritishPurchasePhaseToGenericPattern() {
+    // Other British phases follow the standard pattern; only place is overridden.
+    assertEquals("BritishPurchase", StepNameMapper.toJavaStepName("purchase", "British"));
+  }
+
+  @Test
   void unknownPhaseThrows() {
     assertThrows(
         IllegalArgumentException.class, () -> StepNameMapper.toJavaStepName("mystery", "Germans"));

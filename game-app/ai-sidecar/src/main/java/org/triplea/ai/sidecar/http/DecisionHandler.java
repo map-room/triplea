@@ -169,6 +169,43 @@ public final class DecisionHandler implements HttpHandler {
         });
   }
 
+  /**
+   * Backward-compat test constructor used by tests written before kamikaze / ignore-subs /
+   * engage-stay-hidden / intercept / submerge executors were added. The five new executors default
+   * to their production implementations; callers that need to stub them should use the full
+   * {@link #DecisionHandler(SessionRegistry, DecisionExecutor, DecisionExecutor, DecisionExecutor,
+   * DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor,
+   * DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor)}
+   * constructor instead.
+   */
+  public DecisionHandler(
+      final SessionRegistry registry,
+      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
+          selectCasualtiesExecutor,
+      final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
+      final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
+      final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor,
+      final DecisionExecutor<PoliticsRequest, PoliticsPlan> politicsExecutor,
+      final DecisionExecutor<CombatMoveRequest, CombatMovePlan> combatMoveExecutor,
+      final DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> noncombatMoveExecutor,
+      final DecisionExecutor<PlaceRequest, PlacePlan> placeExecutor) {
+    this(
+        registry,
+        selectCasualtiesExecutor,
+        retreatQueryExecutor,
+        scrambleExecutor,
+        new KamikazeExecutor(),
+        new IgnoreSubsExecutor(),
+        new EngageStayHiddenExecutor(),
+        new InterceptExecutor(),
+        new SubmergeExecutor(),
+        purchaseExecutor,
+        politicsExecutor,
+        combatMoveExecutor,
+        noncombatMoveExecutor,
+        placeExecutor);
+  }
+
   /** Test constructor — full control over all executors. */
   public DecisionHandler(
       final SessionRegistry registry,
