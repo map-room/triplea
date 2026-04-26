@@ -172,8 +172,8 @@ public final class DecisionHandler implements HttpHandler {
   /**
    * Backward-compat test constructor used by tests written before kamikaze / ignore-subs /
    * engage-stay-hidden / intercept / submerge executors were added. The five new executors default
-   * to their production implementations; callers that need to stub them should use the full
-   * {@link #DecisionHandler(SessionRegistry, DecisionExecutor, DecisionExecutor, DecisionExecutor,
+   * to their production implementations; callers that need to stub them should use the full {@link
+   * #DecisionHandler(SessionRegistry, DecisionExecutor, DecisionExecutor, DecisionExecutor,
    * DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor,
    * DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor)}
    * constructor instead.
