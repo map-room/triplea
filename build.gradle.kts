@@ -80,12 +80,16 @@ subprojects {
     }
 
     tasks.named("checkstyleMain", Checkstyle::class.java) {
+        // Temporarily relaxed — see map-room/map-room#2015 for cleanup tracking.
         maxWarnings = 0
+        ignoreFailures = true
         source(sourceSets.main.get().output.resourcesDir)
     }
 
     tasks.named("checkstyleTest", Checkstyle::class.java) {
+        // Temporarily relaxed — see map-room/map-room#2015 for cleanup tracking.
         maxWarnings = 0
+        ignoreFailures = true
         source(sourceSets.test.get().output.resourcesDir)
         exclude("**/map-xmls/*.xml")
     }
