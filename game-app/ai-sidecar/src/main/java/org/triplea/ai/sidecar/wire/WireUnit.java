@@ -65,6 +65,45 @@ public record WireUnit(
         wasLoadedAfterCombat != null && wasLoadedAfterCombat);
   }
 
+  /**
+   * Backward-compat factory for tests written before wasAmphibious / wasScrambled /
+   * maxScrambleCount / unloaded / unloadedTo / wasLoadedAfterCombat were added. New tests should
+   * use the full {@link #of} factory or the canonical record constructor.
+   */
+  public static WireUnit of(
+      final String unitId,
+      final String unitType,
+      final int hitsTaken,
+      final int movesUsed,
+      final int bombingDamage,
+      final String owner,
+      final String transportedBy,
+      final boolean submerged,
+      final boolean wasInCombat,
+      final boolean wasLoadedThisTurn,
+      final boolean wasUnloadedInCombatPhase,
+      final int bonusMovement) {
+    return new WireUnit(
+        unitId,
+        unitType,
+        hitsTaken,
+        movesUsed,
+        bombingDamage,
+        owner,
+        transportedBy,
+        submerged,
+        wasInCombat,
+        wasLoadedThisTurn,
+        wasUnloadedInCombatPhase,
+        bonusMovement,
+        false,
+        false,
+        null,
+        null,
+        null,
+        false);
+  }
+
   /** Backward-compat constructor used by existing tests that don't specify an owner. */
   public WireUnit(
       final String unitId, final String unitType, final int hitsTaken, final int movesUsed) {

@@ -344,6 +344,37 @@ class WireStateVerifierTest {
   }
 
   @Test
+  void conqueredThisTurn_falseAfterPreviousTrue_noWarning() {
+    // Regression fence for #2013: after a territory transitions conquered→not-conquered the
+    // reconciliation in applyConqueredThisTurn must clear it from BattleTracker so no drift fires.
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final WireState firstApply =
+        new WireState(
+            List.of(new WireTerritory("Ethiopia", "British", List.of(), true)),
+            List.of(),
+            1,
+            "place",
+            "British",
+            List.of());
+    WireStateApplier.apply(gd, firstApply, idMap);
+
+    captured.clear();
+    final WireState secondApply =
+        new WireState(
+            List.of(new WireTerritory("Ethiopia", "British", List.of(), false)),
+            List.of(),
+            2,
+            "purchase",
+            "British",
+            List.of());
+    WireStateApplier.apply(gd, secondApply, idMap);
+
+    assertThat(warnings())
+        .noneMatch(w -> w.contains("conquered-this-turn") && w.contains("Ethiopia"));
+  }
+
+  @Test
   void unitTerritoryDrift_detectedAfterMovingUnitToWrongTerritory() {
     final GameData gd = fresh();
     final ConcurrentMap<String, UUID> idMap = freshIdMap();

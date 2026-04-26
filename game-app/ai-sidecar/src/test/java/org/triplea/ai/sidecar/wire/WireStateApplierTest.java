@@ -668,6 +668,54 @@ class WireStateApplierTest {
     assertThat(france.getUnits().iterator().next().getOwner().getName()).isEqualTo("Russians");
   }
 
+  // ---------- conquered-this-turn reconciliation (#2013) ----------
+
+  @Test
+  void conqueredThisTurn_trueOnWire_addsToBattleTracker() {
+    final GameData gd = fresh();
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("Ethiopia", "British", List.of(), true)),
+            List.of(),
+            1,
+            "place",
+            "British",
+            List.of());
+    WireStateApplier.apply(gd, wire, freshIdMap());
+    final Territory ethiopia = gd.getMap().getTerritoryOrThrow("Ethiopia");
+    assertThat(gd.getBattleDelegate().getBattleTracker().getConquered()).contains(ethiopia);
+  }
+
+  @Test
+  void conqueredThisTurn_falseOnSecondApply_removesFromBattleTracker() {
+    // Regression fence for #2013: territory conquered on turn N must be removed from
+    // BattleTracker when the next wire payload says conqueredThisTurn=false.
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final WireState withConquered =
+        new WireState(
+            List.of(new WireTerritory("Ethiopia", "British", List.of(), true)),
+            List.of(),
+            1,
+            "place",
+            "British",
+            List.of());
+    WireStateApplier.apply(gd, withConquered, idMap);
+    final Territory ethiopia = gd.getMap().getTerritoryOrThrow("Ethiopia");
+    assertThat(gd.getBattleDelegate().getBattleTracker().getConquered()).contains(ethiopia);
+
+    final WireState withoutConquered =
+        new WireState(
+            List.of(new WireTerritory("Ethiopia", "British", List.of(), false)),
+            List.of(),
+            2,
+            "purchase",
+            "British",
+            List.of());
+    WireStateApplier.apply(gd, withoutConquered, idMap);
+    assertThat(gd.getBattleDelegate().getBattleTracker().getConquered()).doesNotContain(ethiopia);
+  }
+
   @Test
   void techFlag_setsAttachmentProperty() {
     final GameData gd = fresh();

@@ -101,37 +101,32 @@ public final class WireStateApplier {
   }
 
   /**
-   * Register every {@link WireTerritory#conqueredThisTurn()} territory with the session's {@link
-   * BattleTracker#getConquered() conquered} set so that TripleA predicates such as {@code
-   * AbstractPlaceDelegate.wasConquered(t)} gate placement / production as they would during a real
-   * turn.
+   * Reconcile the session's {@link BattleTracker#getConquered() conquered} set to match the wire
+   * payload exactly. Territories flagged {@code conqueredThisTurn=true} are added; territories
+   * flagged {@code false} are removed (clearing stale entries from a prior apply). Territories not
+   * present in the wire payload at all are left untouched.
    *
    * <p>We cannot use {@code ChangeFactory.attachmentPropertyChange} here because TripleA does not
    * model conquered-this-turn as a {@link games.strategy.triplea.attachments.TerritoryAttachment}
    * field — it lives entirely on the (transient) {@link BattleTracker}.
+   *
+   * <p>Prior to this fix the method only added (never removed), so a territory conquered on turn N
+   * and cleared on turn N+1 (TS-side {@code _conqueredThisTurn} reset) would remain in the
+   * BattleTracker indefinitely, producing a steady-state drift warning every sync cycle.
    */
   private static void applyConqueredThisTurn(final GameData gameData, final WireState wire) {
-    boolean needTracker = false;
-    for (final WireTerritory wt : wire.territories()) {
-      if (wt.conqueredThisTurn()) {
-        needTracker = true;
-        break;
-      }
-    }
-    if (!needTracker) {
-      return;
-    }
     ensureBattleDelegate(gameData);
     final BattleTracker tracker = gameData.getBattleDelegate().getBattleTracker();
     for (final WireTerritory wt : wire.territories()) {
-      if (!wt.conqueredThisTurn()) {
-        continue;
-      }
       final Territory t = gameData.getMap().getTerritoryOrNull(wt.territoryId());
       if (t == null) {
         continue;
       }
-      tracker.getConquered().add(t);
+      if (wt.conqueredThisTurn()) {
+        tracker.getConquered().add(t);
+      } else {
+        tracker.getConquered().remove(t);
+      }
     }
   }
 

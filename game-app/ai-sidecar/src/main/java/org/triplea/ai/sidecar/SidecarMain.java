@@ -35,7 +35,7 @@ public final class SidecarMain {
     System.out.printf("[ai-sidecar] listening on %s:%d%n", cfg.bindHost(), svc.boundPort());
 
     // Start reaper — runs every 5 minutes, cleans stale sessions (>30 days).
-    final SessionReaper reaper = new SessionReaper(registry, Clock.systemUTC(), cfg.serverUrl());
+    final SessionReaper reaper = new SessionReaper(registry, Clock.systemUTC());
     reaper.start();
 
     final CountDownLatch latch = new CountDownLatch(1);
