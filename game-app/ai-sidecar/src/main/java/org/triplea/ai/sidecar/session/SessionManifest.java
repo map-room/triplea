@@ -1,6 +1,7 @@
 package org.triplea.ai.sidecar.session;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
@@ -8,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * data/sessions/{gameId}/{nation}.json} on creation and update. Re-read on startup to rehydrate the
  * in-memory session registry.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public final class SessionManifest {
   private final String sessionId;
   private final String gameId;
