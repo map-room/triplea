@@ -73,6 +73,12 @@ public final class SessionReaper {
     }
 
     for (final SessionKey key : toDelete) {
+      final long idleSec =
+          registry.getUpdatedAt(key).map(updatedAt -> (now - updatedAt) / 1000).orElse(-1L);
+      LOG.log(
+          System.Logger.Level.INFO,
+          "[sidecar] session reaped matchID={0} idleSeconds={1} caller=reaper",
+          new Object[] {key.gameId(), idleSec});
       registry.deleteByKey(key);
     }
 

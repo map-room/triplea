@@ -254,6 +254,10 @@ public final class DecisionHandler implements HttpHandler {
     }
     final Optional<Session> session = registry.get(match.get().sessionId());
     if (session.isEmpty()) {
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "[sidecar] session not found matchID={0} endpoint=decision",
+          match.get().sessionId());
       writeJson(exchange, 404, JsonBodies.errorBody("unknown-session"));
       return;
     }

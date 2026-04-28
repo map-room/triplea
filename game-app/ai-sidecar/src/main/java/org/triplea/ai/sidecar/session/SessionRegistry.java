@@ -113,6 +113,10 @@ public final class SessionRegistry {
     return Optional.ofNullable(byId.get(sessionId));
   }
 
+  public Optional<Long> getUpdatedAt(final SessionKey key) {
+    return Optional.ofNullable(updatedAtMap.get(key));
+  }
+
   public synchronized boolean delete(final String sessionId) {
     final Session removed = byId.remove(sessionId);
     if (removed == null) {

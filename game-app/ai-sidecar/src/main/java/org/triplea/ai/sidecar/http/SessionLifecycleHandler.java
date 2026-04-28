@@ -11,6 +11,10 @@ import org.triplea.ai.sidecar.session.SessionRegistry;
 import org.triplea.ai.sidecar.wire.SessionUpdateRequest;
 
 public final class SessionLifecycleHandler implements HttpHandler {
+
+  private static final System.Logger LOG =
+      System.getLogger(SessionLifecycleHandler.class.getName());
+
   private final SessionRegistry registry;
 
   public SessionLifecycleHandler(final SessionRegistry registry) {
@@ -43,6 +47,10 @@ public final class SessionLifecycleHandler implements HttpHandler {
   private void handleDelete(final HttpExchange exchange, final String sessionId)
       throws IOException {
     if (!registry.delete(sessionId)) {
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "[sidecar] session not found matchID={0} endpoint=delete",
+          sessionId);
       writeJson(exchange, 404, JsonBodies.errorBody("not-found", "unknown session"));
       return;
     }
@@ -54,6 +62,10 @@ public final class SessionLifecycleHandler implements HttpHandler {
       throws IOException {
     final Optional<Session> session = registry.get(sessionId);
     if (session.isEmpty()) {
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "[sidecar] session not found matchID={0} endpoint=update",
+          sessionId);
       writeJson(exchange, 404, JsonBodies.errorBody("not-found", "unknown session"));
       return;
     }
