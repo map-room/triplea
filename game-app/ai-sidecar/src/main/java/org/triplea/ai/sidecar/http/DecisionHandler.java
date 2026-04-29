@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.CombatMovePlan;
 import org.triplea.ai.sidecar.dto.CombatMoveRequest;
 import org.triplea.ai.sidecar.dto.DecisionPlan;
@@ -277,6 +278,12 @@ public final class DecisionHandler implements HttpHandler {
       return;
     }
 
+    // Bind the matchID for this request thread so AiTraceLogger emits include
+    // matchID=<id> on every per-order line. Required for the Loki/Promtail design
+    // (#1968): {matchID="X"} queries must surface every per-order trace for the
+    // match. Clear in finally so a thread-pool worker doesn't leak a stale matchID
+    // into the next request.
+    AiTraceLogger.setMatchId(session.get().key().gameId());
     try {
       switch (request) {
         case SelectCasualtiesRequest sc -> {
@@ -340,6 +347,8 @@ public final class DecisionHandler implements HttpHandler {
     } catch (final RuntimeException e) {
       LOG.log(System.Logger.Level.ERROR, "Decision handler internal error", e);
       writeJson(exchange, 500, JsonBodies.errorBody("internal"));
+    } finally {
+      AiTraceLogger.clearMatchId();
     }
   }
 
