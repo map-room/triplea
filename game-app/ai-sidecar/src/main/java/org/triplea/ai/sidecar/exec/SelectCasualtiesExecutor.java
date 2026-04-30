@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
 import org.triplea.ai.sidecar.dto.SelectCasualtiesRequest;
 import org.triplea.ai.sidecar.session.Session;
@@ -127,6 +128,20 @@ public final class SelectCasualtiesExecutor
     }
 
     final Map<UUID, String> reverseIdMap = reverseIdMap(idMap);
+
+    // Decision-rationale trace (#2101). Emitted before wire-id projection so it captures the
+    // raw ProAi outputs alongside the inputs the AI considered. Cheap (one log line per call)
+    // and bounded — there's exactly one casualty decision per assignCasualties dispatch.
+    AiTraceLogger.logCasualtyDecision(
+        defender.getName(),
+        b.battleId(),
+        b.territory(),
+        b.hitCount(),
+        selectFrom,
+        defaultCasualties.getKilled(),
+        details.getKilled(),
+        reverseIdMap);
+
     final List<String> killedIds = new ArrayList<>(details.getKilled().size());
     for (final Unit u : details.getKilled()) {
       killedIds.add(mapRoomIdOf(u, reverseIdMap));

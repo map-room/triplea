@@ -3,8 +3,10 @@ package org.triplea.ai.sidecar;
 import games.strategy.engine.data.MoveDescription;
 import games.strategy.engine.data.Unit;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -136,7 +138,73 @@ public final class AiTraceLogger {
         target);
   }
 
+  /**
+   * Log the rationale for a casualty-selection decision (#2101).
+   *
+   * <p>Triagers chasing AI-stuck bugs (the #2057 / #2065 / #2066 class) need to see what the AI was
+   * choosing between, what it picked, and whether it diverged from the client-supplied default.
+   * ProAi's deeper reasoning (TUL ratio, cost math) lives inside {@code
+   * AbstractProAi.selectCasualties} and would require its own instrumentation to surface — out of
+   * scope for v1. The {@code reason} captured here is a coarse summary: {@code default-applied}
+   * when ProAi accepted the client's default casualty set verbatim, otherwise {@code
+   * overridden-from-default}. With {@code consideredIds} / {@code pickedIds} / {@code defaultIds}
+   * the triager can manually reconstruct what changed.
+   *
+   * @param uuidToWireId reverse map (Java UUID → Map Room wire ID) for projecting Unit references
+   *     back onto the wire identity space the bug-reporter sees.
+   */
+  public static void logCasualtyDecision(
+      final String nation,
+      final String battleId,
+      final String territory,
+      final int hitCount,
+      final Collection<Unit> considered,
+      final Collection<Unit> defaultCasualties,
+      final Collection<Unit> picked,
+      final Map<UUID, String> uuidToWireId) {
+    LOG.log(
+        System.Logger.Level.INFO,
+        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=battle kind=select-casualties"
+            + " battleId={2} territory={3} hitCount={4}"
+            + " consideredIds=[{5}] consideredTypes=[{6}]"
+            + " pickedIds=[{7}] pickedTypes=[{8}]"
+            + " defaultIds=[{9}] reason={10}",
+        currentMatchId(),
+        nation,
+        battleId,
+        maybeQuote(territory),
+        hitCount,
+        unitWireIds(considered, uuidToWireId),
+        unitTypeCounts(considered),
+        unitWireIds(picked, uuidToWireId),
+        unitTypeCounts(picked),
+        unitWireIds(defaultCasualties, uuidToWireId),
+        casualtyReason(picked, defaultCasualties));
+  }
+
   // --- package-private for tests ---
+
+  /**
+   * Coarse rationale tag for {@link #logCasualtyDecision}: {@code default-applied} when the AI's
+   * pick is the same UUID set the client proposed as the default, else {@code
+   * overridden-from-default}. Set comparison (not list comparison) — ProAi may reorder.
+   */
+  static String casualtyReason(
+      final Collection<Unit> picked, final Collection<Unit> defaultCasualties) {
+    if (picked.size() != defaultCasualties.size()) {
+      return "overridden-from-default";
+    }
+    final Set<UUID> defaultIds = new HashSet<>(defaultCasualties.size());
+    for (final Unit u : defaultCasualties) {
+      defaultIds.add(u.getId());
+    }
+    for (final Unit u : picked) {
+      if (!defaultIds.contains(u.getId())) {
+        return "overridden-from-default";
+      }
+    }
+    return "default-applied";
+  }
 
   /**
    * Build a comma-separated list of Map Room wire IDs for each unit in the given collection, in
