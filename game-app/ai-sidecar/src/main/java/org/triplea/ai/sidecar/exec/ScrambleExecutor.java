@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.ScramblePlan;
 import org.triplea.ai.sidecar.dto.ScrambleRequest;
 import org.triplea.ai.sidecar.session.Session;
@@ -70,6 +71,13 @@ public final class ScrambleExecutor implements DecisionExecutor<ScrambleRequest,
 
     final ScrambleRequest.ScrambleBattle b = request.battle();
     if (b.possibleScramblers() == null || b.possibleScramblers().isEmpty()) {
+      // Emit the rationale line on the short-circuit too (#2104). reason=no-candidates.
+      AiTraceLogger.logScrambleDecision(
+          session.key().nation(),
+          b.defendingTerritory(),
+          /* candidates */ List.of(),
+          /* picked */ List.of(),
+          Map.of());
       return new ScramblePlan(Map.of());
     }
 
@@ -122,6 +130,14 @@ public final class ScrambleExecutor implements DecisionExecutor<ScrambleRequest,
     }
 
     if (possibleScramblers.isEmpty()) {
+      // All wire-side sources were skipped (no airbase on the live source territory). Emit
+      // the rationale line so triagers see "scramble queried but no live candidates".
+      AiTraceLogger.logScrambleDecision(
+          session.key().nation(),
+          b.defendingTerritory(),
+          /* candidates */ List.of(),
+          /* picked */ List.of(),
+          Map.of());
       return new ScramblePlan(Map.of());
     }
 
@@ -171,11 +187,28 @@ public final class ScrambleExecutor implements DecisionExecutor<ScrambleRequest,
       ExecutorSupport.removePendingBattle(tracker, synthetic);
     }
 
+    final Map<UUID, String> reverse = reverseIdMap(idMap);
+
+    // Decision-rationale trace (#2104). One flat list each for candidates and picks across
+    // all source territories — matches the helper's "aggregate" model. Emitted before the
+    // wire-projection loop so it captures live Unit references.
+    final List<Unit> candidatesFlat = new ArrayList<>();
+    for (final Tuple<Collection<Unit>, Collection<Unit>> t : possibleScramblers.values()) {
+      candidatesFlat.addAll(t.getSecond());
+    }
+    final List<Unit> pickedFlat = new ArrayList<>();
+    if (chosen != null) {
+      for (final Collection<Unit> v : chosen.values()) {
+        pickedFlat.addAll(v);
+      }
+    }
+    AiTraceLogger.logScrambleDecision(
+        defender.getName(), b.defendingTerritory(), candidatesFlat, pickedFlat, reverse);
+
     if (chosen == null || chosen.isEmpty()) {
       return new ScramblePlan(Map.of());
     }
 
-    final Map<UUID, String> reverse = reverseIdMap(idMap);
     final Map<String, List<String>> out = new LinkedHashMap<>();
     for (final Map.Entry<Territory, Collection<Unit>> e : chosen.entrySet()) {
       final List<String> ids = new ArrayList<>(e.getValue().size());

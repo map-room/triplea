@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.RetreatPlan;
 import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
 import org.triplea.ai.sidecar.session.Session;
@@ -58,6 +59,14 @@ public final class RetreatQueryExecutor
 
     final RetreatQueryRequest.RetreatQueryBattle b = request.battle();
     if (b.possibleRetreatTerritories().isEmpty()) {
+      // Emit the rationale line even on this short-circuit (#2103) — triagers benefit from
+      // seeing "AI was queried but had no retreat options" vs. silence; reason=no-options.
+      AiTraceLogger.logRetreatDecision(
+          session.key().nation(),
+          b.battleId(),
+          b.battleTerritory(),
+          List.of(),
+          /* retreatTo */ null);
       return new RetreatPlan(null);
     }
 
@@ -139,7 +148,17 @@ public final class RetreatQueryExecutor
       ExecutorSupport.removePendingBattle(tracker, synthetic);
     }
 
-    return new RetreatPlan(chosen.map(Territory::getName).orElse(null));
+    final String retreatTo = chosen.map(Territory::getName).orElse(null);
+
+    // Decision-rationale trace (#2103). One line per call after ProAi resolved.
+    AiTraceLogger.logRetreatDecision(
+        attacker.getName(),
+        b.battleId(),
+        b.battleTerritory(),
+        b.possibleRetreatTerritories(),
+        retreatTo);
+
+    return new RetreatPlan(retreatTo);
   }
 
   private static GamePlayer requirePlayer(final GameData data, final String name) {

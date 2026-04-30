@@ -10,11 +10,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -192,7 +187,7 @@ class AiTraceLoggerTest {
     uuidToWireId.put(tank.getId(), "u-tank-1");
 
     AiTraceLogger.setMatchId("match-cas-001");
-    final CapturingHandler capture = attachHandler();
+    final AiTraceCapture cap = AiTraceCapture.attach();
     try {
       AiTraceLogger.logCasualtyDecision(
           /* nation */ "Germans",
@@ -204,67 +199,209 @@ class AiTraceLoggerTest {
           /* picked */ List.of(inf1, tank),
           uuidToWireId);
     } finally {
-      detachHandler(capture);
+      cap.detach();
     }
 
-    assertThat(capture.formatted())
-        .anySatisfy(
-            line ->
-                assertThat(line)
-                    .startsWith("[AI-TRACE] matchID=match-cas-001 side=sidecar nation=Germans")
-                    .contains("phase=battle kind=select-casualties")
-                    .contains("battleId=b-france-1")
-                    .contains("territory=\"Western Europe\"")
-                    .contains("hitCount=2")
-                    .contains("consideredIds=[u-inf-1,u-inf-2,u-tank-1]")
-                    .contains("consideredTypes=[infantry×2,armour×1]")
-                    .contains("pickedIds=[u-inf-1,u-tank-1]")
-                    .contains("pickedTypes=[infantry×1,armour×1]")
-                    .contains("defaultIds=[u-inf-1,u-inf-2]")
-                    .contains("reason=overridden-from-default"));
+    assertThat(cap.formatted()).hasSize(1);
+    assertThat(cap.formatted().get(0))
+        .startsWith("[AI-TRACE] matchID=match-cas-001 side=sidecar nation=Germans")
+        .contains("phase=battle kind=select-casualties")
+        .contains("battleId=b-france-1")
+        .contains("territory=\"Western Europe\"")
+        .contains("hitCount=2")
+        .contains("consideredIds=[u-inf-1,u-inf-2,u-tank-1]")
+        .contains("consideredTypes=[infantry×2,armour×1]")
+        .contains("pickedIds=[u-inf-1,u-tank-1]")
+        .contains("pickedTypes=[infantry×1,armour×1]")
+        .contains("defaultIds=[u-inf-1,u-inf-2]")
+        .contains("reason=overridden-from-default");
   }
 
-  private static CapturingHandler attachHandler() {
-    final Logger jul = Logger.getLogger(AiTraceLogger.class.getName());
-    final CapturingHandler h = new CapturingHandler();
-    h.setLevel(Level.ALL);
-    jul.setLevel(Level.ALL);
-    jul.addHandler(h);
-    jul.setUseParentHandlers(false);
-    return h;
+  // ---------------------------------------------------------------------------
+  // retreat-decision rationale (#2103)
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void retreatReason_emptyCandidates_returnsNoOptions() {
+    assertThat(AiTraceLogger.retreatReason(List.of(), null)).isEqualTo("no-options");
+    assertThat(AiTraceLogger.retreatReason(List.of(), "Italy")).isEqualTo("no-options");
   }
 
-  private static void detachHandler(final CapturingHandler h) {
-    Logger.getLogger(AiTraceLogger.class.getName()).removeHandler(h);
+  @Test
+  void retreatReason_nullRetreatTo_returnsPress() {
+    assertThat(AiTraceLogger.retreatReason(List.of("Italy", "Germany"), null)).isEqualTo("press");
   }
 
-  /**
-   * JUL handler that captures every {@link LogRecord} so tests can assert on the formatted message.
-   * System.Logger delegates to JUL by default in JDK, so attaching here intercepts {@code LOG.log}
-   * calls in {@link AiTraceLogger}.
-   */
-  private static final class CapturingHandler extends Handler {
-    private final List<LogRecord> records = new CopyOnWriteArrayList<>();
+  @Test
+  void retreatReason_chosenTerritory_returnsRetreat() {
+    assertThat(AiTraceLogger.retreatReason(List.of("Italy", "Germany"), "Italy"))
+        .isEqualTo("retreat");
+  }
 
-    @Override
-    public void publish(final LogRecord record) {
-      records.add(record);
+  @Test
+  void logRetreatDecision_emitsLineWithExpectedKeysAndMatchId() {
+    AiTraceLogger.setMatchId("match-ret-001");
+    final AiTraceCapture cap = AiTraceCapture.attach();
+    try {
+      AiTraceLogger.logRetreatDecision(
+          /* nation */ "Germans",
+          /* battleId */ "b-france-1",
+          /* territory */ "Western Europe",
+          /* candidateTerritories */ List.of("Germany", "Italy"),
+          /* retreatTo */ "Italy");
+    } finally {
+      cap.detach();
     }
 
-    @Override
-    public void flush() {}
+    assertThat(cap.formatted()).hasSize(1);
+    assertThat(cap.formatted().get(0))
+        .startsWith("[AI-TRACE] matchID=match-ret-001 side=sidecar nation=Germans")
+        .contains("phase=battle kind=retreat-decision")
+        .contains("battleId=b-france-1")
+        .contains("territory=\"Western Europe\"")
+        .contains("candidates=[Germany,Italy]")
+        .contains("retreatTo=Italy")
+        .contains("reason=retreat");
+  }
 
-    @Override
-    public void close() throws SecurityException {}
-
-    List<String> formatted() {
-      return records.stream()
-          .map(
-              r ->
-                  r.getParameters() == null
-                      ? r.getMessage()
-                      : java.text.MessageFormat.format(r.getMessage(), r.getParameters()))
-          .toList();
+  @Test
+  void logRetreatDecision_pressDecision_emitsRetreatToNullAndReasonPress() {
+    AiTraceLogger.setMatchId("match-ret-002");
+    final AiTraceCapture cap = AiTraceCapture.attach();
+    try {
+      AiTraceLogger.logRetreatDecision(
+          "Germans", "b-france-2", "Western Europe", List.of("Germany"), null);
+    } finally {
+      cap.detach();
     }
+
+    assertThat(cap.formatted()).hasSize(1);
+    assertThat(cap.formatted().get(0)).contains("retreatTo=null").contains("reason=press");
+  }
+
+  @Test
+  void logRetreatDecision_quotesTerritoryNamesContainingSpaces() {
+    AiTraceLogger.setMatchId("match-ret-003");
+    final AiTraceCapture cap = AiTraceCapture.attach();
+    try {
+      AiTraceLogger.logRetreatDecision(
+          "Germans",
+          "b-fr-3",
+          "Western Europe",
+          List.of("Eastern Europe", "Germany"),
+          "Eastern Europe");
+    } finally {
+      cap.detach();
+    }
+
+    assertThat(cap.formatted()).hasSize(1);
+    assertThat(cap.formatted().get(0))
+        .contains("candidates=[\"Eastern Europe\",Germany]")
+        .contains("retreatTo=\"Eastern Europe\"");
+  }
+
+  // ---------------------------------------------------------------------------
+  // scramble-selection rationale (#2104)
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void scrambleReason_emptyCandidates_returnsNoCandidates() {
+    final var gd = canonical.cloneForSession();
+    assertThat(AiTraceLogger.scrambleReason(List.of(), List.of())).isEqualTo("no-candidates");
+    // No-candidates wins even if picked is somehow non-empty (defensive guard).
+    final UnitType fighter = gd.getUnitTypeList().getUnitType("fighter").orElseThrow();
+    final var germans = gd.getPlayerList().getPlayerId("Germans");
+    final Unit f = new Unit(UUID.randomUUID(), fighter, germans, gd);
+    assertThat(AiTraceLogger.scrambleReason(List.of(), List.of(f))).isEqualTo("no-candidates");
+  }
+
+  @Test
+  void scrambleReason_pickedSubsetOfCandidates_returnsPartialAllOrNone() {
+    final var gd = canonical.cloneForSession();
+    final UnitType fighter = gd.getUnitTypeList().getUnitType("fighter").orElseThrow();
+    final var germans = gd.getPlayerList().getPlayerId("Germans");
+    final Unit f1 = new Unit(UUID.randomUUID(), fighter, germans, gd);
+    final Unit f2 = new Unit(UUID.randomUUID(), fighter, germans, gd);
+
+    assertThat(AiTraceLogger.scrambleReason(List.of(f1, f2), List.of())).isEqualTo("none");
+    assertThat(AiTraceLogger.scrambleReason(List.of(f1, f2), List.of(f1))).isEqualTo("partial");
+    assertThat(AiTraceLogger.scrambleReason(List.of(f1, f2), List.of(f1, f2))).isEqualTo("all");
+  }
+
+  @Test
+  void logScrambleDecision_emitsLineWithExpectedKeysAndMatchId() {
+    final var gd = canonical.cloneForSession();
+    final UnitType fighter = gd.getUnitTypeList().getUnitType("fighter").orElseThrow();
+    final var germans = gd.getPlayerList().getPlayerId("Germans");
+    final Unit f1 = new Unit(UUID.randomUUID(), fighter, germans, gd);
+    final Unit f2 = new Unit(UUID.randomUUID(), fighter, germans, gd);
+    final Map<UUID, String> uuidToWireId = new HashMap<>();
+    uuidToWireId.put(f1.getId(), "u-fighter-1");
+    uuidToWireId.put(f2.getId(), "u-fighter-2");
+
+    AiTraceLogger.setMatchId("match-scr-001");
+    final AiTraceCapture cap = AiTraceCapture.attach();
+    try {
+      AiTraceLogger.logScrambleDecision(
+          /* nation */ "Germans",
+          /* territory */ "112 Sea Zone",
+          /* candidates */ List.of(f1, f2),
+          /* picked */ List.of(f1),
+          uuidToWireId);
+    } finally {
+      cap.detach();
+    }
+
+    assertThat(cap.formatted()).hasSize(1);
+    assertThat(cap.formatted().get(0))
+        .startsWith("[AI-TRACE] matchID=match-scr-001 side=sidecar nation=Germans")
+        .contains("phase=battle kind=scramble-decision")
+        .contains("territory=\"112 Sea Zone\"")
+        .contains("candidatesIds=[u-fighter-1,u-fighter-2]")
+        .contains("candidatesTypes=[fighter×2]")
+        .contains("pickedIds=[u-fighter-1]")
+        .contains("pickedTypes=[fighter×1]")
+        .contains("reason=partial");
+  }
+
+  // ---------------------------------------------------------------------------
+  // SBR interceptor-selection rationale (#2105)
+  //
+  // InterceptExecutor is currently a stub returning no interceptors. The rationale line still
+  // emits — triagers benefit from seeing that an intercept query reached the sidecar but the
+  // decision is not yet implemented (vs. "the decision did happen and chose nothing"). Once
+  // ProAI integration lands, the helper signature already accepts a real reason and picked set
+  // so the call site can switch over without API churn.
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void logSbrInterceptorDecision_emitsLineWithExpectedKeysAndMatchId() {
+    AiTraceLogger.setMatchId("match-sbr-001");
+    final AiTraceCapture cap = AiTraceCapture.attach();
+    try {
+      AiTraceLogger.logSbrInterceptorDecision(
+          /* nation */ "Germans",
+          /* battleId */ "sbr-1",
+          /* territory */ "Germany",
+          /* attackerNation */ "British",
+          /* candidateIds */ List.of("u-f-1", "u-f-2"),
+          /* candidateTypes */ List.of("fighter", "fighter"),
+          /* pickedIds */ List.of(),
+          /* reason */ "stub-not-implemented");
+    } finally {
+      cap.detach();
+    }
+
+    assertThat(cap.formatted()).hasSize(1);
+    assertThat(cap.formatted().get(0))
+        .startsWith("[AI-TRACE] matchID=match-sbr-001 side=sidecar nation=Germans")
+        .contains("phase=sbr kind=interceptor-decision")
+        .contains("battleId=sbr-1")
+        .contains("territory=Germany")
+        .contains("attacker=British")
+        .contains("candidatesIds=[u-f-1,u-f-2]")
+        .contains("candidatesTypes=[fighter×2]")
+        .contains("pickedIds=[]")
+        .contains("reason=stub-not-implemented");
   }
 }
