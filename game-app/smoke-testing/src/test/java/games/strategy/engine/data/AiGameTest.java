@@ -58,8 +58,6 @@ public class AiGameTest {
         "Expecting first round game to not be over so early: " + getResourceSummary(game.getData()),
         game.isGameOver(),
         is(false));
-    // Need to call stopGame() to ensure ProAI resets its static ConcurrentBattleCalculator, else
-    // the next test will use the wrong GameData for simulation.
     game.stopGame();
   }
 
