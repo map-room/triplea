@@ -900,4 +900,89 @@ class WireStateApplierTest {
                     transportUnit, seaZone))
         .doesNotThrowAnyException();
   }
+
+  // ---------- China production frontier (#2174) ----------
+
+  @Test
+  void appliesProductionFrontierClosedForChinese() {
+    final GameData gd = fresh();
+    // Default canonical XML sets Chinese to productionChinese_Burma_Road_Open.
+    assertThat(gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName())
+        .isEqualTo("productionChinese_Burma_Road_Open");
+
+    final WireState wire =
+        new WireState(
+            List.of(),
+            List.of(
+                new WirePlayer(
+                    "Chinese",
+                    0,
+                    List.of(),
+                    false,
+                    null,
+                    null,
+                    "productionChinese_Burma_Road_Closed")),
+            1,
+            "purchase",
+            "Chinese",
+            List.of());
+    WireStateApplier.apply(gd, wire, freshIdMap());
+
+    assertThat(gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName())
+        .isEqualTo("productionChinese_Burma_Road_Closed");
+  }
+
+  @Test
+  void productionFrontierNullLeavesChineseFrontierUnchanged() {
+    final GameData gd = fresh();
+    final String originalFrontier =
+        gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName();
+
+    final WireState wire =
+        new WireState(
+            List.of(),
+            List.of(new WirePlayer("Chinese", 0, List.of(), false)),
+            1,
+            "purchase",
+            "Chinese",
+            List.of());
+    WireStateApplier.apply(gd, wire, freshIdMap());
+
+    assertThat(gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName())
+        .isEqualTo(originalFrontier);
+  }
+
+  @Test
+  void appliesProductionFrontierOpenForChinese() {
+    final GameData gd = fresh();
+    // Manually force Closed first so we can verify Open restores it.
+    gd.getPlayerList()
+        .getPlayerId("Chinese")
+        .setProductionFrontier(
+            gd.getProductionFrontierList()
+                .getProductionFrontier("productionChinese_Burma_Road_Closed"));
+    assertThat(gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName())
+        .isEqualTo("productionChinese_Burma_Road_Closed");
+
+    final WireState wire =
+        new WireState(
+            List.of(),
+            List.of(
+                new WirePlayer(
+                    "Chinese",
+                    0,
+                    List.of(),
+                    false,
+                    null,
+                    null,
+                    "productionChinese_Burma_Road_Open")),
+            1,
+            "purchase",
+            "Chinese",
+            List.of());
+    WireStateApplier.apply(gd, wire, freshIdMap());
+
+    assertThat(gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName())
+        .isEqualTo("productionChinese_Burma_Road_Open");
+  }
 }
