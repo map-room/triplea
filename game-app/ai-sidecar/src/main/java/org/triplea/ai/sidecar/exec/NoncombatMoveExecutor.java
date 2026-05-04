@@ -44,6 +44,8 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
 public final class NoncombatMoveExecutor
     implements DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> {
 
+  private static final System.Logger LOG = System.getLogger(NoncombatMoveExecutor.class.getName());
+
   private final ProSessionSnapshotStore snapshotStore;
 
   public NoncombatMoveExecutor(final ProSessionSnapshotStore snapshotStore) {
@@ -57,6 +59,13 @@ public final class NoncombatMoveExecutor
     // Step 1: load snapshot once; pre-seed unitIdMap before WireStateApplier runs
     final Optional<games.strategy.triplea.ai.pro.data.ProSessionSnapshot> snapOpt =
         snapshotStore.load(session.key());
+    if (snapOpt.isEmpty()) {
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "[sidecar] snapshot missing for session {0} — purchase may not have run or snapshot was"
+              + " lost (e.g. sidecar restart with non-persistent snapshot dir)",
+          session.key());
+    }
     snapOpt.ifPresent(snap -> ProSessionSnapshotStore.restoreUnitIdMap(snap, session.unitIdMap()));
 
     // Step 2: hydrate GameData from wire state

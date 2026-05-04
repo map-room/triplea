@@ -31,13 +31,12 @@ public final class SessionRegistry {
   // Tracks updatedAt per key (used by reaper). Updated by setUpdatedAt.
   private final ConcurrentHashMap<SessionKey, Long> updatedAtMap = new ConcurrentHashMap<>();
 
-  /** Production constructor: data dir defaults to ./data/sessions; snapshot dir to tmpdir. */
+  /**
+   * Production constructor: data dir defaults to {@code ./data/sessions}; snapshots go in {@code
+   * ./data/sessions/snapshots} (same persistent volume as manifests, survives container restart).
+   */
   public SessionRegistry(final CanonicalGameData canonical) {
-    this(
-        canonical,
-        Path.of("data", "sessions"),
-        new ProSessionSnapshotStore(
-            Path.of(System.getProperty("java.io.tmpdir"), "sidecar-snapshots")));
+    this(canonical, Path.of("data", "sessions"));
   }
 
   /** Constructor accepting a custom data dir (used in tests and via SidecarConfig). */
