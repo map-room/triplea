@@ -1,11 +1,13 @@
 package org.triplea.ai.sidecar.wire;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.triplea.delegate.TransportTracker;
 import games.strategy.triplea.settings.ClientSetting;
 import java.util.List;
 import java.util.Map;
@@ -730,5 +732,104 @@ class WireStateApplierTest {
     WireStateApplier.apply(gd, wire, freshIdMap());
     assertThat(gd.getPlayerList().getPlayerId("Germans").getTechAttachment().getHeavyBomber())
         .isTrue();
+  }
+
+  // ---------- transport unloaded / unloadedTo round-trip (#2162) ----------
+
+  @Test
+  void transportUnloaded_consistentState_setsUnloadedOnTransportAndUnloadedToOnCargo() {
+    // Consistent wire state: transport.unloaded = [infantry], infantry.unloadedTo = "Germany".
+    // After apply, the Java transport must have the infantry in its unloaded collection and the
+    // infantry must have the Germany territory as its unloadedTo.
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+
+    final WireUnit transport =
+        WireUnit.of(
+            "u-trn-1", "transport", 0, 0, 0, "Germans", null,
+            false, false, false, false, 0, false, false, null,
+            List.of("u-inf-1"), null, false);
+    final WireUnit infantry =
+        WireUnit.of(
+            "u-inf-1", "infantry", 0, 0, 0, "Germans", null,
+            false, false, false, true, 0, false, false, null,
+            null, "Germany", false);
+
+    final WireState wire =
+        new WireState(
+            List.of(
+                new WireTerritory("112 Sea Zone", "Germans", List.of(transport)),
+                new WireTerritory("Germany", "Germans", List.of(infantry))),
+            List.of(), 1, "combatMove", "Germans", List.of());
+
+    WireStateApplier.apply(gd, wire, idMap);
+
+    final Territory seaZone = gd.getMap().getTerritoryOrNull("112 Sea Zone");
+    assertThat(seaZone).isNotNull();
+    final Unit transportUnit =
+        seaZone.getUnits().stream()
+            .filter(u -> u.getId().equals(idMap.get("u-trn-1")))
+            .findFirst()
+            .orElseThrow();
+    final Territory germanyTerr = gd.getMap().getTerritoryOrNull("Germany");
+    assertThat(germanyTerr).isNotNull();
+    final Unit infantryUnit =
+        germanyTerr.getUnits().stream()
+            .filter(u -> u.getId().equals(idMap.get("u-inf-1")))
+            .findFirst()
+            .orElseThrow();
+
+    assertThat(transportUnit.getUnloaded()).containsExactly(infantryUnit);
+    assertThat(infantryUnit.getUnloadedTo()).isNotNull();
+    assertThat(infantryUnit.getUnloadedTo().getName()).isEqualTo("Germany");
+  }
+
+  @Test
+  void transportUnloaded_nullUnloadedToOnCargo_staleEntrySkipped_preventsNpe() {
+    // Defense-in-depth for #2162. Wire state is inconsistent: transport.unloaded = [infantry]
+    // but infantry.unloadedTo = null. This arises when a foreign-owned transport retains its
+    // unloaded list from a prior nation's combat-move phase while the cargo unit's unloadedTo
+    // was cleared because the cargo belongs to the active player. The applier must skip the
+    // stale entry so transport.getUnloaded() is empty, preventing an NPE in
+    // TransportTracker.isTransportUnloadRestrictedToAnotherTerritory.
+    final GameData gd = fresh();
+
+    final WireUnit transport =
+        WireUnit.of(
+            "u-trn-1", "transport", 0, 0, 0, "Germans", null,
+            false, false, false, false, 0, false, false, null,
+            List.of("u-inf-1"), null, false);
+    final WireUnit infantry =
+        WireUnit.of(
+            "u-inf-1", "infantry", 0, 0, 0, "Germans", null,
+            false, false, false, false, 0, false, false, null,
+            null, null, false); // unloadedTo = null — stale cross-nation state
+
+    final WireState wire =
+        new WireState(
+            List.of(
+                new WireTerritory("112 Sea Zone", "Germans", List.of(transport)),
+                new WireTerritory("Germany", "Germans", List.of(infantry))),
+            List.of(), 1, "combatMove", "Germans", List.of());
+
+    WireStateApplier.apply(gd, wire, freshIdMap());
+
+    final Territory seaZone = gd.getMap().getTerritoryOrNull("112 Sea Zone");
+    assertThat(seaZone).isNotNull();
+    final Unit transportUnit =
+        seaZone.getUnits().stream()
+            .filter(u -> u.getType().getName().equals("transport"))
+            .findFirst()
+            .orElseThrow();
+
+    // Stale entry skipped — transport has no unloaded units
+    assertThat(transportUnit.getUnloaded()).isEmpty();
+
+    // Regression: no NPE when TransportTracker interrogates this transport
+    assertThatCode(
+            () ->
+                TransportTracker.isTransportUnloadRestrictedToAnotherTerritory(
+                    transportUnit, seaZone))
+        .doesNotThrowAnyException();
   }
 }

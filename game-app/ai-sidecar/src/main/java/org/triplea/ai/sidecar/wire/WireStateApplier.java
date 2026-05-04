@@ -356,6 +356,14 @@ public final class WireStateApplier {
         allUnitsById.put(u.getId(), u);
       }
     }
+    // Defense-in-depth: index wire units by Map Room id so we can check unloadedTo on cargo units
+    // when building a transport's unloaded list (#2162 — stale cross-nation transport state).
+    final Map<String, WireUnit> wireUnitById = new HashMap<>();
+    for (final WireTerritory wt : wire.territories()) {
+      for (final WireUnit wu : wt.units()) {
+        wireUnitById.put(wu.unitId(), wu);
+      }
+    }
 
     for (final WireTerritory wt : wire.territories()) {
       final Territory t = gameData.getMap().getTerritoryOrNull(wt.territoryId());
@@ -431,6 +439,15 @@ public final class WireStateApplier {
         if (wu.unloaded() != null && !wu.unloaded().isEmpty()) {
           final List<Unit> unloadedUnits = new ArrayList<>();
           for (final String unloadedId : wu.unloaded()) {
+            // Skip cargo units whose wire state has no unloadedTo — this indicates stale
+            // cross-nation transport state (#2162): the transport belongs to one nation but
+            // the cargo belongs to another, so only the cargo's unloadedTo was cleared at
+            // phase start while the transport's unloaded list was not. Propagating it to
+            // Java would cause an NPE in TransportTracker.isTransportUnloadRestricted*.
+            final WireUnit cargoWu = wireUnitById.get(unloadedId);
+            if (cargoWu == null || cargoWu.unloadedTo() == null) {
+              continue;
+            }
             final UUID unloadedUuid = unitIdMap.get(unloadedId);
             if (unloadedUuid != null) {
               final Unit unloadedUnit = allUnitsById.get(unloadedUuid);
