@@ -523,6 +523,20 @@ public final class WireStateApplier {
     // lookups rather than a boolean flag on the player. It is accepted on the wire for Map
     // Room's own bookkeeping but is currently a no-op on the Java side. Revisit if a specific
     // executor needs it.
+
+    // China's production frontier must be set explicitly because the canonical GameData defaults to
+    // productionChinese_Burma_Road_Open and the sidecar never fires TripleA's trigger system that
+    // would switch it. Without this, ProPurchaseAi always sees Artillery as available even when the
+    // Burma Road is closed (#2174).
+    if (wp.productionFrontier() != null) {
+      final var frontier =
+          gameData.getProductionFrontierList().getProductionFrontier(wp.productionFrontier());
+      if (frontier == null) {
+        throw new IllegalArgumentException(
+            "Unknown productionFrontier in WireState: " + wp.productionFrontier());
+      }
+      player.setProductionFrontier(frontier);
+    }
   }
 
   private static GamePlayer resolvePlayer(final GameData gameData, final String name) {
