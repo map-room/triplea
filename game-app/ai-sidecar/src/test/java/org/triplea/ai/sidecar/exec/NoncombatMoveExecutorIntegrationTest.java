@@ -164,9 +164,9 @@ class NoncombatMoveExecutorIntegrationTest {
    * purchase run that leaves {@code storedFactoryMoveMap} null or empty writes an empty map to the
    * snapshot. The old restore guard {@code !snap.factoryMoveMap().isEmpty()} then skipped restore,
    * leaving {@code storedFactoryMoveMap} null. Any subsequent NCM request on a fresh session (after
-   * an ack-timeout, reconnect, or per-turn session cycle) would crash with "storedFactoryMoveMap
-   * is null". Affects any nation where purchase simulation finds no factory territories (e.g.
-   * British with capital captured or all factories damaged).
+   * an ack-timeout, reconnect, or per-turn session cycle) would crash with "storedFactoryMoveMap is
+   * null". Affects any nation where purchase simulation finds no factory territories (e.g. British
+   * with capital captured or all factories damaged).
    */
   @Test
   void emptyFactoryMoveMapInSnapshotRestoresAsNonNull() throws Exception {

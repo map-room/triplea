@@ -596,8 +596,8 @@ public abstract class AbstractProAi extends AbstractAi {
    * methods.
    *
    * <p>An empty {@code snap.factoryMoveMap()} is treated as "purchase ran but found no factory
-   * territories" (a valid state) and restores {@code storedFactoryMoveMap} to an empty map. This
-   * is distinct from a missing snapshot file (purchase never ran), which the caller handles by not
+   * territories" (a valid state) and restores {@code storedFactoryMoveMap} to an empty map. This is
+   * distinct from a missing snapshot file (purchase never ran), which the caller handles by not
    * calling this method at all. Without this distinction the NCM executor crashes with
    * "storedFactoryMoveMap is null" when British (or any nation) has no factory territories in the
    * purchase-simulation phase — map-room#2191.
