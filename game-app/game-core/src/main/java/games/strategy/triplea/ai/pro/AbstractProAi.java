@@ -594,11 +594,21 @@ public abstract class AbstractProAi extends AbstractAi {
    * Restores {@code storedFactoryMoveMap} from a snapshot. No-op if already populated. Call this
    * before dispatching a {@code noncombat-move} decision; do NOT combine with the other restore
    * methods.
+   *
+   * <p>An empty {@code snap.factoryMoveMap()} is treated as "purchase ran but found no factory
+   * territories" (a valid state) and restores {@code storedFactoryMoveMap} to an empty map. This
+   * is distinct from a missing snapshot file (purchase never ran), which the caller handles by not
+   * calling this method at all. Without this distinction the NCM executor crashes with
+   * "storedFactoryMoveMap is null" when British (or any nation) has no factory territories in the
+   * purchase-simulation phase — map-room#2191.
    */
   public void restoreFactoryMoveMapFromSnapshot(
       final ProSessionSnapshot snap, final GameData data) {
-    if (storedFactoryMoveMap == null && !snap.factoryMoveMap().isEmpty()) {
-      storedFactoryMoveMap = restoreTerritoryMap(snap.factoryMoveMap(), data);
+    if (storedFactoryMoveMap == null) {
+      storedFactoryMoveMap =
+          snap.factoryMoveMap().isEmpty()
+              ? new HashMap<>()
+              : restoreTerritoryMap(snap.factoryMoveMap(), data);
     }
   }
 

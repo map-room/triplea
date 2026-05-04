@@ -2,6 +2,7 @@ package org.triplea.ai.sidecar.exec;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.triplea.ai.pro.AbstractProAi;
@@ -152,6 +153,44 @@ class NoncombatMoveExecutorIntegrationTest {
         "storedPurchaseTerritories must not be null after noncombat-move — place executor needs it");
     assertFalse(
         stored.isEmpty(), "storedPurchaseTerritories must be non-empty after noncombat-move");
+  }
+
+  /**
+   * Regression for map-room#2191: {@code restoreFactoryMoveMapFromSnapshot} must set {@code
+   * storedFactoryMoveMap} to a non-null empty map when the snapshot's {@code factoryMoveMap} is
+   * empty, so that {@code storedFactoryMoveMapIsNull()} returns {@code false}.
+   *
+   * <p>Root cause: {@code projectTerritoryMap(null)} returns {@code new HashMap<>()} (empty), so a
+   * purchase run that leaves {@code storedFactoryMoveMap} null or empty writes an empty map to the
+   * snapshot. The old restore guard {@code !snap.factoryMoveMap().isEmpty()} then skipped restore,
+   * leaving {@code storedFactoryMoveMap} null. Any subsequent NCM request on a fresh session (after
+   * an ack-timeout, reconnect, or per-turn session cycle) would crash with "storedFactoryMoveMap
+   * is null". Affects any nation where purchase simulation finds no factory territories (e.g.
+   * British with capital captured or all factories damaged).
+   */
+  @Test
+  void emptyFactoryMoveMapInSnapshotRestoresAsNonNull() throws Exception {
+    // Create a fresh ProAi with storedFactoryMoveMap == null (simulates a new session).
+    final ProAi proAi = new ProAi("sidecar-test-British", "British");
+    final GameData data = canonical.cloneForSession();
+
+    // Assert precondition: storedFactoryMoveMap is null before restore.
+    assertTrue(proAi.storedFactoryMoveMapIsNull(), "storedFactoryMoveMap must start as null");
+
+    // Snapshot with empty factoryMoveMap — exactly what projectTerritoryMap(null or emptyMap)
+    // produces when purchase finds no factory territories.
+    final var emptyFactorySnap =
+        new games.strategy.triplea.ai.pro.data.ProSessionSnapshot(
+            java.util.Map.of(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of());
+
+    proAi.restoreFactoryMoveMapFromSnapshot(emptyFactorySnap, data);
+
+    // After the fix: storedFactoryMoveMap is set to an empty HashMap (non-null).
+    // Before the fix: storedFactoryMoveMap remained null → storedFactoryMoveMapIsNull() == true.
+    assertFalse(
+        proAi.storedFactoryMoveMapIsNull(),
+        "storedFactoryMoveMap must be non-null after restore from empty-factoryMoveMap snapshot"
+            + " (regression: map-room#2191)");
   }
 
   /**
