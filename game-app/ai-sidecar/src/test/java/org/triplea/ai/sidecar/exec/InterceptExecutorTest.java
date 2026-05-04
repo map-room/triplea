@@ -128,6 +128,10 @@ class InterceptExecutorTest {
 
     final InterceptPlan plan = new InterceptExecutor().execute(session, req);
     assertThat(plan).isNotNull();
+    // Acceptance criterion: at least one interceptor must be sent when bombers are
+    // present and fighters are available. Two bombers vs two fighters always favours
+    // interception in TUV terms (fighters are cheaper and have higher combat values).
+    assertThat(plan.interceptorIds()).isNotEmpty();
     assertThat(plan.interceptorIds())
         .allMatch(id -> id.equals("u-ger-ftr-1") || id.equals("u-ger-ftr-2"));
   }
@@ -135,6 +139,7 @@ class InterceptExecutorTest {
   // -------------------------------------------------------------------------
   // Test 3: Unit-ID round-trip — any IDs emitted in the plan must have been
   //   registered in the session id map and be a subset of the candidate IDs.
+  //   Also verifies the acceptance criterion: at least one interceptor is sent.
   // -------------------------------------------------------------------------
 
   @Test
@@ -178,6 +183,9 @@ class InterceptExecutorTest {
 
     // All wire IDs were registered in the session map after WireStateApplier ran.
     assertThat(session.unitIdMap()).containsKeys("u-usa-bmr-RT", "u-ger-ftr-RT1", "u-ger-ftr-RT2");
+
+    // Acceptance criterion: at least one interceptor must be sent (real-state assertion).
+    assertThat(plan.interceptorIds()).isNotEmpty();
 
     // Any IDs the plan emits must be strings we sent in (not UUID.toString()).
     assertThat(plan.interceptorIds())
