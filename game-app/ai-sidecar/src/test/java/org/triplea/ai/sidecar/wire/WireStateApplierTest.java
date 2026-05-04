@@ -746,21 +746,55 @@ class WireStateApplierTest {
 
     final WireUnit transport =
         WireUnit.of(
-            "u-trn-1", "transport", 0, 0, 0, "Germans", null,
-            false, false, false, false, 0, false, false, null,
-            List.of("u-inf-1"), null, false);
+            "u-trn-1",
+            "transport",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            false,
+            0,
+            false,
+            false,
+            null,
+            List.of("u-inf-1"),
+            null,
+            false);
     final WireUnit infantry =
         WireUnit.of(
-            "u-inf-1", "infantry", 0, 0, 0, "Germans", null,
-            false, false, false, true, 0, false, false, null,
-            null, "Germany", false);
+            "u-inf-1",
+            "infantry",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            true,
+            0,
+            false,
+            false,
+            null,
+            null,
+            "Germany",
+            false);
 
     final WireState wire =
         new WireState(
             List.of(
                 new WireTerritory("112 Sea Zone", "Germans", List.of(transport)),
                 new WireTerritory("Germany", "Germans", List.of(infantry))),
-            List.of(), 1, "combatMove", "Germans", List.of());
+            List.of(),
+            1,
+            "combatMove",
+            "Germans",
+            List.of());
 
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -796,21 +830,55 @@ class WireStateApplierTest {
 
     final WireUnit transport =
         WireUnit.of(
-            "u-trn-1", "transport", 0, 0, 0, "Germans", null,
-            false, false, false, false, 0, false, false, null,
-            List.of("u-inf-1"), null, false);
+            "u-trn-1",
+            "transport",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            false,
+            0,
+            false,
+            false,
+            null,
+            List.of("u-inf-1"),
+            null,
+            false);
     final WireUnit infantry =
         WireUnit.of(
-            "u-inf-1", "infantry", 0, 0, 0, "Germans", null,
-            false, false, false, false, 0, false, false, null,
-            null, null, false); // unloadedTo = null — stale cross-nation state
+            "u-inf-1",
+            "infantry",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            false,
+            0,
+            false,
+            false,
+            null,
+            null,
+            null,
+            false); // unloadedTo = null — stale cross-nation state
 
     final WireState wire =
         new WireState(
             List.of(
                 new WireTerritory("112 Sea Zone", "Germans", List.of(transport)),
                 new WireTerritory("Germany", "Germans", List.of(infantry))),
-            List.of(), 1, "combatMove", "Germans", List.of());
+            List.of(),
+            1,
+            "combatMove",
+            "Germans",
+            List.of());
 
     WireStateApplier.apply(gd, wire, freshIdMap());
 
