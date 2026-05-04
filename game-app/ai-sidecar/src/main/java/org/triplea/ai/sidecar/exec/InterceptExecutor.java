@@ -174,8 +174,7 @@ public final class InterceptExecutor implements DecisionExecutor<InterceptReques
     for (final Unit u : sorted) {
       chosen.add(u);
       current = calc.calculateBattleResults(proData, territory, bombers, chosen, List.of());
-      if (current.getTuvSwing() <= 0
-          && current.getWinPercentage() < (100 - minWinPct)) {
+      if (current.getTuvSwing() <= 0 && current.getWinPercentage() < (100 - minWinPct)) {
         break;
       }
     }
