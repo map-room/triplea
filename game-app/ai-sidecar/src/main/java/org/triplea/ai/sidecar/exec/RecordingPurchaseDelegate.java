@@ -51,12 +51,21 @@ public final class RecordingPurchaseDelegate extends PurchaseDelegate {
   }
 
   /**
-   * Captures the repair map. Does NOT call {@code super.purchaseRepair()} for the same reason as
-   * {@link #purchase}. Always returns {@code null} (success).
+   * Captures the repair map and forwards to {@code super.purchaseRepair()} to deduct repair IPC
+   * from {@code player.getResources()} via {@link
+   * games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge#addChange}. This mirrors what
+   * the real {@link games.strategy.triplea.delegate.PurchaseDelegate} does and is necessary so
+   * that the subsequent {@code ProPurchaseAi.purchase()} call initialises its {@link
+   * games.strategy.triplea.ai.pro.data.ProResourceTracker} with the correct post-repair budget.
+   *
+   * <p>Unlike {@link #purchase}, calling {@code super.purchaseRepair()} is safe here: repair does
+   * NOT add new units to the player's holding pool (it only reduces unit damage and deducts PUs),
+   * so no double-injection occurs in {@link
+   * games.strategy.triplea.ai.pro.AbstractProAi#invokePlaceForSidecar}.
    */
   @Override
   public @Nullable String purchaseRepair(final Map<Unit, IntegerMap<RepairRule>> productionRules) {
     this.capturedRepair = Map.copyOf(productionRules);
-    return null;
+    return super.purchaseRepair(productionRules);
   }
 }
