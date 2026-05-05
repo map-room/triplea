@@ -121,8 +121,8 @@ class PurchaseExecutorTest {
    * budget. Before the fix, {@link RecordingPurchaseDelegate#purchaseRepair} captured but did NOT
    * deduct repair IPC from {@code player.getResources()}, so {@code ProPurchaseAi.purchase()}
    * initialized its {@link games.strategy.triplea.ai.pro.data.ProResourceTracker} with the full
-   * pre-repair budget. Combined cost (repair + unit buys) could then exceed available IPC →
-   * engine rejected "ran out of IPC".
+   * pre-repair budget. Combined cost (repair + unit buys) could then exceed available IPC → engine
+   * rejected "ran out of IPC".
    */
   @Test
   void repairCostDeductedFromUnitBudgetWhenFactoryIsDamaged() {
@@ -145,18 +145,15 @@ class PurchaseExecutorTest {
 
     final int startingPus = player.getResources().getQuantity(pus);
 
-    final PurchasePlan plan = new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final PurchasePlan plan =
+        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
 
     // ProAi must have decided to repair (the factory has damage and the player can afford it).
-    assertThat(plan.repairs())
-        .as("ProAi should repair the damaged factory")
-        .isNotEmpty();
+    assertThat(plan.repairs()).as("ProAi should repair the damaged factory").isNotEmpty();
 
     // Repair cost is 1 PU per damage point (Global 1940 standard).
     final int repairCost =
-        plan.repairs().stream()
-            .mapToInt(org.triplea.ai.sidecar.dto.RepairOrder::repairCount)
-            .sum();
+        plan.repairs().stream().mapToInt(org.triplea.ai.sidecar.dto.RepairOrder::repairCount).sum();
     final int unitCost = totalCost(data, plan);
 
     assertThat(repairCost + unitCost)

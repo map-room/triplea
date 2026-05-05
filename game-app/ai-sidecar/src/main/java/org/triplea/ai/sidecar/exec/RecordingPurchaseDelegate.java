@@ -53,9 +53,9 @@ public final class RecordingPurchaseDelegate extends PurchaseDelegate {
   /**
    * Captures the repair map and forwards to {@code super.purchaseRepair()} to deduct repair IPC
    * from {@code player.getResources()} via {@link
-   * games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge#addChange}. This mirrors what
-   * the real {@link games.strategy.triplea.delegate.PurchaseDelegate} does and is necessary so
-   * that the subsequent {@code ProPurchaseAi.purchase()} call initialises its {@link
+   * games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge#addChange}. This mirrors what the
+   * real {@link games.strategy.triplea.delegate.PurchaseDelegate} does and is necessary so that the
+   * subsequent {@code ProPurchaseAi.purchase()} call initialises its {@link
    * games.strategy.triplea.ai.pro.data.ProResourceTracker} with the correct post-repair budget.
    *
    * <p>Unlike {@link #purchase}, calling {@code super.purchaseRepair()} is safe here: repair does
