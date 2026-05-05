@@ -6,9 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import games.strategy.engine.data.GameData;
+import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.ProductionRule;
 import games.strategy.engine.data.RepairRule;
 import games.strategy.engine.data.Unit;
+import games.strategy.triplea.ai.pro.ProAi;
+import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import games.strategy.triplea.delegate.PurchaseDelegate;
 import games.strategy.triplea.settings.ClientSetting;
 import java.util.Map;
@@ -50,7 +53,16 @@ class RecordingPurchaseDelegateTest {
 
   @Test
   void capturesRepairMap() {
+    // purchaseRepair() now calls super so it needs a live bridge+player context.
+    // Use an empty repair map (no units to repair) so super returns null immediately
+    // after the canAfford + property check, without modifying any game state.
+    final GameData data = canonical.cloneForSession();
+    final GamePlayer player = data.getPlayerList().getPlayerId("Germans");
+    final ProAi proAi = new ProAi("test", "Germans");
     final RecordingPurchaseDelegate d = new RecordingPurchaseDelegate();
+    d.initialize("purchase", "Purchase");
+    d.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
+
     final Map<Unit, IntegerMap<RepairRule>> input = Map.of();
     assertNull(d.purchaseRepair(input));
     assertNotNull(d.capturedRepair());

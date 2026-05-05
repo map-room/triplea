@@ -7,10 +7,13 @@ import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.NamedAttachable;
 import games.strategy.engine.data.ProductionRule;
 import games.strategy.engine.data.Resource;
+import games.strategy.engine.data.Territory;
+import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.ai.pro.ProAi;
+import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.settings.ClientSetting;
 import java.util.List;
 import java.util.UUID;
@@ -111,6 +114,53 @@ class PurchaseExecutorTest {
         new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
 
     assertThat(totalCost(data, plan)).isEqualTo(0);
+  }
+
+  /**
+   * Regression for map-room#2194: factory repair cost must be deducted from the unit-purchase
+   * budget. Before the fix, {@link RecordingPurchaseDelegate#purchaseRepair} captured but did NOT
+   * deduct repair IPC from {@code player.getResources()}, so {@code ProPurchaseAi.purchase()}
+   * initialized its {@link games.strategy.triplea.ai.pro.data.ProResourceTracker} with the full
+   * pre-repair budget. Combined cost (repair + unit buys) could then exceed available IPC → engine
+   * rejected "ran out of IPC".
+   */
+  @Test
+  void repairCostDeductedFromUnitBudgetWhenFactoryIsDamaged() {
+    final Session session = freshSession("Germans");
+    final GameData data = session.gameData();
+    final Resource pus = data.getResourceList().getResourceOrThrow(Constants.PUS);
+    final GamePlayer player = data.getPlayerList().getPlayerId("Germans");
+
+    // Apply 7 points of SBR damage to Germany's factory.
+    final Territory germany = data.getMap().getTerritoryOrThrow("Germany");
+    final Unit factory =
+        germany.getUnitCollection().stream()
+            .filter(Matches.unitCanProduceUnitsAndCanBeDamaged())
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No damageable factory found in Germany"));
+    final int factoryDamage = 7;
+    final var damageMap = new org.triplea.java.collections.IntegerMap<Unit>();
+    damageMap.put(factory, factoryDamage);
+    data.performChange(ChangeFactory.bombingUnitDamage(damageMap, List.of(germany)));
+
+    final int startingPus = player.getResources().getQuantity(pus);
+
+    final PurchasePlan plan =
+        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+
+    // ProAi must have decided to repair (the factory has damage and the player can afford it).
+    assertThat(plan.repairs()).as("ProAi should repair the damaged factory").isNotEmpty();
+
+    // Repair cost is 1 PU per damage point (Global 1940 standard).
+    final int repairCost =
+        plan.repairs().stream().mapToInt(org.triplea.ai.sidecar.dto.RepairOrder::repairCount).sum();
+    final int unitCost = totalCost(data, plan);
+
+    assertThat(repairCost + unitCost)
+        .as(
+            "repair (%d) + unit buys (%d) must not exceed starting IPC (%d)",
+            repairCost, unitCost, startingPus)
+        .isLessThanOrEqualTo(startingPus);
   }
 
   @Test
