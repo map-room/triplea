@@ -112,6 +112,15 @@ class ProNonCombatMoveAi {
     Map<Territory, ProTerritory> factoryMoveMap = initialFactoryMoveMap;
     final List<ProTerritory> prioritizedTerritories = prioritizeDefendOptions(factoryMoveMap);
 
+    // Proactively occupy Friendly_Neutral territories (e.g. Bulgaria, Iraq, Finland) that have no
+    // player-owned unit yet. These territories are allied by archetype but owned by passive
+    // neutrals
+    // (Neutral_Axis), so neither the border-defense step nor the value-based assignment claims
+    // them.
+    // Must run before moveUnitsToDefendTerritories so the units reserved for friendly neutrals are
+    // not pre-consumed by the main defensive assignment (#2195).
+    claimFriendlyNeutralTerritories();
+
     // Determine which territories to defend and how many units each one needs
     final Territory myCapital = proData.getMyCapital();
     int enemyDistanceToMyCapital = Integer.MAX_VALUE;
@@ -332,6 +341,76 @@ class ProNonCombatMoveAi {
       }
     }
     return false;
+  }
+
+  /**
+   * Sends one land unit to each accessible Friendly_Neutral territory that has no player-owned
+   * unit. These territories (e.g. Bulgaria, Iraq, Finland) are owned by passive-neutral players
+   * with the "allied" archetype (Friendly_Neutral relationship type), so the AI can legally move
+   * land units into them during NCM but they are invisible to both the border-defense heuristic
+   * (which only looks at potential-enemy neighbors) and the value-based assignment (which assigns
+   * zero value to zero-production neutral territories). Running this step before the
+   * territory-manager copy ensures the claimed unit survives any capital-defense rollback.
+   *
+   * <p>Regression for map-room#2195.
+   */
+  private void claimFriendlyNeutralTerritories() {
+    ProLogger.info("Claim accessible friendly neutral territories");
+
+    final Map<Territory, ProTerritory> moveMap =
+        territoryManager.getDefendOptions().getTerritoryMap();
+    final Map<Unit, Set<Territory>> unitMoveMap =
+        territoryManager.getDefendOptions().getUnitMoveMap();
+
+    // Collect Friendly_Neutral territories that have no player-owned unit yet.
+    final List<Territory> toClaim = new ArrayList<>();
+    for (final Territory t : moveMap.keySet()) {
+      if (t.isWater()) {
+        continue;
+      }
+      final GamePlayer owner = t.getOwner();
+      if (owner.isNull() || owner.equals(player)) {
+        continue;
+      }
+      // Friendly_Neutral = allied archetype + no combat moves (passive neutral)
+      if (!Matches.isAllied(player).test(owner) || !ProUtils.isPassiveNeutralPlayer(owner)) {
+        continue;
+      }
+      final boolean hasPlayerUnit =
+          moveMap.get(t).getAllDefenders().stream().anyMatch(Matches.unitIsOwnedBy(player));
+      if (!hasPlayerUnit) {
+        toClaim.add(t);
+      }
+    }
+
+    if (toClaim.isEmpty()) {
+      return;
+    }
+
+    // Sort available units: fewest move options first (most committed / cheapest units first).
+    final Map<Unit, Set<Territory>> sorted =
+        ProSortMoveOptionsUtils.sortUnitMoveOptions(proData, unitMoveMap);
+
+    // Assign one land unit per unclaimed territory.
+    final Set<Territory> claimed = new HashSet<>();
+    for (final Unit unit : sorted.keySet()) {
+      if (!Matches.unitIsLand().test(unit)) {
+        continue;
+      }
+      for (final Territory t : sorted.get(unit)) {
+        if (!toClaim.contains(t) || claimed.contains(t)) {
+          continue;
+        }
+        moveMap.get(t).addUnit(unit);
+        unitMoveMap.remove(unit);
+        claimed.add(t);
+        ProLogger.debug(t + ", claimed Friendly_Neutral with: " + unit);
+        break;
+      }
+      if (claimed.size() == toClaim.size()) {
+        break;
+      }
+    }
   }
 
   private List<Territory> moveOneDefenderToLandTerritoriesBorderingEnemy() {
