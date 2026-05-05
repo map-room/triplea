@@ -194,6 +194,38 @@ class NoncombatMoveExecutorIntegrationTest {
   }
 
   /**
+   * Regression for map-room#2195: Germans must send at least one unit to Bulgaria
+   * (Friendly_Neutral) on turn 1 NCM. Before the fix, {@link
+   * games.strategy.triplea.ai.pro.ProNonCombatMoveAi#moveOneDefenderToLandTerritoriesBorderingEnemy}
+   * checked {@code hasAlliedLandUnits} using a predicate that includes units owned by any allied
+   * player — including Neutral_Axis infantry in Bulgaria. Because Friendly_Neutral has {@code
+   * archeType="allied"}, those infantry satisfied {@code isUnitAllied(Germans)}, so Bulgaria was
+   * falsely classified as already-defended and never added to {@code
+   * territoriesToDefendWithOneUnit}. After the fix, only player-owned (German) units count for the
+   * "already has a land unit" check, so Bulgaria is correctly identified as needing a defender.
+   */
+  @Test
+  void germansClaimBulgariaOnTurn1() {
+    final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
+    final Session session = freshSession("Germans");
+
+    new PurchaseExecutor(store)
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+    new CombatMoveExecutor(store)
+        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
+    final NoncombatMovePlan plan =
+        new NoncombatMoveExecutor(store)
+            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+
+    assertNotNull(plan);
+    assertTrue(
+        plan.moves().stream().anyMatch(m -> "Bulgaria".equals(m.to())),
+        "Germans must send at least one unit to Bulgaria (Friendly_Neutral) on turn 1 NCM"
+            + " — regression map-room#2195. Actual moves to: "
+            + plan.moves().stream().map(m -> m.to()).distinct().sorted().toList());
+  }
+
+  /**
    * Missing-unit resilience: a snapshot with stale unit UUIDs in storedFactoryMoveMap must not
    * cause an NPE — the defensive drop in #1763 skips unknown units silently.
    */
