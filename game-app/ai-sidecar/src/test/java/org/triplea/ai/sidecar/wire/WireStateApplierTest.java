@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import games.strategy.engine.data.GameData;
+import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.engine.data.UnitType;
+import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.triplea.delegate.TransportTracker;
 import games.strategy.triplea.settings.ClientSetting;
 import java.util.List;
@@ -984,5 +987,50 @@ class WireStateApplierTest {
 
     assertThat(gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName())
         .isEqualTo("productionChinese_Burma_Road_Open");
+  }
+
+  /**
+   * Regression for map-room#2210: phantom units left in a player's holding pool (e.g. from a failed
+   * invokePlaceForSidecar where §20 validation rejected the placement) must be cleared when
+   * WireStateApplier applies the next turn's wire state.
+   *
+   * <p>Before the fix: {@link WireStateApplier#applyPlayer} reconciled PUs and tech but never
+   * touched the holding pool. Stale units accumulated there across HTTP request cycles, inflating
+   * subsequent place-phase outputs and causing false "factory_minor at Kwangtung" log entries.
+   */
+  @Test
+  void holdingPoolClearedWhenWireApplied() {
+    final GameData gd = fresh();
+    final GamePlayer germans = gd.getPlayerList().getPlayerId("Germans");
+
+    // Simulate what invokePlaceForSidecar does: add a unit to the holding pool before placement.
+    // In the failure case (§20 validation rejects the place), the unit stays in the holding pool
+    // rather than being moved to the territory.
+    final UnitType infantry = gd.getUnitTypeList().getUnitTypeOrThrow("infantry");
+    final Unit phantomUnit = infantry.create(1, germans).get(0);
+    gd.performChange(ChangeFactory.addUnits(germans, List.of(phantomUnit)));
+    assertThat(germans.getUnitCollection().getUnits())
+        .as("precondition: phantom in holding pool")
+        .hasSize(1);
+
+    // Apply a wire state for the next turn — the holding pool is always empty between turns.
+    // The wire state includes the Germans player (with their current PUs) but no holding-pool
+    // units.
+    final int currentPus = germans.getResources().getQuantity("PUs");
+    final WireState wire =
+        new WireState(
+            List.of(),
+            List.of(new WirePlayer("Germans", currentPus, List.of(), false)),
+            1,
+            "purchase",
+            "Germans",
+            List.of());
+    WireStateApplier.apply(gd, wire, freshIdMap());
+
+    assertThat(germans.getUnitCollection().getUnits())
+        .as(
+            "holding pool must be empty after wire apply — phantom from failed place must be"
+                + " cleared (regression: map-room#2210)")
+        .isEmpty();
   }
 }
