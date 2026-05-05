@@ -387,29 +387,51 @@ class ProNonCombatMoveAi {
       return;
     }
 
-    // Sort available units: fewest move options first (most committed / cheapest units first).
-    final Map<Unit, Set<Territory>> sorted =
-        ProSortMoveOptionsUtils.sortUnitMoveOptions(proData, unitMoveMap);
-
-    // Assign one land unit per unclaimed territory.
-    final Set<Territory> claimed = new HashSet<>();
-    for (final Unit unit : sorted.keySet()) {
+    // Build territory → candidate land units map from the full unitMoveMap.
+    final Map<Territory, List<Unit>> candidates = new HashMap<>();
+    for (final Territory t : toClaim) {
+      candidates.put(t, new ArrayList<>());
+    }
+    for (final Map.Entry<Unit, Set<Territory>> entry : unitMoveMap.entrySet()) {
+      final Unit unit = entry.getKey();
       if (!Matches.unitIsLand().test(unit)) {
         continue;
       }
-      for (final Territory t : sorted.get(unit)) {
-        if (!toClaim.contains(t) || claimed.contains(t)) {
-          continue;
+      for (final Territory t : entry.getValue()) {
+        final List<Unit> list = candidates.get(t);
+        if (list != null) {
+          list.add(unit);
         }
-        moveMap.get(t).addUnit(unit);
-        unitMoveMap.remove(unit);
-        claimed.add(t);
-        ProLogger.debug(t + ", claimed Friendly_Neutral with: " + unit);
-        break;
       }
-      if (claimed.size() == toClaim.size()) {
-        break;
+    }
+
+    // Sort territories most-constrained first (fewest reachable land units → first pick).
+    // Break ties by name so iteration order is deterministic across JVM runs.
+    toClaim.sort(
+        Comparator.comparingInt((Territory t) -> candidates.get(t).size())
+            .thenComparing(Territory::getName));
+
+    // Territory-first assignment: for each territory (most constrained first) pick the best
+    // available land unit — fewest move options, then lowest cost, then unit type name.
+    // This mirrors sortUnitMoveOptions tie-breaking and guarantees every reachable
+    // Friendly_Neutral gets a unit if one is available (#2195).
+    final Set<Unit> usedUnits = new HashSet<>();
+    for (final Territory t : toClaim) {
+      final Unit chosen =
+          candidates.get(t).stream()
+              .filter(u -> !usedUnits.contains(u))
+              .min(
+                  Comparator.comparingInt((Unit u) -> unitMoveMap.getOrDefault(u, Set.of()).size())
+                      .thenComparingInt(u -> proData.getUnitValue(u.getType()))
+                      .thenComparing(u -> u.getType().getName()))
+              .orElse(null);
+      if (chosen == null) {
+        continue;
       }
+      moveMap.get(t).addUnit(chosen);
+      unitMoveMap.remove(chosen);
+      usedUnits.add(chosen);
+      ProLogger.debug(t + ", claimed Friendly_Neutral with: " + chosen);
     }
   }
 
