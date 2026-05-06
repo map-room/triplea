@@ -77,9 +77,15 @@ public class RemoveUnitsHistoryChange implements HistoryChange {
       for (Unit unloadedUnit : u.getUnloaded()) {
         oldUnits.add(unloadedUnit);
         allUnloadedUnits.add(unloadedUnit);
-        unloadedUnits
-            .computeIfAbsent(unloadedUnit.getUnloadedTo(), k -> new ArrayList<>())
-            .add(unloadedUnit);
+        // Guard against null unloadedTo: stale transport.unloaded entries (cargo that was
+        // killed before NCM) can have getUnloadedTo()==null; a null map key causes NPE in
+        // perform() via ChangeFactory.removeUnits(null, …). Skip — the unit is already
+        // in oldUnits and will be removed from the transport's current territory (#2268).
+        if (unloadedUnit.getUnloadedTo() != null) {
+          unloadedUnits
+              .computeIfAbsent(unloadedUnit.getUnloadedTo(), k -> new ArrayList<>())
+              .add(unloadedUnit);
+        }
       }
     }
 

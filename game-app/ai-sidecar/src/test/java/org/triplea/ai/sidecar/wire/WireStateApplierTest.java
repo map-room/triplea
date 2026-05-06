@@ -904,6 +904,237 @@ class WireStateApplierTest {
         .doesNotThrowAnyException();
   }
 
+  /**
+   * Regression for #2268: when cargo dies between combat-move and NCM, the wire transport still
+   * lists the dead unit's ID in its {@code unloaded} array (TS engine doesn't clean up transport
+   * refs on unit deletion). The second apply must clear the transport's Java {@code unloaded} list
+   * so that battle-calculator workers don't inherit a stale list with null {@code unloadedTo},
+   * which causes NPE in {@code RemoveUnitsHistoryChange} during NCM odds simulation.
+   */
+  @Test
+  void transportUnloaded_deadCargoAbsentFromWire_staleUnloadedListCleared() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+
+    // Apply 1 (combat-move): transport references infantry, infantry has unloadedTo=Germany.
+    final WireUnit transportApply1 =
+        WireUnit.of(
+            "u-trn-1",
+            "transport",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            false,
+            0,
+            false,
+            false,
+            null,
+            List.of("u-inf-1"),
+            null,
+            false);
+    final WireUnit infantryApply1 =
+        WireUnit.of(
+            "u-inf-1",
+            "infantry",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            true,
+            0,
+            false,
+            false,
+            null,
+            null,
+            "Germany",
+            false);
+
+    final WireState wireA =
+        new WireState(
+            List.of(
+                new WireTerritory("112 Sea Zone", "Germans", List.of(transportApply1)),
+                new WireTerritory("Germany", "Germans", List.of(infantryApply1))),
+            List.of(),
+            1,
+            "combatMove",
+            "Germans",
+            List.of());
+    WireStateApplier.apply(gd, wireA, idMap);
+
+    final Territory seaZone = gd.getMap().getTerritoryOrNull("112 Sea Zone");
+    assertThat(seaZone).isNotNull();
+    final Unit transportUnit =
+        seaZone.getUnits().stream()
+            .filter(u -> u.getId().equals(idMap.get("u-trn-1")))
+            .findFirst()
+            .orElseThrow();
+    // Precondition: after apply 1, transport has infantry in unloaded list.
+    assertThat(transportUnit.getUnloaded()).hasSize(1);
+
+    // Apply 2 (NCM): infantry was killed in battle — absent from wire entirely.
+    // Transport's wire state still says unloaded=['u-inf-1'] (TS engine doesn't clean up
+    // transport.unloaded on unit deletion). All entries are absent from wireUnitById so the
+    // #2162 guard skips them, producing an empty resolved list. The fix must apply that
+    // empty list to clear the stale Java unloaded state.
+    final WireUnit transportApply2 =
+        WireUnit.of(
+            "u-trn-1",
+            "transport",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            false,
+            0,
+            false,
+            false,
+            null,
+            List.of("u-inf-1"),
+            null,
+            false);
+
+    final WireState wireB =
+        new WireState(
+            List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(transportApply2))),
+            List.of(),
+            1,
+            "nonCombatMove",
+            "Germans",
+            List.of());
+    WireStateApplier.apply(gd, wireB, idMap);
+
+    // Stale unloaded list must be cleared — transport has no dead cargo (#2268 regression fence).
+    assertThat(transportUnit.getUnloaded())
+        .as(
+            "transport.unloaded must be empty after NCM wire apply when cargo was killed"
+                + " — stale list causes NPE in RemoveUnitsHistoryChange (regression: #2268)")
+        .isEmpty();
+  }
+
+  /**
+   * Regression for #2268 (else branch): when wire sends an empty/null unloaded list but Java
+   * transport still has stale cargo from a prior apply, the stale list must be cleared.
+   */
+  @Test
+  void transportUnloaded_emptyOnWire_clearsStaleJavaUnloadedList() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+
+    // Apply 1: establish unloaded relationship.
+    final WireUnit transportApply1 =
+        WireUnit.of(
+            "u-trn-1",
+            "transport",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            false,
+            0,
+            false,
+            false,
+            null,
+            List.of("u-inf-1"),
+            null,
+            false);
+    final WireUnit infantryApply1 =
+        WireUnit.of(
+            "u-inf-1",
+            "infantry",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            true,
+            0,
+            false,
+            false,
+            null,
+            null,
+            "Germany",
+            false);
+
+    WireStateApplier.apply(
+        gd,
+        new WireState(
+            List.of(
+                new WireTerritory("112 Sea Zone", "Germans", List.of(transportApply1)),
+                new WireTerritory("Germany", "Germans", List.of(infantryApply1))),
+            List.of(),
+            1,
+            "combatMove",
+            "Germans",
+            List.of()),
+        idMap);
+
+    final Territory seaZone = gd.getMap().getTerritoryOrNull("112 Sea Zone");
+    assertThat(seaZone).isNotNull();
+    final Unit transportUnit =
+        seaZone.getUnits().stream()
+            .filter(u -> u.getId().equals(idMap.get("u-trn-1")))
+            .findFirst()
+            .orElseThrow();
+    assertThat(transportUnit.getUnloaded()).hasSize(1);
+
+    // Apply 2: transport wire sends null unloaded (NCM phase — no unload happened yet).
+    final WireUnit transportApply2 =
+        WireUnit.of(
+            "u-trn-1",
+            "transport",
+            0,
+            0,
+            0,
+            "Germans",
+            null,
+            false,
+            false,
+            false,
+            false,
+            0,
+            false,
+            false,
+            null,
+            null, // unloaded = null on wire
+            null,
+            false);
+
+    WireStateApplier.apply(
+        gd,
+        new WireState(
+            List.of(new WireTerritory("112 Sea Zone", "Germans", List.of(transportApply2))),
+            List.of(),
+            1,
+            "nonCombatMove",
+            "Germans",
+            List.of()),
+        idMap);
+
+    assertThat(transportUnit.getUnloaded())
+        .as("stale Java unloaded list must be cleared when wire sends null unloaded (#2268)")
+        .isEmpty();
+  }
+
   // ---------- China production frontier (#2174) ----------
 
   @Test

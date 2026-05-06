@@ -456,10 +456,19 @@ public final class WireStateApplier {
               }
             }
           }
-          if (!unloadedUnits.isEmpty() && !unloadedUnits.equals(unit.getUnloaded())) {
+          // Always reconcile even when all cargo was filtered (#2268): dropping
+          // !unloadedUnits.isEmpty() ensures a stale unloaded list is cleared when every
+          // referenced cargo unit is dead or has no unloadedTo. Without this, worker GameData
+          // retains the stale list, and RemoveUnitsHistoryChange hits a NPE when it calls
+          // unloadedUnit.getUnloadedTo() and finds null.
+          if (!unloadedUnits.equals(unit.getUnloaded())) {
             changes.add(
                 ChangeFactory.unitPropertyChange(unit, unloadedUnits, Unit.PropertyName.UNLOADED));
           }
+        } else if (!unit.getUnloaded().isEmpty()) {
+          // Wire says no unloaded cargo (null/empty) but Java still has a stale list — clear it.
+          changes.add(
+              ChangeFactory.unitPropertyChange(unit, List.of(), Unit.PropertyName.UNLOADED));
         }
 
         final String wireTransportedById = wu.transportedBy();
