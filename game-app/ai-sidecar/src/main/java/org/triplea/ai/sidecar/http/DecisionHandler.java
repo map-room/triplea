@@ -269,7 +269,19 @@ public final class DecisionHandler implements HttpHandler {
     try {
       request = JsonBodies.readValue(body, DecisionRequest.class);
     } catch (final IOException e) {
-      LOG.log(System.Logger.Level.ERROR, "Decision bad-request: JSON deserialization failed", e);
+      // Structured WARN per map-room#2305 (matches SessionLifecycleHandler.handleUpdate
+      // pattern). The decision endpoint's error body envelope (DecisionError) is a
+      // wire-contract type — it currently has no detail field, so we keep returning
+      // the opaque 400 here; the structured log gives the server-side diagnostic and
+      // the bot's response-body capture (#2306) remains useful for the response shape
+      // it does carry. Extending DecisionError with a `message` field is a separate
+      // coordinated TS+Java change and is out of scope for #2305.
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "[sidecar] decision validation failed matchID={0} exClass={1} message={2} bodyBytes={3}",
+          new Object[] {
+            match.get().sessionId(), e.getClass().getSimpleName(), e.getMessage(), body.length()
+          });
       writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));
       return;
     }
