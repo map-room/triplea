@@ -1,6 +1,7 @@
 package org.triplea.ai.sidecar.http;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import org.triplea.ai.sidecar.dto.DecisionError;
@@ -8,7 +9,23 @@ import org.triplea.ai.sidecar.dto.DecisionPlan;
 import org.triplea.ai.sidecar.dto.DecisionReady;
 
 public final class JsonBodies {
-  public static final ObjectMapper MAPPER = new ObjectMapper();
+  /**
+   * Wire-surface ObjectMapper. Configured with {@code FAIL_ON_UNKNOWN_PROPERTIES=false} so additive
+   * TS-side wire-schema changes (new optional fields on {@code WirePlayer}, {@code WireUnit}, etc.)
+   * deserialize cleanly even before the Java POJO catches up.
+   *
+   * <p>This addresses the class of bug from map-room#2301 / map-room#2305: a TS-side wire emit of a
+   * previously-unknown field (in that case {@code WirePlayer.purchasedUnits}) caused Jackson to
+   * throw {@code UnrecognizedPropertyException}, which surfaced as opaque {@code 400 bad-request}
+   * on every {@code /session/{id}/update} call, which the bot mishandled by falling back to {@code
+   * skip*} moves with empty plans — silently burning AI turns.
+   *
+   * <p>The other two ObjectMappers in the sidecar ({@code ProSessionSnapshotStore.MAPPER}, {@code
+   * SessionStore.MAPPER}) are intentionally left strict — those files have schemas the sidecar
+   * fully owns, so unknown properties there indicate a real bug.
+   */
+  public static final ObjectMapper MAPPER =
+      new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
   private JsonBodies() {}
 

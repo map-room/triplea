@@ -74,7 +74,15 @@ public final class SessionLifecycleHandler implements HttpHandler {
     try {
       JsonBodies.readValue(body, SessionUpdateRequest.class);
     } catch (final IOException e) {
-      writeJson(exchange, 400, JsonBodies.errorBody("bad-request", "invalid JSON body"));
+      // Structured WARN per map-room#2305: matchID + exception class + message + body
+      // length so production drift surfaces in Loki without a follow-up logging fix.
+      // Body itself is not logged (game state, potentially large; full slice goes
+      // into the response body for the bot's own logs via map-room/map-room#2306).
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "[sidecar] update validation failed matchID={0} exClass={1} message={2} bodyBytes={3}",
+          new Object[] {sessionId, e.getClass().getSimpleName(), e.getMessage(), body.length()});
+      writeJson(exchange, 400, JsonBodies.errorBody("bad-request", e.getMessage()));
       return;
     }
     // Phase 1: accept and record the delta request; actual GameData mutation is Phase 2.

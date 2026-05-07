@@ -18,6 +18,8 @@ import org.triplea.ai.sidecar.wire.SessionCreateResponse;
  * created=false} without reinitialising ProData.
  */
 public final class SessionCreateHandler implements HttpHandler {
+  private static final System.Logger LOG = System.getLogger(SessionCreateHandler.class.getName());
+
   private final SessionRegistry registry;
 
   public SessionCreateHandler(final SessionRegistry registry) {
@@ -36,7 +38,12 @@ public final class SessionCreateHandler implements HttpHandler {
     try {
       req = JsonBodies.readValue(body, SessionCreateRequest.class);
     } catch (final IOException e) {
-      writeJson(exchange, 400, JsonBodies.errorBody("bad-request", "invalid JSON body"));
+      // Structured WARN per map-room#2305 — see SessionLifecycleHandler.handleUpdate.
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "[sidecar] sessions create validation failed exClass={0} message={1} bodyBytes={2}",
+          new Object[] {e.getClass().getSimpleName(), e.getMessage(), body.length()});
+      writeJson(exchange, 400, JsonBodies.errorBody("bad-request", e.getMessage()));
       return;
     }
     // Validate required fields
