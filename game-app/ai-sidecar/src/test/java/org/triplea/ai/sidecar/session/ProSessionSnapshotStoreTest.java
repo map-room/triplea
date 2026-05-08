@@ -136,13 +136,14 @@ class ProSessionSnapshotStoreTest {
         "snapshot must survive SessionRegistry recreation (regression: map-room#2191)");
   }
 
+  /**
+   * Regression test for map-room#2325: {@code SessionRegistry.delete()} is used for intra-round
+   * session close (heartbeat race, seat reset). It must NOT delete the snapshot — downstream
+   * executors (combat-move, noncombat-move, place) rely on it surviving until the round ends.
+   */
   @Test
-  void sessionRegistryDeleteCallsSnapshotDelete() throws Exception {
-    // Verify that SessionRegistry.delete() propagates to the snapshot store.
+  void sessionRegistryDeletePreservesSnapshot() throws Exception {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(dir);
-
-    games.strategy.triplea.settings.ClientSetting.setPreferences(
-        new org.sonatype.goodies.prefs.memory.MemoryPreferences());
     final SessionRegistry registry =
         new SessionRegistry(org.triplea.ai.sidecar.CanonicalGameData.load(), store);
 
@@ -153,6 +154,26 @@ class ProSessionSnapshotStoreTest {
 
     registry.delete(session.sessionId());
     assertTrue(
-        store.load(session.key()).isEmpty(), "snapshot should be gone after registry.delete");
+        store.load(session.key()).isPresent(),
+        "snapshot must survive registry.delete (intra-round close) — regression: map-room#2325");
+  }
+
+  /**
+   * The reaper path ({@code deleteByKey}) is the only caller that should purge snapshots. This
+   * keeps the reaper from accumulating orphan files across rounds.
+   */
+  @Test
+  void sessionRegistryDeleteByKeyPurgesSnapshot() throws Exception {
+    final ProSessionSnapshotStore store = new ProSessionSnapshotStore(dir);
+    final SessionRegistry registry =
+        new SessionRegistry(org.triplea.ai.sidecar.CanonicalGameData.load(), store);
+
+    final SessionKey key = new SessionKey("g-1", "Germans", 1);
+    registry.createOrGet(key, "g-1:Germans:r1", 42L);
+    store.save(key, emptySnapshot());
+    assertTrue(store.load(key).isPresent(), "snapshot should exist before deleteByKey");
+
+    registry.deleteByKey(key);
+    assertTrue(store.load(key).isEmpty(), "snapshot must be purged by deleteByKey (reaper path)");
   }
 }

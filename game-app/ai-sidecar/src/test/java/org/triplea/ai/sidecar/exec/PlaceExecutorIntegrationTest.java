@@ -2,6 +2,7 @@ package org.triplea.ai.sidecar.exec;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -26,6 +27,7 @@ import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionKey;
+import org.triplea.ai.sidecar.session.SessionRegistry;
 import org.triplea.ai.sidecar.wire.WireState;
 
 /**
@@ -178,5 +180,50 @@ class PlaceExecutorIntegrationTest {
         new PlaceExecutor(store).execute(session, new PlaceRequest(placeWireState("Germans")));
 
     assertNotNull(plan, "plan must not be null even after stale-snapshot scenario");
+  }
+
+  /**
+   * Regression test for map-room#2325: an intra-round session re-cycle (session deleted and
+   * re-created with the same key before place runs) must not lose storedPurchaseTerritories.
+   *
+   * <p>Before the fix, {@code SessionRegistry.delete()} called {@code snapshotStore.delete()},
+   * wiping the purchase-phase snapshot. The new session's ProAi had no stored state, so {@link
+   * PlaceExecutor} threw {@code "place called without preceding purchase"}.
+   *
+   * <p>After the fix, {@code delete()} preserves the snapshot file; only {@code deleteByKey()} (the
+   * reaper path) purges it. The new session restores storedPurchaseTerritories from the surviving
+   * snapshot and place succeeds.
+   */
+  @Test
+  void placeSucceedsAfterIntraRoundSessionRecycle() {
+    final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
+    final SessionRegistry registry = new SessionRegistry(canonical, store);
+
+    final SessionKey key = new SessionKey("g1", "Germans", 3);
+    final String sessionId = "g1:Germans:r3";
+
+    // S1: run the full offensive pipeline through noncombat-move; snapshot is saved after purchase.
+    final Session s1 = registry.createOrGet(key, sessionId, 42L).session();
+    new PurchaseExecutor(store).execute(s1, new PurchaseRequest(wireState("purchase", "Germans")));
+    new CombatMoveExecutor(store)
+        .execute(s1, new CombatMoveRequest(wireState("combatMove", "Germans")));
+    new NoncombatMoveExecutor(store)
+        .execute(s1, new NoncombatMoveRequest(noncombatWireState("Germans")));
+
+    // Intra-round re-cycle: session is deleted before place runs (heartbeat race / seat reset).
+    assertTrue(registry.delete(sessionId), "delete must return true for known session");
+
+    // S2: new ProAi with no in-memory state, but snapshot must survive the delete.
+    final Session s2 = registry.createOrGet(key, sessionId, 42L).session();
+    assertNotSame(s1, s2, "new session object must be created after delete");
+
+    // Place on S2 must succeed — storedPurchaseTerritories restored from the preserved snapshot.
+    final PlacePlan plan =
+        new PlaceExecutor(store).execute(s2, new PlaceRequest(placeWireState("Germans")));
+
+    assertNotNull(plan, "place plan must not be null after intra-round session recycle");
+    assertFalse(
+        plan.placements().isEmpty(),
+        "Germans should have at least one placement after recycle; got: " + plan.placements());
   }
 }

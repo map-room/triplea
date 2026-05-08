@@ -117,6 +117,13 @@ public final class SessionRegistry {
     return Optional.ofNullable(updatedAtMap.get(key));
   }
 
+  /**
+   * Removes a session from memory and deletes its manifest file. The snapshot file is intentionally
+   * preserved so that subsequent requests (combat-move, noncombat-move, place) can still restore
+   * ProAi stored state after an intra-round session re-cycle (heartbeat race, seat reset).
+   *
+   * <p>Snapshot cleanup happens only via {@link #deleteByKey} (the reaper path).
+   */
   public synchronized boolean delete(final String sessionId) {
     final Session removed = byId.remove(sessionId);
     if (removed == null) {
@@ -125,15 +132,20 @@ public final class SessionRegistry {
     byKey.remove(removed.key(), removed);
     updatedAtMap.remove(removed.key());
     removed.offensiveExecutor().shutdownNow();
-    snapshotStore.delete(removed.key());
     sessionStore.delete(removed.key());
     return true;
   }
 
+  /**
+   * Removes a session by key and purges its snapshot file. Used by {@link SessionReaper} for
+   * end-of-life cleanup. Unlike {@link #delete}, this also deletes the snapshot so orphan files do
+   * not accumulate across rounds.
+   */
   public synchronized void deleteByKey(final SessionKey key) {
     final Session session = byKey.get(key);
     if (session != null) {
       delete(session.sessionId());
+      snapshotStore.delete(key);
     }
   }
 
