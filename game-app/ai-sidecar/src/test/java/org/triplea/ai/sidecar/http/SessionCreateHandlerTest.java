@@ -25,10 +25,10 @@ class SessionCreateHandlerTest {
         new FakeHttpExchange(
             "POST",
             "/sessions",
-            "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}");
+            "{\"sessionId\":\"g-1:Germans:r1\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"round\":1,\"seed\":42}");
     h.handle(ex);
     assertEquals(200, ex.responseCode());
-    assertTrue(ex.responseBodyString().contains("\"sessionId\":\"g-1:Germans\""));
+    assertTrue(ex.responseBodyString().contains("\"sessionId\":\"g-1:Germans:r1\""));
     assertTrue(ex.responseBodyString().contains("\"created\":true"));
   }
 
@@ -55,14 +55,14 @@ class SessionCreateHandlerTest {
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load());
     final SessionCreateHandler h = new SessionCreateHandler(registry);
     final String body =
-        "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}";
+        "{\"sessionId\":\"g-1:Germans:r1\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"round\":1,\"seed\":42}";
     final FakeHttpExchange ex1 = new FakeHttpExchange("POST", "/sessions", body);
     h.handle(ex1);
     assertTrue(ex1.responseBodyString().contains("\"created\":true"));
 
     final FakeHttpExchange ex2 = new FakeHttpExchange("POST", "/sessions", body);
     h.handle(ex2);
-    assertTrue(ex2.responseBodyString().contains("\"sessionId\":\"g-1:Germans\""));
+    assertTrue(ex2.responseBodyString().contains("\"sessionId\":\"g-1:Germans:r1\""));
     assertTrue(ex2.responseBodyString().contains("\"created\":false"));
   }
 }

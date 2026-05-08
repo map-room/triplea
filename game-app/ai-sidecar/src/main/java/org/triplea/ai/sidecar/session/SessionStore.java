@@ -30,7 +30,8 @@ public final class SessionStore {
 
   /** Writes {@code manifest} to disk atomically. Creates parent directories as needed. */
   public void save(final SessionManifest manifest) {
-    final Path target = pathFor(new SessionKey(manifest.gameId(), manifest.nation()));
+    final Path target =
+        pathFor(new SessionKey(manifest.gameId(), manifest.nation(), manifest.round()));
     final Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
     try {
       Files.createDirectories(target.getParent());
@@ -118,6 +119,6 @@ public final class SessionStore {
     // Sanitize to avoid path traversal.
     final String safeGameId = key.gameId().replaceAll("[^A-Za-z0-9\\-]", "_");
     final String safeNation = key.nation().replaceAll("[^A-Za-z0-9]", "_");
-    return dataDir.resolve(safeGameId).resolve(safeNation + ".json");
+    return dataDir.resolve(safeGameId).resolve(safeNation + "_r" + key.round() + ".json");
   }
 }

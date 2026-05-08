@@ -64,7 +64,9 @@ class DecisionHandlerTest {
   }
 
   private Session newSession(final SessionRegistry registry) {
-    return registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+    return registry
+        .createOrGet(new SessionKey("g-1", "Germans", 1), "g-1:Germans:r1", 42L)
+        .session();
   }
 
   private static DecisionHandler handler(

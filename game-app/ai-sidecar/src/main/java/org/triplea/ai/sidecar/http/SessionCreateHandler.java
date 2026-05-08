@@ -12,10 +12,10 @@ import org.triplea.ai.sidecar.wire.SessionCreateResponse;
 /**
  * Handles {@code POST /sessions} (v2 contract).
  *
- * <p>The caller supplies a deterministic {@code sessionId = matchID:nation}. The handler validates
- * that {@code sessionId == gameId + ":" + nation} and then delegates to {@link
- * SessionRegistry#createOrGet} which is idempotent — reopening an existing session returns {@code
- * created=false} without reinitialising ProData.
+ * <p>The caller supplies a deterministic {@code sessionId = matchID:nation:r{round}}. The handler
+ * validates that {@code sessionId == gameId + ":" + nation + ":r" + round} and then delegates to
+ * {@link SessionRegistry#createOrGet} which is idempotent — reopening an existing session returns
+ * {@code created=false} without reinitialising ProData.
  */
 public final class SessionCreateHandler implements HttpHandler {
   private static final System.Logger LOG = System.getLogger(SessionCreateHandler.class.getName());
@@ -54,21 +54,23 @@ public final class SessionCreateHandler implements HttpHandler {
           JsonBodies.errorBody("bad-request", "sessionId, gameId and nation are required"));
       return;
     }
-    // Validate deterministic sessionId contract
-    final String expectedId = req.gameId() + ":" + req.nation();
+    // Validate per-round sessionId contract: must be gameId:nation:r{round}
+    final String expectedId = req.gameId() + ":" + req.nation() + ":r" + req.round();
     if (!expectedId.equals(req.sessionId())) {
       writeJson(
           exchange,
           400,
           JsonBodies.errorBody(
               "bad-request",
-              "sessionId must equal gameId + \":\" + nation (expected \"" + expectedId + "\")"));
+              "sessionId must equal gameId + \":\" + nation + \":r\" + round (expected \""
+                  + expectedId
+                  + "\")"));
       return;
     }
 
     final SessionRegistry.CreateResult result =
         registry.createOrGet(
-            new org.triplea.ai.sidecar.session.SessionKey(req.gameId(), req.nation()),
+            new org.triplea.ai.sidecar.session.SessionKey(req.gameId(), req.nation(), req.round()),
             req.sessionId(),
             req.seed());
 

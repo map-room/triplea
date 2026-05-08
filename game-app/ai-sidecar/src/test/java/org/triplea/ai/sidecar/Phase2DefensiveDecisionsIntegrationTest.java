@@ -57,7 +57,7 @@ class Phase2DefensiveDecisionsIntegrationTest {
     // attacker holds the top-level turn (ctx.currentPlayer = attacker) and the defender is
     // in an activePlayers stage.
     final String gameId = "integration-defensive";
-    sessionId = gameId + ":" + DEFENDER;
+    sessionId = gameId + ":" + DEFENDER + ":r1";
     final HttpResponse<String> create =
         client.send(
             HttpRequest.newBuilder(URI.create(base + "/sessions"))
@@ -70,7 +70,7 @@ class Phase2DefensiveDecisionsIntegrationTest {
                             + gameId
                             + "\",\"nation\":\""
                             + DEFENDER
-                            + "\",\"seed\":42}"))
+                            + "\",\"round\":1,\"seed\":42}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
     assertEquals(200, create.statusCode(), "Session create must return 200");

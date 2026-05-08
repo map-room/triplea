@@ -21,7 +21,7 @@ class SessionOffensiveExecutorTest {
   void sessionHasSingleThreadOffensiveExecutor() throws Exception {
     final SessionRegistry reg = new SessionRegistry(CanonicalGameData.load());
     final Session s =
-        reg.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+        reg.createOrGet(new SessionKey("g-1", "Germans", 1), "g-1:Germans:r1", 42L).session();
     assertNotNull(s.offensiveExecutor());
     final Future<String> f = s.offensiveExecutor().submit(() -> Thread.currentThread().getName());
     final String threadName = f.get();

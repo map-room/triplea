@@ -37,7 +37,7 @@ class InterceptExecutorTest {
     final ProAi proAi = new ProAi("sidecar-test-" + nation, nation);
     return new Session(
         "s-test-" + UUID.randomUUID(),
-        new SessionKey("g1", nation),
+        new SessionKey("g1", nation, 1),
         42L,
         proAi,
         data,

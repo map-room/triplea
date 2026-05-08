@@ -47,11 +47,11 @@ class SidecarMainIntegrationTest {
                   .header("Authorization", "Bearer dev-token")
                   .POST(
                       HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
+                          "{\"sessionId\":\"g-1:Germans:r1\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"round\":1,\"seed\":42}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, create.statusCode());
-      assertTrue(create.body().contains("\"sessionId\":\"g-1:Germans\""));
+      assertTrue(create.body().contains("\"sessionId\":\"g-1:Germans:r1\""));
     } finally {
       svc.stop();
     }

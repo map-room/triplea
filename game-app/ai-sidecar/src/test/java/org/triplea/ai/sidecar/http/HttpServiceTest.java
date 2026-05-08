@@ -61,7 +61,7 @@ class HttpServiceTest {
               HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/sessions"))
                   .POST(
                       HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"g:Germans\",\"gameId\":\"g\",\"nation\":\"Germans\",\"seed\":1}"))
+                          "{\"sessionId\":\"g:Germans:r1\",\"gameId\":\"g\",\"nation\":\"Germans\",\"round\":1,\"seed\":1}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(401, unauth.statusCode());
@@ -72,11 +72,11 @@ class HttpServiceTest {
                   .header("Authorization", "Bearer test-token")
                   .POST(
                       HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"g:Germans\",\"gameId\":\"g\",\"nation\":\"Germans\",\"seed\":1}"))
+                          "{\"sessionId\":\"g:Germans:r1\",\"gameId\":\"g\",\"nation\":\"Germans\",\"round\":1,\"seed\":1}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, ok.statusCode());
-      assertTrue(ok.body().contains("\"sessionId\":\"g:Germans\""));
+      assertTrue(ok.body().contains("\"sessionId\":\"g:Germans:r1\""));
     } finally {
       svc.stop();
     }

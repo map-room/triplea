@@ -109,6 +109,6 @@ public final class ProSessionSnapshotStore {
     // Sanitize to avoid path traversal: replace any non-alphanumeric chars with '_'
     final String safeGameId = key.gameId().replaceAll("[^A-Za-z0-9\\-]", "_");
     final String safeNation = key.nation().replaceAll("[^A-Za-z0-9\\-]", "_");
-    return dir.resolve(safeGameId + "_" + safeNation + ".json");
+    return dir.resolve(safeGameId + "_" + safeNation + "_r" + key.round() + ".json");
   }
 }
