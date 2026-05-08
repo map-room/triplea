@@ -63,7 +63,7 @@ class ExecutorSupportTest {
     final Session session =
         new Session(
             "s-race-" + UUID.randomUUID(),
-            new SessionKey("g1", "Germans"),
+            new SessionKey("g1", "Germans", 1),
             42L,
             proAi,
             data,

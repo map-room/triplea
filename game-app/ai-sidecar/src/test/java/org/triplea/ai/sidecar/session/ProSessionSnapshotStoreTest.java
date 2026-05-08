@@ -33,7 +33,7 @@ class ProSessionSnapshotStoreTest {
   @Test
   void saveAndLoadRoundTrip() {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(dir);
-    final SessionKey key = new SessionKey("g-1", "Germans");
+    final SessionKey key = new SessionKey("g-1", "Germans", 1);
     store.save(key, emptySnapshot());
 
     final Optional<ProSessionSnapshot> loaded = store.load(key);
@@ -46,13 +46,13 @@ class ProSessionSnapshotStoreTest {
   @Test
   void loadReturnsEmptyWhenNoFile() {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(dir);
-    assertTrue(store.load(new SessionKey("g-1", "Germans")).isEmpty());
+    assertTrue(store.load(new SessionKey("g-1", "Germans", 1)).isEmpty());
   }
 
   @Test
   void deleteRemovesFile() throws Exception {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(dir);
-    final SessionKey key = new SessionKey("g-1", "Germans");
+    final SessionKey key = new SessionKey("g-1", "Germans", 1);
     store.save(key, emptySnapshot());
 
     // File exists after save
@@ -61,8 +61,8 @@ class ProSessionSnapshotStoreTest {
 
     store.delete(key);
     assertTrue(store.load(key).isEmpty(), "load should return empty after delete");
-    // No file left for this key
-    assertFalse(Files.exists(dir.resolve("g-1_Germans.json")));
+    // No file left for this key (now includes round suffix)
+    assertFalse(Files.exists(dir.resolve("g-1_Germans_r1.json")));
   }
 
   @Test
@@ -99,7 +99,7 @@ class ProSessionSnapshotStoreTest {
   void deleteIsNoOpWhenFileAbsent() {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(dir);
     // Should not throw
-    store.delete(new SessionKey("no-such-game", "Americans"));
+    store.delete(new SessionKey("no-such-game", "Americans", 1));
   }
 
   /**
@@ -113,8 +113,8 @@ class ProSessionSnapshotStoreTest {
    */
   @Test
   void snapshotSurvivesSessionRegistryRecreation() throws Exception {
-    final SessionKey key = new SessionKey("g-restart", "British");
-    final String sessionId = "g-restart:British";
+    final SessionKey key = new SessionKey("g-restart", "British", 1);
+    final String sessionId = "g-restart:British:r1";
 
     // First registry instance — simulates sidecar before restart
     final SessionRegistry reg1 =
@@ -147,7 +147,7 @@ class ProSessionSnapshotStoreTest {
         new SessionRegistry(org.triplea.ai.sidecar.CanonicalGameData.load(), store);
 
     final Session session =
-        registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+        registry.createOrGet(new SessionKey("g-1", "Germans", 1), "g-1:Germans:r1", 42L).session();
     store.save(session.key(), emptySnapshot());
     assertTrue(store.load(session.key()).isPresent(), "snapshot should exist before delete");
 

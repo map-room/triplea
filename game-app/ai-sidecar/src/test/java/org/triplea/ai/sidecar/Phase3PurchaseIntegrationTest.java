@@ -73,7 +73,7 @@ class Phase3PurchaseIntegrationTest {
     auth = "Bearer dev-token";
 
     final String gameId = "integration-purchase";
-    sessionId = gameId + ":" + NATION;
+    sessionId = gameId + ":" + NATION + ":r1";
     final HttpResponse<String> create =
         client.send(
             HttpRequest.newBuilder(URI.create(base + "/sessions"))
@@ -86,7 +86,7 @@ class Phase3PurchaseIntegrationTest {
                             + gameId
                             + "\",\"nation\":\""
                             + NATION
-                            + "\",\"seed\":42}"))
+                            + "\",\"round\":1,\"seed\":42}"))
                 .build(),
             HttpResponse.BodyHandlers.ofString());
     assertEquals(200, create.statusCode(), "Session create must return 200");

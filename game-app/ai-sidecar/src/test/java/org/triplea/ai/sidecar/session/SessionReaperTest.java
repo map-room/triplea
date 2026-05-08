@@ -32,7 +32,7 @@ class SessionReaperTest {
     final long now = System.currentTimeMillis();
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load(), dataDir);
     // Create a session — updatedAt = now
-    registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L);
+    registry.createOrGet(new SessionKey("g-1", "Germans", 1), "g-1:Germans:r1", 42L);
 
     final Clock clock = Clock.fixed(Instant.ofEpochMilli(now), ZoneId.systemDefault());
     final SessionReaper reaper = new SessionReaper(registry, clock);
@@ -47,9 +47,9 @@ class SessionReaperTest {
     // Set updatedAt to 31 days ago
     final long stalePast = now - TimeUnit.DAYS.toMillis(31);
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load(), dataDir);
-    registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L);
+    registry.createOrGet(new SessionKey("g-1", "Germans", 1), "g-1:Germans:r1", 42L);
     // Override updatedAt to simulate staleness
-    registry.setUpdatedAtForTesting(new SessionKey("g-1", "Germans"), stalePast);
+    registry.setUpdatedAtForTesting(new SessionKey("g-1", "Germans", 1), stalePast);
 
     final Clock clock = Clock.fixed(Instant.ofEpochMilli(now), ZoneId.systemDefault());
     final SessionReaper reaper = new SessionReaper(registry, clock);

@@ -82,7 +82,8 @@ public final class SessionRegistry {
     final Session created = buildSession(key, sessionId, seed);
     register(created);
     final long now = System.currentTimeMillis();
-    sessionStore.save(new SessionManifest(sessionId, key.gameId(), key.nation(), seed, now, now));
+    sessionStore.save(
+        new SessionManifest(sessionId, key.gameId(), key.nation(), key.round(), seed, now, now));
     updatedAtMap.put(key, now);
     return new CreateResult(created, true);
   }
@@ -94,7 +95,7 @@ public final class SessionRegistry {
   public synchronized void rehydrate() {
     final List<SessionManifest> manifests = sessionStore.loadAll();
     for (final SessionManifest m : manifests) {
-      final SessionKey key = new SessionKey(m.gameId(), m.nation());
+      final SessionKey key = new SessionKey(m.gameId(), m.nation(), m.round());
       if (byId.containsKey(m.sessionId())) {
         continue; // already present — skip
       }

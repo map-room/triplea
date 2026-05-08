@@ -50,7 +50,7 @@ class SidecarPersistenceIntegrationTest {
                   .header("Authorization", "Bearer dev-token")
                   .POST(
                       HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"m1:Germans\",\"gameId\":\"m1\",\"nation\":\"Germans\",\"seed\":42}"))
+                          "{\"sessionId\":\"m1:Germans:r1\",\"gameId\":\"m1\",\"nation\":\"Germans\",\"round\":1,\"seed\":42}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, create.statusCode());
@@ -70,7 +70,7 @@ class SidecarPersistenceIntegrationTest {
                   .header("Authorization", "Bearer dev-token")
                   .POST(
                       HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"m1:Germans\",\"gameId\":\"m1\",\"nation\":\"Germans\",\"seed\":42}"))
+                          "{\"sessionId\":\"m1:Germans:r1\",\"gameId\":\"m1\",\"nation\":\"Germans\",\"round\":1,\"seed\":42}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, reopen.statusCode());

@@ -54,12 +54,12 @@ class SidecarIntegrationTest {
                   .header("Authorization", auth)
                   .POST(
                       HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"seed\":42}"))
+                          "{\"sessionId\":\"g-1:Germans:r1\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"round\":1,\"seed\":42}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, create.statusCode());
       assertTrue(create.body().contains("\"created\":true"));
-      final String sessionId = "g-1:Germans"; // deterministic — no extraction needed
+      final String sessionId = "g-1:Germans:r1"; // deterministic — no extraction needed
 
       // 2. update
       final HttpResponse<String> update =

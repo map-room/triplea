@@ -105,7 +105,7 @@ class ScrambleExecutorBenchmark {
     final ProAi proAi = new ProAi("bench-Germans", "Germans");
     return new Session(
         "s-bench-" + UUID.randomUUID(),
-        new SessionKey("g-bench", "Germans"),
+        new SessionKey("g-bench", "Germans", 1),
         42L,
         proAi,
         data,

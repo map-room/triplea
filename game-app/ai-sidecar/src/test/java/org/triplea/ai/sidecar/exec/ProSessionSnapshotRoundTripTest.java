@@ -141,7 +141,7 @@ class ProSessionSnapshotRoundTripTest {
     ExecutorSupport.ensureProAiInitialized(
         new org.triplea.ai.sidecar.session.Session(
             "s-test",
-            new org.triplea.ai.sidecar.session.SessionKey("test-game", "Germans"),
+            new org.triplea.ai.sidecar.session.SessionKey("test-game", "Germans", 1),
             42L,
             proAi,
             data,

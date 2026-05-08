@@ -31,7 +31,7 @@ class SessionTest {
       final Session s =
           new Session(
               "s-1",
-              new SessionKey("g-1", "Germans"),
+              new SessionKey("g-1", "Germans", 1),
               42L,
               proAi,
               data,

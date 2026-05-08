@@ -48,7 +48,8 @@ class DecisionHandlerPurchaseTest {
 
   private Session newSession(final SessionRegistry registry) {
     return registry
-        .createOrGet(new SessionKey("g-purchase-test", "Germans"), "g-purchase-test:Germans", 42L)
+        .createOrGet(
+            new SessionKey("g-purchase-test", "Germans", 1), "g-purchase-test:Germans:r1", 42L)
         .session();
   }
 
