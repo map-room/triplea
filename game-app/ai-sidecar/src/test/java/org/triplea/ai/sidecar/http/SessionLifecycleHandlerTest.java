@@ -66,7 +66,7 @@ class SessionLifecycleHandlerTest {
   void updateMalformedBodyResponseIncludesValidationDetail() throws Exception {
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load());
     final Session s =
-        registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+        registry.createOrGet(new SessionKey("g-1", "Germans", 1), "g-1:Germans:r1", 42L).session();
     final SessionLifecycleHandler h = new SessionLifecycleHandler(registry);
     final FakeHttpExchange ex =
         new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/update", "not-json");
@@ -93,7 +93,7 @@ class SessionLifecycleHandlerTest {
   void updateAcceptsUnknownPropertiesOnWirePlayer() throws Exception {
     final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load());
     final Session s =
-        registry.createOrGet(new SessionKey("g-1", "Germans"), "g-1:Germans", 42L).session();
+        registry.createOrGet(new SessionKey("g-1", "Germans", 1), "g-1:Germans:r1", 42L).session();
     final SessionLifecycleHandler h = new SessionLifecycleHandler(registry);
     // A WireState payload with a fabricated unknown field on WirePlayer. Pre-fix this 400d.
     final String bodyWithUnknownField =
