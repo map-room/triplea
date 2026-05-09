@@ -11,14 +11,8 @@ import org.triplea.ai.sidecar.dto.CombatMovePlan;
 import org.triplea.ai.sidecar.dto.CombatMoveRequest;
 import org.triplea.ai.sidecar.dto.DecisionPlan;
 import org.triplea.ai.sidecar.dto.DecisionRequest;
-import org.triplea.ai.sidecar.dto.EngageStayHiddenPlan;
-import org.triplea.ai.sidecar.dto.EngageStayHiddenRequest;
-import org.triplea.ai.sidecar.dto.IgnoreSubsPlan;
-import org.triplea.ai.sidecar.dto.IgnoreSubsRequest;
 import org.triplea.ai.sidecar.dto.InterceptPlan;
 import org.triplea.ai.sidecar.dto.InterceptRequest;
-import org.triplea.ai.sidecar.dto.KamikazePlan;
-import org.triplea.ai.sidecar.dto.KamikazeRequest;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.NoncombatMoveRequest;
 import org.triplea.ai.sidecar.dto.OtherOffensiveRequest;
@@ -32,24 +26,15 @@ import org.triplea.ai.sidecar.dto.RetreatPlan;
 import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
 import org.triplea.ai.sidecar.dto.ScramblePlan;
 import org.triplea.ai.sidecar.dto.ScrambleRequest;
-import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
-import org.triplea.ai.sidecar.dto.SelectCasualtiesRequest;
-import org.triplea.ai.sidecar.dto.SubmergePlan;
-import org.triplea.ai.sidecar.dto.SubmergeRequest;
 import org.triplea.ai.sidecar.exec.CombatMoveExecutor;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
-import org.triplea.ai.sidecar.exec.EngageStayHiddenExecutor;
-import org.triplea.ai.sidecar.exec.IgnoreSubsExecutor;
 import org.triplea.ai.sidecar.exec.InterceptExecutor;
-import org.triplea.ai.sidecar.exec.KamikazeExecutor;
 import org.triplea.ai.sidecar.exec.NoncombatMoveExecutor;
 import org.triplea.ai.sidecar.exec.PlaceExecutor;
 import org.triplea.ai.sidecar.exec.PoliticsExecutor;
 import org.triplea.ai.sidecar.exec.PurchaseExecutor;
 import org.triplea.ai.sidecar.exec.RetreatQueryExecutor;
 import org.triplea.ai.sidecar.exec.ScrambleExecutor;
-import org.triplea.ai.sidecar.exec.SelectCasualtiesExecutor;
-import org.triplea.ai.sidecar.exec.SubmergeExecutor;
 import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionRegistry;
@@ -70,16 +55,9 @@ public final class DecisionHandler implements HttpHandler {
   private static final System.Logger LOG = System.getLogger(DecisionHandler.class.getName());
 
   private final SessionRegistry registry;
-  private final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
-      selectCasualtiesExecutor;
   private final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor;
   private final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor;
-  private final DecisionExecutor<KamikazeRequest, KamikazePlan> kamikazeExecutor;
-  private final DecisionExecutor<IgnoreSubsRequest, IgnoreSubsPlan> ignoreSubsExecutor;
-  private final DecisionExecutor<EngageStayHiddenRequest, EngageStayHiddenPlan>
-      engageStayHiddenExecutor;
   private final DecisionExecutor<InterceptRequest, InterceptPlan> interceptExecutor;
-  private final DecisionExecutor<SubmergeRequest, SubmergePlan> submergeExecutor;
   private final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor;
   private final DecisionExecutor<PoliticsRequest, PoliticsPlan> politicsExecutor;
   private final DecisionExecutor<CombatMoveRequest, CombatMovePlan> combatMoveExecutor;
@@ -90,14 +68,9 @@ public final class DecisionHandler implements HttpHandler {
   public DecisionHandler(final SessionRegistry registry) {
     this(
         registry,
-        new SelectCasualtiesExecutor(),
         new RetreatQueryExecutor(),
         new ScrambleExecutor(),
-        new KamikazeExecutor(),
-        new IgnoreSubsExecutor(),
-        new EngageStayHiddenExecutor(),
         new InterceptExecutor(),
-        new SubmergeExecutor(),
         new PurchaseExecutor(registry.snapshotStore()),
         new PoliticsExecutor(registry.snapshotStore()),
         new CombatMoveExecutor(registry.snapshotStore()),
@@ -112,20 +85,13 @@ public final class DecisionHandler implements HttpHandler {
   public DecisionHandler(
       final SessionRegistry registry,
       final ProSessionSnapshotStore snapshotStore,
-      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
-          selectCasualtiesExecutor,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor) {
     this(
         registry,
-        selectCasualtiesExecutor,
         retreatQueryExecutor,
         scrambleExecutor,
-        new KamikazeExecutor(),
-        new IgnoreSubsExecutor(),
-        new EngageStayHiddenExecutor(),
         new InterceptExecutor(),
-        new SubmergeExecutor(),
         new PurchaseExecutor(snapshotStore),
         new PoliticsExecutor(snapshotStore),
         new CombatMoveExecutor(snapshotStore),
@@ -140,21 +106,14 @@ public final class DecisionHandler implements HttpHandler {
    */
   public DecisionHandler(
       final SessionRegistry registry,
-      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
-          selectCasualtiesExecutor,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor) {
     this(
         registry,
-        selectCasualtiesExecutor,
         retreatQueryExecutor,
         scrambleExecutor,
-        new KamikazeExecutor(),
-        new IgnoreSubsExecutor(),
-        new EngageStayHiddenExecutor(),
         new InterceptExecutor(),
-        new SubmergeExecutor(),
         purchaseExecutor,
         (session, req) -> {
           throw new AssertionError("PoliticsExecutor was called unexpectedly");
@@ -171,18 +130,12 @@ public final class DecisionHandler implements HttpHandler {
   }
 
   /**
-   * Backward-compat test constructor used by tests written before kamikaze / ignore-subs /
-   * engage-stay-hidden / intercept / submerge executors were added. The five new executors default
-   * to their production implementations; callers that need to stub them should use the full {@link
-   * #DecisionHandler(SessionRegistry, DecisionExecutor, DecisionExecutor, DecisionExecutor,
-   * DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor,
-   * DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor, DecisionExecutor)}
-   * constructor instead.
+   * Backward-compat test constructor used by tests written before intercept was upgraded to a real
+   * ProAi TUV-swing implementation. InterceptExecutor defaults to its production implementation;
+   * callers that need to stub it should use the full constructor instead.
    */
   public DecisionHandler(
       final SessionRegistry registry,
-      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
-          selectCasualtiesExecutor,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor,
@@ -192,14 +145,9 @@ public final class DecisionHandler implements HttpHandler {
       final DecisionExecutor<PlaceRequest, PlacePlan> placeExecutor) {
     this(
         registry,
-        selectCasualtiesExecutor,
         retreatQueryExecutor,
         scrambleExecutor,
-        new KamikazeExecutor(),
-        new IgnoreSubsExecutor(),
-        new EngageStayHiddenExecutor(),
         new InterceptExecutor(),
-        new SubmergeExecutor(),
         purchaseExecutor,
         politicsExecutor,
         combatMoveExecutor,
@@ -210,30 +158,18 @@ public final class DecisionHandler implements HttpHandler {
   /** Test constructor — full control over all executors. */
   public DecisionHandler(
       final SessionRegistry registry,
-      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan>
-          selectCasualtiesExecutor,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> retreatQueryExecutor,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> scrambleExecutor,
-      final DecisionExecutor<KamikazeRequest, KamikazePlan> kamikazeExecutor,
-      final DecisionExecutor<IgnoreSubsRequest, IgnoreSubsPlan> ignoreSubsExecutor,
-      final DecisionExecutor<EngageStayHiddenRequest, EngageStayHiddenPlan>
-          engageStayHiddenExecutor,
       final DecisionExecutor<InterceptRequest, InterceptPlan> interceptExecutor,
-      final DecisionExecutor<SubmergeRequest, SubmergePlan> submergeExecutor,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor,
       final DecisionExecutor<PoliticsRequest, PoliticsPlan> politicsExecutor,
       final DecisionExecutor<CombatMoveRequest, CombatMovePlan> combatMoveExecutor,
       final DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> noncombatMoveExecutor,
       final DecisionExecutor<PlaceRequest, PlacePlan> placeExecutor) {
     this.registry = registry;
-    this.selectCasualtiesExecutor = selectCasualtiesExecutor;
     this.retreatQueryExecutor = retreatQueryExecutor;
     this.scrambleExecutor = scrambleExecutor;
-    this.kamikazeExecutor = kamikazeExecutor;
-    this.ignoreSubsExecutor = ignoreSubsExecutor;
-    this.engageStayHiddenExecutor = engageStayHiddenExecutor;
     this.interceptExecutor = interceptExecutor;
-    this.submergeExecutor = submergeExecutor;
     this.purchaseExecutor = purchaseExecutor;
     this.politicsExecutor = politicsExecutor;
     this.combatMoveExecutor = combatMoveExecutor;
@@ -298,10 +234,6 @@ public final class DecisionHandler implements HttpHandler {
     AiTraceLogger.setMatchId(session.get().key().gameId());
     try {
       switch (request) {
-        case SelectCasualtiesRequest sc -> {
-          final SelectCasualtiesPlan plan = selectCasualtiesExecutor.execute(session.get(), sc);
-          writeJson(exchange, 200, JsonBodies.readyBody(plan));
-        }
         case RetreatQueryRequest rq -> {
           final RetreatPlan plan = retreatQueryExecutor.execute(session.get(), rq);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
@@ -310,24 +242,8 @@ public final class DecisionHandler implements HttpHandler {
           final ScramblePlan plan = scrambleExecutor.execute(session.get(), sr);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
-        case KamikazeRequest kr -> {
-          final KamikazePlan plan = kamikazeExecutor.execute(session.get(), kr);
-          writeJson(exchange, 200, JsonBodies.readyBody(plan));
-        }
-        case IgnoreSubsRequest isr -> {
-          final IgnoreSubsPlan plan = ignoreSubsExecutor.execute(session.get(), isr);
-          writeJson(exchange, 200, JsonBodies.readyBody(plan));
-        }
-        case EngageStayHiddenRequest esh -> {
-          final EngageStayHiddenPlan plan = engageStayHiddenExecutor.execute(session.get(), esh);
-          writeJson(exchange, 200, JsonBodies.readyBody(plan));
-        }
         case InterceptRequest ir -> {
           final InterceptPlan plan = interceptExecutor.execute(session.get(), ir);
-          writeJson(exchange, 200, JsonBodies.readyBody(plan));
-        }
-        case SubmergeRequest smr -> {
-          final SubmergePlan plan = submergeExecutor.execute(session.get(), smr);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
         case PurchaseRequest pr -> {

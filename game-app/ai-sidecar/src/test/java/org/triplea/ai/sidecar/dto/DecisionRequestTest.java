@@ -9,27 +9,6 @@ class DecisionRequestTest {
   private final ObjectMapper mapper = new ObjectMapper();
 
   @Test
-  void deserializesSelectCasualtiesVariant() throws Exception {
-    String json =
-        """
-      {
-        "kind": "select-casualties",
-        "state": { "territories": [], "players": [], "round": 1, "phase": "combat", "currentPlayer": "Germans" },
-        "battle": {
-          "battleId": "b1", "territory": "Egypt",
-          "attackerNation": "British", "defenderNation": "Germans",
-          "hitCount": 2, "selectFrom": [], "friendlyUnits": [], "enemyUnits": [],
-          "isAmphibious": false, "amphibiousLandAttackers": [],
-          "defaultCasualties": ["u1","u2"], "allowMultipleHitsPerUnit": false
-        }
-      }""";
-    DecisionRequest req = mapper.readValue(json, DecisionRequest.class);
-    assertThat(req).isInstanceOf(SelectCasualtiesRequest.class);
-    assertThat(((SelectCasualtiesRequest) req).battle().defaultCasualties())
-        .containsExactly("u1", "u2");
-  }
-
-  @Test
   void deserializesRetreatVariant() throws Exception {
     String json =
         """

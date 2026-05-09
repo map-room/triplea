@@ -17,8 +17,6 @@ import org.triplea.ai.sidecar.dto.RetreatPlan;
 import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
 import org.triplea.ai.sidecar.dto.ScramblePlan;
 import org.triplea.ai.sidecar.dto.ScrambleRequest;
-import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
-import org.triplea.ai.sidecar.dto.SelectCasualtiesRequest;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionKey;
@@ -34,15 +32,6 @@ class DecisionHandlerTest {
   private static final String EMPTY_STATE =
       "\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
           + "\"phase\":\"combat\",\"currentPlayer\":\"Germans\"}";
-
-  private static final String SELECT_CASUALTIES_BODY =
-      "{\"kind\":\"select-casualties\","
-          + EMPTY_STATE
-          + ",\"battle\":{\"battleId\":\"b1\",\"territory\":\"Egypt\","
-          + "\"attackerNation\":\"British\",\"defenderNation\":\"Germans\","
-          + "\"hitCount\":0,\"selectFrom\":[],\"friendlyUnits\":[],\"enemyUnits\":[],"
-          + "\"isAmphibious\":false,\"amphibiousLandAttackers\":[],"
-          + "\"defaultCasualties\":[],\"allowMultipleHitsPerUnit\":false}}";
 
   private static final String RETREAT_BODY =
       "{\"kind\":\"retreat-or-press\","
@@ -71,11 +60,10 @@ class DecisionHandlerTest {
 
   private static DecisionHandler handler(
       final SessionRegistry registry,
-      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> sc,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> rq,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> sr) {
     return new DecisionHandler(
-        registry, sc, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of()));
+        registry, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of()));
   }
 
   // ---------------------------------------------------------------------
@@ -84,51 +72,12 @@ class DecisionHandlerTest {
   // ---------------------------------------------------------------------
 
   @Test
-  void selectCasualties_happyPath_returnsPlanJson() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final AtomicReference<Object> captured = new AtomicReference<>();
-    final DecisionHandler h =
-        handler(
-            registry,
-            (session, req) -> {
-              captured.set(req);
-              return new SelectCasualtiesPlan(List.of("u1"), List.of("u2"));
-            },
-            (session, req) -> {
-              throw new AssertionError("retreat executor must not be called");
-            },
-            (session, req) -> {
-              throw new AssertionError("scramble executor must not be called");
-            });
-
-    final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", SELECT_CASUALTIES_BODY);
-    h.handle(ex);
-
-    assertEquals(200, ex.responseCode());
-    final String body = ex.responseBodyString();
-    // Envelope fields
-    assertTrue(body.contains("\"status\":\"ready\""), body);
-    assertTrue(body.contains("\"plan\":{"), body);
-    // Plan contents nested under "plan"
-    assertTrue(body.contains("\"kind\":\"select-casualties\""), body);
-    assertTrue(body.contains("\"killed\":[\"u1\"]"), body);
-    assertTrue(body.contains("\"damaged\":[\"u2\"]"), body);
-    assertTrue(captured.get() instanceof SelectCasualtiesRequest);
-  }
-
-  @Test
   void retreatQuery_happyPath_returnsPlanJson() throws Exception {
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
     final DecisionHandler h =
         handler(
             registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
             (session, req) -> new RetreatPlan("Libya"),
             (session, req) -> {
               throw new AssertionError();
@@ -153,9 +102,6 @@ class DecisionHandlerTest {
     final DecisionHandler h =
         handler(
             registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
             (session, req) -> {
               throw new AssertionError();
             },
@@ -193,9 +139,6 @@ class DecisionHandlerTest {
               },
               (session, req) -> {
                 throw new AssertionError();
-              },
-              (session, req) -> {
-                throw new AssertionError();
               });
       final FakeHttpExchange ex =
           new FakeHttpExchange(
@@ -224,11 +167,10 @@ class DecisionHandlerTest {
     final DecisionHandler h =
         handler(
             newRegistry(),
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
     final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/unknown/decision", SELECT_CASUALTIES_BODY);
+        new FakeHttpExchange("POST", "/session/unknown/decision", RETREAT_BODY);
     h.handle(ex);
     assertEquals(404, ex.responseCode());
     final String body = ex.responseBodyString();
@@ -243,7 +185,6 @@ class DecisionHandlerTest {
     final DecisionHandler h =
         handler(
             registry,
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
     final FakeHttpExchange ex =
@@ -262,7 +203,6 @@ class DecisionHandlerTest {
     final DecisionHandler h =
         handler(
             registry,
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
     final String body = "{" + EMPTY_STATE + "}";
@@ -281,7 +221,6 @@ class DecisionHandlerTest {
     final DecisionHandler h =
         handler(
             registry,
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
     final FakeHttpExchange ex =
@@ -306,10 +245,7 @@ class DecisionHandlerTest {
             registry,
             (session, req) -> {
               seenInExecutor.set(AiTraceLogger.currentMatchId());
-              return new SelectCasualtiesPlan(List.of(), List.of());
-            },
-            (session, req) -> {
-              throw new AssertionError();
+              return new RetreatPlan(null);
             },
             (session, req) -> {
               throw new AssertionError();
@@ -317,8 +253,7 @@ class DecisionHandlerTest {
 
     AiTraceLogger.clearMatchId();
     final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", SELECT_CASUALTIES_BODY);
+        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", RETREAT_BODY);
     h.handle(ex);
 
     // During dispatch the executor saw the session's matchID.
@@ -340,15 +275,11 @@ class DecisionHandlerTest {
             },
             (session, req) -> {
               throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
             });
 
     AiTraceLogger.clearMatchId();
     final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", SELECT_CASUALTIES_BODY);
+        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", RETREAT_BODY);
     h.handle(ex);
 
     assertEquals(400, ex.responseCode());
@@ -363,7 +294,6 @@ class DecisionHandlerTest {
     final DecisionHandler h =
         handler(
             registry,
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
     final FakeHttpExchange ex =

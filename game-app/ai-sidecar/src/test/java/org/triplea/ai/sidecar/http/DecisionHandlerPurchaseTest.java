@@ -14,7 +14,6 @@ import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
-import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionKey;
@@ -54,17 +53,14 @@ class DecisionHandlerPurchaseTest {
   }
 
   /**
-   * Creates a {@link DecisionHandler} with stub Phase-2 executors that throw on invocation, and the
-   * supplied purchase executor stub.
+   * Creates a {@link DecisionHandler} with stub defensive executors that throw on invocation, and
+   * the supplied purchase executor stub.
    */
   private DecisionHandler handlerWithPurchaseStub(
       final SessionRegistry registry,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor) {
     return new DecisionHandler(
         registry,
-        (session, req) -> {
-          throw new AssertionError("selectCasualties must not be called");
-        },
         (session, req) -> {
           throw new AssertionError("retreat must not be called");
         },
@@ -147,46 +143,5 @@ class DecisionHandlerPurchaseTest {
     assertEquals("purchase", plan.path("kind").asText());
     assertEquals(0, plan.path("buys").size(), "empty buys must still be an array");
     assertEquals(0, plan.path("repairs").size(), "empty repairs must still be an array");
-  }
-
-  // -------------------------------------------------------------------------
-  // Verify Phase-2 defensive executors still route correctly (no regression)
-  // -------------------------------------------------------------------------
-
-  @Test
-  void selectCasualties_stillRoutedCorrectly_purchaseNotInvoked() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-
-    final String selectCasualtiesBody =
-        "{\"kind\":\"select-casualties\","
-            + EMPTY_STATE.replace("\"phase\":\"purchase\"", "\"phase\":\"combat\"")
-            + ",\"battle\":{\"battleId\":\"b1\",\"territory\":\"Egypt\","
-            + "\"attackerNation\":\"British\",\"defenderNation\":\"Germans\","
-            + "\"hitCount\":0,\"selectFrom\":[],\"friendlyUnits\":[],\"enemyUnits\":[],"
-            + "\"isAmphibious\":false,\"amphibiousLandAttackers\":[],"
-            + "\"defaultCasualties\":[],\"allowMultipleHitsPerUnit\":false}}";
-
-    final DecisionHandler h =
-        new DecisionHandler(
-            registry,
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
-            (session, req) -> {
-              throw new AssertionError("retreat must not be called");
-            },
-            (session, req) -> {
-              throw new AssertionError("scramble must not be called");
-            },
-            (session, req) -> {
-              throw new AssertionError("purchase must not be called");
-            });
-
-    final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", selectCasualtiesBody);
-    h.handle(ex);
-
-    assertEquals(200, ex.responseCode());
-    assertEquals("ready", MAPPER.readTree(ex.responseBodyString()).path("status").asText());
   }
 }

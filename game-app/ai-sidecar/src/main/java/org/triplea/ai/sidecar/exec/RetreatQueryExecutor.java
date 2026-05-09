@@ -22,10 +22,10 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
  * Executes a {@code retreat-or-press} decision by invoking {@link AbstractProAi#retreatQuery(UUID,
  * boolean, Territory, Collection, String)}.
  *
- * <p>Symmetric with {@link SelectCasualtiesExecutor}: applies the embedded {@code WireState},
- * synthesises a pending {@link IBattle} in the session {@link BattleTracker}, dispatches into
- * ProAi, and maps the {@code Optional<Territory>} result back to a wire-shaped {@link RetreatPlan}
- * carrying the territory name (or {@code null} if ProAi decides to press).
+ * <p>Applies the embedded {@code WireState}, synthesises a pending {@link IBattle} in the session
+ * {@link BattleTracker}, dispatches into ProAi, and maps the {@code Optional<Territory>} result
+ * back to a wire-shaped {@link RetreatPlan} carrying the territory name (or {@code null} if ProAi
+ * decides to press).
  *
  * <p>The request DTO intentionally does <b>not</b> carry attacker/defender/unit collections — per
  * the Phase 2 detector contract ({@code detectRetreatQuery}) the retreating player is always the

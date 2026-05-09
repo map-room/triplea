@@ -84,99 +84,7 @@ class Phase2DefensiveDecisionsIntegrationTest {
   }
 
   // ---------------------------------------------------------------------------
-  // Test 1: selectCasualties
-  //   POST /decision with kind=select-casualties for a mixed German stack being
-  //   attacked by Russians on Germany. currentPlayer=Russians (attacker's turn).
-  //   Expect 200 + SelectCasualtiesPlan with Map Room unit IDs (not UUIDs).
-  // ---------------------------------------------------------------------------
-
-  @Test
-  void selectCasualties_mixedStack_returns200WithValidKilledIds() throws Exception {
-    // WireState: attacker (Russians) holds the turn; Germany territory has German units plus the
-    // Russian enemy infantry (all units referenced in the request must appear in WireState).
-    // Field names follow WireTerritory (territoryId, owner, units) and WireUnit (unitId, unitType).
-    final String wireState =
-        "{"
-            + "\"territories\":["
-            + "{\"territoryId\":\"Germany\",\"owner\":\""
-            + DEFENDER
-            + "\",\"units\":["
-            + "{\"unitId\":\"u-inf-1\",\"unitType\":\"infantry\",\"hitsTaken\":0,\"movesUsed\":0},"
-            + "{\"unitId\":\"u-art-1\",\"unitType\":\"artillery\",\"hitsTaken\":0,\"movesUsed\":0},"
-            + "{\"unitId\":\"u-tank-1\",\"unitType\":\"armour\",\"hitsTaken\":0,\"movesUsed\":0},"
-            + "{\"unitId\":\"u-rus-inf-1\",\"unitType\":\"infantry\",\"hitsTaken\":0,\"movesUsed\":0}"
-            + "]}"
-            + "],"
-            + "\"players\":[],"
-            + "\"round\":1,"
-            + "\"phase\":\"combat\","
-            + "\"currentPlayer\":\""
-            + ATTACKER
-            + "\""
-            + "}";
-
-    final String selectFrom =
-        "["
-            + "{\"unitId\":\"u-inf-1\",\"unitType\":\"infantry\",\"hitsTaken\":0,\"movesUsed\":0},"
-            + "{\"unitId\":\"u-art-1\",\"unitType\":\"artillery\",\"hitsTaken\":0,\"movesUsed\":0},"
-            + "{\"unitId\":\"u-tank-1\",\"unitType\":\"armour\",\"hitsTaken\":0,\"movesUsed\":0}"
-            + "]";
-
-    final String body =
-        "{"
-            + "\"kind\":\"select-casualties\","
-            + "\"state\":"
-            + wireState
-            + ","
-            + "\"battle\":{"
-            + "\"battleId\":\"b-sc-integration\","
-            + "\"territory\":\"Germany\","
-            + "\"attackerNation\":\""
-            + ATTACKER
-            + "\","
-            + "\"defenderNation\":\""
-            + DEFENDER
-            + "\","
-            + "\"hitCount\":2,"
-            + "\"selectFrom\":"
-            + selectFrom
-            + ","
-            + "\"friendlyUnits\":"
-            + selectFrom
-            + ","
-            + "\"enemyUnits\":["
-            + "{\"unitId\":\"u-rus-inf-1\",\"unitType\":\"infantry\",\"hitsTaken\":0,\"movesUsed\":0}"
-            + "],"
-            + "\"isAmphibious\":false,"
-            + "\"amphibiousLandAttackers\":[],"
-            + "\"defaultCasualties\":[\"u-inf-1\",\"u-art-1\"],"
-            + "\"allowMultipleHitsPerUnit\":false"
-            + "}"
-            + "}";
-
-    final HttpResponse<String> resp = postDecision(body);
-    assertEquals(200, resp.statusCode(), "selectCasualties must return 200; body=" + resp.body());
-
-    final JsonNode envelope = MAPPER.readTree(resp.body());
-    assertEquals("ready", envelope.path("status").asText(), "envelope status must be 'ready'");
-    final JsonNode plan = envelope.path("plan");
-    assertTrue(plan.has("killed"), "Response must have 'killed' field");
-    assertTrue(plan.has("damaged"), "Response must have 'damaged' field");
-    assertTrue(plan.get("killed").isArray(), "'killed' must be an array");
-    assertEquals(2, plan.get("killed").size(), "hitCount=2 so exactly 2 units must be killed");
-
-    // All returned IDs must be Map Room IDs, not Java UUIDs.
-    for (final JsonNode idNode : plan.get("killed")) {
-      final String id = idNode.asText();
-      assertTrue(
-          id.equals("u-inf-1") || id.equals("u-art-1") || id.equals("u-tank-1"),
-          "Killed id must be a Map Room id from the selectFrom list, got: " + id);
-      assertNotUuid(id);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Test 2: retreatQuery
+  // Test 1: retreatQuery
   //   POST /decision with kind=retreat-or-press for Germans on Poland with legal
   //   retreat to Germany or Slovakia Hungary. currentPlayer=Russians (attacker).
   //   Expect 200 + RetreatPlan with retreatTo null (press) or one of the legal
@@ -237,7 +145,7 @@ class Phase2DefensiveDecisionsIntegrationTest {
   }
 
   // ---------------------------------------------------------------------------
-  // Test 3: scramble
+  // Test 2: scramble
   //   POST /decision with kind=scramble for Germans defending 112 Sea Zone from
   //   an airbase at Western Germany. currentPlayer=British (attacker at sea).
   //   Expect 200 + ScramblePlan with scramblers map (may be empty if ProAi

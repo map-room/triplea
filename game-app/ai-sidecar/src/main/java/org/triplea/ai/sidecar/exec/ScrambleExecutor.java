@@ -28,12 +28,11 @@ import org.triplea.util.Tuple;
  * Executes a {@code scramble} decision by invoking {@link
  * AbstractProAi#scrambleUnitsQuery(Territory, Map)}.
  *
- * <p>Symmetric with {@link RetreatQueryExecutor} and {@link SelectCasualtiesExecutor}: applies the
- * embedded {@link org.triplea.ai.sidecar.wire.WireState}, synthesises a pending {@link IBattle} at
- * the scramble-to territory so {@code ProScrambleAi} can find it via {@code
- * BattleTracker.getPendingBattle}, dispatches into ProAi, and maps the resulting {@code
- * Map<Territory, Collection<Unit>>} back to a wire-shaped {@link ScramblePlan} keyed by source
- * territory name with Map Room unit IDs.
+ * <p>Symmetric with {@link RetreatQueryExecutor}: applies the embedded {@link
+ * org.triplea.ai.sidecar.wire.WireState}, synthesises a pending {@link IBattle} at the scramble-to
+ * territory so {@code ProScrambleAi} can find it via {@code BattleTracker.getPendingBattle},
+ * dispatches into ProAi, and maps the resulting {@code Map<Territory, Collection<Unit>>} back to a
+ * wire-shaped {@link ScramblePlan} keyed by source territory name with Map Room unit IDs.
  *
  * <h2>Airbase resolution — why the wire {@code maxCount} is advisory</h2>
  *
