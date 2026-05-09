@@ -231,4 +231,23 @@ class PurchaseExecutorTest {
     if (!pg.isWater()) return 2; // land construction
     return 3; // water construction
   }
+
+  /**
+   * Smoke test: {@code politicalActions} is always a non-null list. Round 1 Germans will not
+   * declare any wars, so the list is expected to be empty. The important invariant is that the
+   * field is present and well-typed regardless of whether any actions were decided.
+   *
+   * <p>Note: {@code politicalActions} reflects the AI's decisions on the simulation clone ({@code
+   * dataCopy}), not the live session's {@link games.strategy.engine.data.RelationshipTracker}. The
+   * live tracker is only updated after the bot dispatches the returned war declarations to the
+   * engine via {@code declareWar} moves.
+   */
+  @Test
+  void politicalActionsIsNonNullAfterPurchase() throws Exception {
+    final Session session = freshSession("Germans");
+    final PurchasePlan plan =
+        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+
+    assertThat(plan.politicalActions()).as("politicalActions must never be null").isNotNull();
+  }
 }

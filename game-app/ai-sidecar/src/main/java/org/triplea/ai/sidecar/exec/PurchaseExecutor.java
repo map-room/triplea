@@ -16,6 +16,7 @@ import games.strategy.triplea.ai.pro.data.ProPlaceTerritory;
 import games.strategy.triplea.ai.pro.data.ProPurchaseTerritory;
 import games.strategy.triplea.ai.pro.data.ProSplitResourceTracker;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
+import games.strategy.triplea.attachments.PoliticalActionAttachment;
 import games.strategy.triplea.delegate.EndRoundDelegate;
 import games.strategy.triplea.delegate.MoveDelegate;
 import games.strategy.triplea.delegate.PlaceDelegate;
@@ -34,6 +35,7 @@ import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RepairOrder;
+import org.triplea.ai.sidecar.dto.WarDeclaration;
 import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.wire.WirePlayer;
@@ -185,7 +187,17 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
       AiTraceLogger.logPurchaseOrder(player.getName(), order.unitType(), order.count());
     }
     final List<RepairOrder> repairs = toRepairOrders(recorder.capturedRepair(), data);
-    return new PurchasePlan(buys, repairs, placements);
+
+    final List<PoliticalActionAttachment> storedActions = proAi.getStoredPoliticalActions();
+    final List<WarDeclaration> politicalActions;
+    if (storedActions != null && !storedActions.isEmpty()) {
+      politicalActions = PoliticsObserver.toWarDeclarations(storedActions, player);
+      proAi.clearStoredPoliticalActions();
+    } else {
+      politicalActions = List.of();
+    }
+
+    return new PurchasePlan(buys, repairs, placements, politicalActions);
   }
 
   /**
