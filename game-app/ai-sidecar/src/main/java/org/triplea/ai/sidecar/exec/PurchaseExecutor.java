@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import org.triplea.ai.sidecar.AiTraceLogger;
+import org.triplea.ai.sidecar.dto.PlacementGroup;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
@@ -170,18 +171,21 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     // (rare — would indicate purchase ran with no target territories, typical of empty plans).
     final Map<Territory, ProPurchaseTerritory> stored = proAi.getStoredPurchaseTerritories();
     final List<PurchaseOrder> buys;
+    final List<PlacementGroup> placements;
     if (stored != null && !stored.isEmpty()) {
       buys = toPurchaseOrdersFromStored(stored);
+      placements = toPlacementGroups(stored);
     } else {
       final IntegerMap<ProductionRule> captured = recorder.capturedPurchase();
       final IntegerMap<ProductionRule> trimmed = trimToFit(captured, pusToSpend, pus);
       buys = toPurchaseOrders(trimmed);
+      placements = List.of();
     }
     for (final PurchaseOrder order : buys) {
       AiTraceLogger.logPurchaseOrder(player.getName(), order.unitType(), order.count());
     }
     final List<RepairOrder> repairs = toRepairOrders(recorder.capturedRepair(), data);
-    return new PurchasePlan(buys, repairs);
+    return new PurchasePlan(buys, repairs, placements);
   }
 
   /**
@@ -215,6 +219,55 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
       sum += rule.getCosts().getInt(pus) * map.getInt(rule);
     }
     return sum;
+  }
+
+  /**
+   * Builds the ordered placement plan from {@code storedPurchaseTerritories}.
+   *
+   * <p>Dispatch order mirrors {@code ProPurchaseAi.place}: land non-construction first, then water
+   * non-construction, then land construction, then water construction. Within each bucket the
+   * iteration order follows the insertion order of {@code stored}.
+   */
+  static List<PlacementGroup> toPlacementGroups(final Map<Territory, ProPurchaseTerritory> stored) {
+    final List<PlacementGroup> landNonConst = new ArrayList<>();
+    final List<PlacementGroup> waterNonConst = new ArrayList<>();
+    final List<PlacementGroup> landConst = new ArrayList<>();
+    final List<PlacementGroup> waterConst = new ArrayList<>();
+
+    for (final ProPurchaseTerritory ppt : stored.values()) {
+      for (final ProPlaceTerritory placeTerr : ppt.getCanPlaceTerritories()) {
+        final List<Unit> units = placeTerr.getPlaceUnits();
+        if (units.isEmpty()) {
+          continue;
+        }
+        final boolean isWater = placeTerr.getTerritory().isWater();
+        final boolean isConstruction =
+            units.stream().anyMatch(u -> u.getType().getUnitAttachment().isConstruction());
+        final List<String> unitTypes = new ArrayList<>();
+        for (final Unit u : units) {
+          unitTypes.add(u.getType().getName());
+        }
+        final PlacementGroup group =
+            new PlacementGroup(
+                placeTerr.getTerritory().getName(), unitTypes, isWater, isConstruction);
+        if (!isWater && !isConstruction) {
+          landNonConst.add(group);
+        } else if (isWater && !isConstruction) {
+          waterNonConst.add(group);
+        } else if (!isWater) {
+          landConst.add(group);
+        } else {
+          waterConst.add(group);
+        }
+      }
+    }
+
+    final List<PlacementGroup> result = new ArrayList<>();
+    result.addAll(landNonConst);
+    result.addAll(waterNonConst);
+    result.addAll(landConst);
+    result.addAll(waterConst);
+    return result;
   }
 
   private static List<PurchaseOrder> toPurchaseOrders(final IntegerMap<ProductionRule> map) {

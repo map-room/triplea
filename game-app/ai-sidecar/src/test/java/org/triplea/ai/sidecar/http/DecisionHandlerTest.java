@@ -63,7 +63,7 @@ class DecisionHandlerTest {
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> rq,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> sr) {
     return new DecisionHandler(
-        registry, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of()));
+        registry, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of(), List.of()));
   }
 
   // ---------------------------------------------------------------------
