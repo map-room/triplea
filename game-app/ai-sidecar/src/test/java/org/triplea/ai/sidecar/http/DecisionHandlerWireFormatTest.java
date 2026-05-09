@@ -10,7 +10,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import games.strategy.triplea.settings.ClientSetting;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
@@ -25,8 +24,6 @@ import org.triplea.ai.sidecar.dto.RetreatPlan;
 import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
 import org.triplea.ai.sidecar.dto.ScramblePlan;
 import org.triplea.ai.sidecar.dto.ScrambleRequest;
-import org.triplea.ai.sidecar.dto.SelectCasualtiesPlan;
-import org.triplea.ai.sidecar.dto.SelectCasualtiesRequest;
 import org.triplea.ai.sidecar.dto.WireMoveDescription;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
 import org.triplea.ai.sidecar.session.Session;
@@ -56,15 +53,6 @@ class DecisionHandlerWireFormatTest {
   private static final String EMPTY_STATE =
       "\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
           + "\"phase\":\"combat\",\"currentPlayer\":\"Germans\"}";
-
-  private static final String SELECT_CASUALTIES_BODY =
-      "{\"kind\":\"select-casualties\","
-          + EMPTY_STATE
-          + ",\"battle\":{\"battleId\":\"b1\",\"territory\":\"Egypt\","
-          + "\"attackerNation\":\"British\",\"defenderNation\":\"Germans\","
-          + "\"hitCount\":0,\"selectFrom\":[],\"friendlyUnits\":[],\"enemyUnits\":[],"
-          + "\"isAmphibious\":false,\"amphibiousLandAttackers\":[],"
-          + "\"defaultCasualties\":[],\"allowMultipleHitsPerUnit\":false}}";
 
   private static final String RETREAT_BODY =
       "{\"kind\":\"retreat-or-press\","
@@ -97,13 +85,12 @@ class DecisionHandlerWireFormatTest {
 
   private DecisionHandler stubHandler(
       final SessionRegistry registry,
-      final DecisionExecutor<SelectCasualtiesRequest, SelectCasualtiesPlan> sc,
       final DecisionExecutor<RetreatQueryRequest, RetreatPlan> rq,
       final DecisionExecutor<ScrambleRequest, ScramblePlan> sr) {
     // Default purchase stub: returns an empty plan so wire-format tests that don't exercise
     // purchase still compile and route correctly.
     return new DecisionHandler(
-        registry, sc, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of()));
+        registry, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of()));
   }
 
   private JsonNode responseJson(final FakeHttpExchange ex) throws Exception {
@@ -115,58 +102,12 @@ class DecisionHandlerWireFormatTest {
   // ---------------------------------------------------------------------
 
   @Test
-  void selectCasualties_success_wireShape() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final DecisionHandler h =
-        stubHandler(
-            registry,
-            (session, req) -> new SelectCasualtiesPlan(List.of("u-inf-1"), List.of()),
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            });
-
-    final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", SELECT_CASUALTIES_BODY);
-    h.handle(ex);
-
-    assertEquals(200, ex.responseCode());
-    final JsonNode root = responseJson(ex);
-
-    // Envelope: exactly status + plan
-    assertEquals("ready", root.path("status").asText(), "status must be 'ready'");
-    assertTrue(root.has("plan"), "root must have 'plan'");
-    assertFalse(root.has("error"), "success body must not have 'error'");
-
-    // plan: kind discriminator + payload fields
-    final JsonNode plan = root.path("plan");
-    assertEquals("select-casualties", plan.path("kind").asText(), "plan.kind");
-    assertTrue(plan.path("killed").isArray(), "plan.killed must be array");
-    assertTrue(plan.path("damaged").isArray(), "plan.damaged must be array");
-    assertEquals(1, plan.path("killed").size(), "killed count");
-    assertEquals("u-inf-1", plan.path("killed").get(0).asText(), "killed[0]");
-    assertEquals(0, plan.path("damaged").size(), "damaged count");
-
-    // No extra top-level fields
-    final Set<String> topKeys = Set.of("status", "plan");
-    root.fieldNames()
-        .forEachRemaining(k -> assertTrue(topKeys.contains(k), "unexpected top-level key: " + k));
-  }
-
-  @Test
   void retreatOrPress_success_wireShape() throws Exception {
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
     final DecisionHandler h =
         stubHandler(
             registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
             (session, req) -> new RetreatPlan("Libya"),
             (session, req) -> {
               throw new AssertionError();
@@ -195,9 +136,6 @@ class DecisionHandlerWireFormatTest {
     final DecisionHandler h =
         stubHandler(
             registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
             (session, req) -> new RetreatPlan(null),
             (session, req) -> {
               throw new AssertionError();
@@ -221,9 +159,6 @@ class DecisionHandlerWireFormatTest {
     final DecisionHandler h =
         stubHandler(
             registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
             (session, req) -> {
               throw new AssertionError();
             },
@@ -258,9 +193,6 @@ class DecisionHandlerWireFormatTest {
     final DecisionHandler h =
         new DecisionHandler(
             registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
             (session, req) -> {
               throw new AssertionError();
             },
@@ -305,9 +237,6 @@ class DecisionHandlerWireFormatTest {
     final DecisionHandler h =
         new DecisionHandler(
             registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
             (session, req) -> {
               throw new AssertionError();
             },
@@ -370,9 +299,6 @@ class DecisionHandlerWireFormatTest {
             (session, req) -> {
               throw new AssertionError();
             },
-            (session, req) -> {
-              throw new AssertionError();
-            },
             (session, req) -> fixedPlan,
             (session, req) -> {
               throw new AssertionError();
@@ -419,9 +345,6 @@ class DecisionHandlerWireFormatTest {
             (session, req) -> {
               throw new AssertionError();
             },
-            (session, req) -> {
-              throw new AssertionError();
-            },
             (session, req) -> fixedPlan);
 
     final FakeHttpExchange ex =
@@ -449,12 +372,11 @@ class DecisionHandlerWireFormatTest {
     final DecisionHandler h =
         stubHandler(
             newRegistry(),
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
 
     final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/no-such-session/decision", SELECT_CASUALTIES_BODY);
+        new FakeHttpExchange("POST", "/session/no-such-session/decision", RETREAT_BODY);
     h.handle(ex);
 
     assertEquals(404, ex.responseCode());
@@ -475,7 +397,6 @@ class DecisionHandlerWireFormatTest {
     final DecisionHandler h =
         stubHandler(
             registry,
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
 
@@ -501,7 +422,6 @@ class DecisionHandlerWireFormatTest {
     final DecisionHandler h =
         stubHandler(
             registry,
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
 
@@ -529,7 +449,6 @@ class DecisionHandlerWireFormatTest {
     final DecisionHandler h =
         stubHandler(
             registry,
-            (session, req) -> new SelectCasualtiesPlan(List.of(), List.of()),
             (session, req) -> new RetreatPlan(null),
             (session, req) -> new ScramblePlan(Map.of()));
 
