@@ -105,8 +105,18 @@ public final class PoliticsObserver {
    * Mirrors the warPlayers extraction in {@code ProPoliticsAi}.
    */
   public List<WarDeclaration> toWarDeclarations(final GamePlayer actingPlayer) {
+    return toWarDeclarations(captured, actingPlayer);
+  }
+
+  /**
+   * Static variant that projects an arbitrary list of {@link PoliticalActionAttachment}s to {@link
+   * WarDeclaration}s. Used by {@link org.triplea.ai.sidecar.exec.PurchaseExecutor} to project
+   * {@code storedPoliticalActions} populated during purchase simulation.
+   */
+  static List<WarDeclaration> toWarDeclarations(
+      final List<PoliticalActionAttachment> actions, final GamePlayer actingPlayer) {
     final List<WarDeclaration> out = new ArrayList<>();
-    for (final PoliticalActionAttachment action : captured) {
+    for (final PoliticalActionAttachment action : actions) {
       for (final PoliticalActionAttachment.RelationshipChange change :
           action.getRelationshipChanges()) {
         if (change.relationshipType == null

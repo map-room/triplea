@@ -51,4 +51,34 @@ class PurchasePlanJsonTest {
     assertTrue(back.placements().get(1).isWater());
     assertTrue(back.placements().get(2).isConstruction());
   }
+
+  @Test
+  void purchasePlanRoundTripsWithPoliticalActions() throws Exception {
+    PurchasePlan plan =
+        new PurchasePlan(
+            List.of(new PurchaseOrder("infantry", 2, "Germany")),
+            List.of(),
+            List.of(),
+            List.of(new WarDeclaration("Russians"), new WarDeclaration("British")));
+    String json = mapper.writeValueAsString((DecisionPlan) plan);
+    assertTrue(json.contains("\"politicalActions\""));
+    assertTrue(json.contains("\"Russians\""));
+    DecisionPlan decoded = mapper.readValue(json, DecisionPlan.class);
+    assertInstanceOf(PurchasePlan.class, decoded);
+    PurchasePlan back = (PurchasePlan) decoded;
+    assertEquals(2, back.politicalActions().size());
+    assertEquals("Russians", back.politicalActions().get(0).target());
+    assertEquals("British", back.politicalActions().get(1).target());
+  }
+
+  @Test
+  void purchasePlanWithMissingPoliticalActionsDefaultsToEmpty() throws Exception {
+    String json =
+        "{\"kind\":\"purchase\",\"buys\":[{\"unitType\":\"infantry\",\"count\":1}],"
+            + "\"repairs\":[],\"placements\":[]}";
+    DecisionPlan decoded = mapper.readValue(json, DecisionPlan.class);
+    assertInstanceOf(PurchasePlan.class, decoded);
+    PurchasePlan back = (PurchasePlan) decoded;
+    assertEquals(0, back.politicalActions().size());
+  }
 }

@@ -134,6 +134,14 @@ public abstract class AbstractProAi extends AbstractAi {
     storedStrafingTerritories = strafingTerritories;
   }
 
+  public List<PoliticalActionAttachment> getStoredPoliticalActions() {
+    return storedPoliticalActions;
+  }
+
+  public void clearStoredPoliticalActions() {
+    storedPoliticalActions = null;
+  }
+
   /**
    * Sidecar-only toggle: disable the politics step inside {@link #purchase}'s turn-simulation loop.
    * The sidecar's bot calls {@code kind=politics} before {@code kind=purchase}, so by the time
@@ -349,14 +357,11 @@ public abstract class AbstractProAi extends AbstractAi {
    * <p>The sidecar's {@code PurchaseExecutor} lives in a separate package ({@code
    * org.triplea.ai.sidecar.exec}) and therefore cannot invoke {@link #purchase} directly.
    *
-   * <p>This method disables the politics step inside {@link #purchase}'s turn-simulation loop for
-   * the duration of the call. By the time the sidecar calls this method, real politics has already
-   * executed on the session GameData via {@code invokePoliticsForSidecar}; {@code dataCopy} (cloned
-   * inside {@link #purchase}) inherits the correct post-politics relationships. Re-running politics
-   * in simulation would roll fresh RNG and may declare additional wars, inflating attack-option
-   * scoring and producing purchases for territories that won't actually be conquered.
-   *
-   * @see #setSimulatePoliticsInPurchase
+   * <p>Politics simulation runs with the default {@code simulatePoliticsInPurchase=true}, so the
+   * purchase simulation may declare additional wars on {@code dataCopy} and populate {@link
+   * #storedPoliticalActions}. {@code PurchaseExecutor} reads {@link #getStoredPoliticalActions()}
+   * after this method returns to project them onto the {@code PurchasePlan} wire response, then
+   * calls {@link #clearStoredPoliticalActions()} to prevent replay on the next turn.
    */
   public void invokePurchaseForSidecar(
       final boolean purchaseForBid,
@@ -364,16 +369,7 @@ public abstract class AbstractProAi extends AbstractAi {
       final IPurchaseDelegate purchaseDelegate,
       final GameData data,
       final GamePlayer player) {
-    // Disable simulated politics; real politics has already executed on the session's
-    // GameData via invokePoliticsForSidecar before this call.
-    setSimulatePoliticsInPurchase(false);
-    try {
-      purchase(purchaseForBid, pusToSpend, purchaseDelegate, data, player);
-    } finally {
-      // Restore default behaviour for any subsequent code paths (defensive — the same
-      // ProAi instance is reused across turns within a session).
-      setSimulatePoliticsInPurchase(true);
-    }
+    purchase(purchaseForBid, pusToSpend, purchaseDelegate, data, player);
   }
 
   /**
