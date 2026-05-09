@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.dto.PlacementGroup;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
@@ -177,5 +178,57 @@ class PurchaseExecutorTest {
           .as("unit type %s has a production rule", order.unitType())
           .isNotNull();
     }
+  }
+
+  /**
+   * Verifies that when ProAi buys units for turn 1 Germans, the response's {@code placements} list:
+   *
+   * <ul>
+   *   <li>is non-empty (storedPurchaseTerritories is populated after a successful purchase)
+   *   <li>maintains the correct bucket order: land non-construction → water non-construction → land
+   *       construction → water construction
+   *   <li>each group has a non-blank territory name and at least one unit type
+   * </ul>
+   */
+  @Test
+  void placementsArePopulatedAndOrderedCorrectly() throws Exception {
+    final Session session = freshSession("Germans");
+    final PurchasePlan plan =
+        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+
+    // ProAi always buys something for turn-1 Germans; placements must follow from buys.
+    assertThat(plan.buys()).as("ProAi should buy units for turn-1 Germans").isNotEmpty();
+    assertThat(plan.placements())
+        .as("placements must be populated when buys is non-empty")
+        .isNotEmpty();
+
+    // Each group must have valid territory and units.
+    for (final PlacementGroup pg : plan.placements()) {
+      assertThat(pg.territory()).as("placement territory must not be blank").isNotBlank();
+      assertThat(pg.unitTypes()).as("placement unitTypes must not be empty").isNotEmpty();
+    }
+
+    // Ordering: priority(i) ≤ priority(i+1) for all consecutive groups.
+    final List<PlacementGroup> groups = plan.placements();
+    for (int i = 0; i < groups.size() - 1; i++) {
+      assertThat(bucketOf(groups.get(i)))
+          .as(
+              "placement order violation at index %d (%s priority=%d) before index %d (%s priority=%d)",
+              i,
+              groups.get(i).territory(),
+              bucketOf(groups.get(i)),
+              i + 1,
+              groups.get(i + 1).territory(),
+              bucketOf(groups.get(i + 1)))
+          .isLessThanOrEqualTo(bucketOf(groups.get(i + 1)));
+    }
+  }
+
+  /** Returns the dispatch-order bucket index for a placement group (0 = highest priority). */
+  private static int bucketOf(final PlacementGroup pg) {
+    if (!pg.isWater() && !pg.isConstruction()) return 0; // land non-construction
+    if (pg.isWater() && !pg.isConstruction()) return 1; // water non-construction
+    if (!pg.isWater()) return 2; // land construction
+    return 3; // water construction
   }
 }

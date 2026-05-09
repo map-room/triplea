@@ -80,7 +80,7 @@ class DecisionHandlerPurchaseTest {
     final Session s = newSession(registry);
 
     final PurchasePlan fixedPlan =
-        new PurchasePlan(List.of(new PurchaseOrder("infantry", 3, null)), List.of());
+        new PurchasePlan(List.of(new PurchaseOrder("infantry", 3, null)), List.of(), List.of());
 
     final DecisionHandler h = handlerWithPurchaseStub(registry, (session, req) -> fixedPlan);
 
@@ -109,6 +109,7 @@ class DecisionHandlerPurchaseTest {
         new PurchasePlan(
             List.of(
                 new PurchaseOrder("infantry", 2, null), new PurchaseOrder("artillery", 1, null)),
+            List.of(),
             List.of());
 
     final DecisionHandler h = handlerWithPurchaseStub(registry, (session, req) -> fixedPlan);
@@ -131,7 +132,7 @@ class DecisionHandlerPurchaseTest {
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
 
-    final PurchasePlan emptyPlan = new PurchasePlan(List.of(), List.of());
+    final PurchasePlan emptyPlan = new PurchasePlan(List.of(), List.of(), List.of());
     final DecisionHandler h = handlerWithPurchaseStub(registry, (session, req) -> emptyPlan);
 
     final FakeHttpExchange ex =

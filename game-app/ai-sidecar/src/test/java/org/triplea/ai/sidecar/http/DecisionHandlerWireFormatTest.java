@@ -90,7 +90,7 @@ class DecisionHandlerWireFormatTest {
     // Default purchase stub: returns an empty plan so wire-format tests that don't exercise
     // purchase still compile and route correctly.
     return new DecisionHandler(
-        registry, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of()));
+        registry, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of(), List.of()));
   }
 
   private JsonNode responseJson(final FakeHttpExchange ex) throws Exception {
@@ -189,7 +189,7 @@ class DecisionHandlerWireFormatTest {
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
     final PurchasePlan fixedPlan =
-        new PurchasePlan(List.of(new PurchaseOrder("infantry", 1, null)), List.of());
+        new PurchasePlan(List.of(new PurchaseOrder("infantry", 1, null)), List.of(), List.of());
     final DecisionHandler h =
         new DecisionHandler(
             registry,
