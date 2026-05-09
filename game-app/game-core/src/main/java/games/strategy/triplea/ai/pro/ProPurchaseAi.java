@@ -276,8 +276,18 @@ class ProPurchaseAi {
     }
 
     // Find all purchase/place territories
+    //
+    // #2368: ProMatches.territoryIsNotConqueredOwnedLand reads BattleTracker via
+    // player.getData(). The simulation loop in AbstractProAi.purchase keeps the original session
+    // player on proData so that downstream code (purchaseDelegate.purchase, etc.) operates on
+    // session references — but that means player.getData() resolves to the un-simulated session,
+    // which silently misses territories the simulation just captured (and conquered would
+    // otherwise correctly mark on dataCopy via simulateBattles). Look up the dataCopy-rooted
+    // player here so wasConquered queries hit the simulation's BattleTracker instead.
+    final GamePlayer playerForPurchaseQuery =
+        proData.isSimulation() ? data.getPlayerList().getPlayerId(player.getName()) : player;
     final Map<Territory, ProPurchaseTerritory> purchaseTerritories =
-        ProPurchaseUtils.findPurchaseTerritories(proData, player);
+        ProPurchaseUtils.findPurchaseTerritories(proData, playerForPurchaseQuery);
     final Set<Territory> placeTerritories =
         new HashSet<>(
             CollectionUtils.getMatches(
