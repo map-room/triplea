@@ -801,7 +801,7 @@ public abstract class AbstractProAi extends AbstractAi {
   @Override
   protected void tech(
       final ITechDelegate techDelegate, final GameData data, final GamePlayer player) {
-    ProTechAi.tech(techDelegate, data, player);
+    ProTechAi.tech(techDelegate, data, player, proData);
   }
 
   public Optional<Territory> retreatQuery(
