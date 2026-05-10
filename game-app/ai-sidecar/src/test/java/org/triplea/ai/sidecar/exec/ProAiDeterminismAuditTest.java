@@ -49,26 +49,41 @@ import org.triplea.ai.sidecar.wire.WireState;
  * <p>This audit is deliberately non-fixing. Failures surface specific divergence sites that are
  * filed as separate follow-up issues; the audit's only role is to capture the empirical evidence.
  *
- * <p><b>Why {@link Disabled}:</b> as of the initial audit (2026-05-09) every fixture is RED.
- * Leaving the tests enabled would block {@code :game-app:ai-sidecar:check} indefinitely. The tests
- * are meant to be re-enabled by whichever follow-up PR believes it has fixed the underlying
- * non-determinism (primary suspect: {@code Math.random()} in {@code
- * ProPurchaseUtils.randomizePurchaseOption}); at that point they become a regression suite pinning
- * the (gamestate, seed) → wire-response invariant.
+ * <p><b>Status after map-room/map-room#2377:</b> the gross non-determinism (different unit types
+ * bought entirely; completely different placement totals) has been eliminated. What remains is a
+ * subtler residual flake where {@code politicalActions} occasionally flips at the {@code random <=
+ * warChance} threshold check inside {@link games.strategy.triplea.ai.pro.ProPoliticsAi}.
+ * Empirically (~10 reruns of each fixture):
  *
- * <p>To re-run the audit manually:
+ * <ul>
+ *   <li>Round-1 Russians purchase: deterministic (Russia has no war-declaration options on round 1,
+ *       so the threshold flip can't bite).
+ *   <li>Round-1 Germans / British purchase: {@code buys} and {@code placements} now identical
+ *       across runs; only {@code politicalActions} occasionally flips between empty and a single
+ *       war target.
+ *   <li>Round-1 Japanese purchase: still cascading divergence (more diverse unit types and more
+ *       potential war targets, so threshold drift cascades through the plan).
+ *   <li>Round-1 Germans / Japanese NCM: residual move-source-territory drift.
+ * </ul>
+ *
+ * <p>Per the discussion on map-room/map-room#2376, the remaining flake is not architecturally
+ * load-bearing — sidecar calls are one-shot, the bot does not compare wire responses across
+ * retries, and Session-elimination is gated on "calls being self-contained from gamestate" rather
+ * than on byte-identical reproducibility. The remaining drift is captured as a follow-up for
+ * incremental cleanup; this audit class stays {@link Disabled} so CI does not flake on the
+ * threshold-boundary cases.
+ *
+ * <p>To re-run the audit manually (delete or comment-out the class-level {@link Disabled}):
  *
  * <pre>{@code
  * ./gradlew :game-app:ai-sidecar:test \
- *   --tests org.triplea.ai.sidecar.exec.ProAiDeterminismAuditTest -PenableAudit
+ *   --tests org.triplea.ai.sidecar.exec.ProAiDeterminismAuditTest
  * }</pre>
- *
- * (the {@code -PenableAudit} flag is documentation only — JUnit ignores Gradle properties; you
- * still need to comment out the {@code @Disabled} annotation locally to actually run the test).
  */
 @Disabled(
-    "Audit harness for map-room/map-room#2376. Currently RED across all fixtures. Re-enable from"
-        + " the PR that fixes the underlying non-determinism so this becomes a regression test.")
+    "Audit harness for map-room/map-room#2376. Politics threshold-flip flake remains after #2377;"
+        + " not architecturally load-bearing — see class javadoc. Re-enable progressively as"
+        + " further determinism fixes land.")
 class ProAiDeterminismAuditTest {
 
   /** Seed used for every audit run. Matches the constant in {@link PurchaseExecutorTest}. */
@@ -150,10 +165,11 @@ class ProAiDeterminismAuditTest {
   private Session freshSession(final String nation) {
     final GameData data = canonical.cloneForSession();
     final ProAi proAi = new ProAi("audit-" + nation + "-" + UUID.randomUUID(), nation);
-    // CRITICAL: mirrors SessionRegistry.buildSession line 192. Without this, ProData.rng is
-    // default-seeded (`new Random()`) and politics planning becomes non-deterministic
-    // independent of any other findings.
+    // CRITICAL: mirrors SessionRegistry.buildSession exactly. Without these two seed-set calls,
+    // ProData.rng and the ConcurrentBattleCalculator both run unseeded, masking the determinism
+    // contract that production code carefully establishes (map-room/map-room#2376 / #2377).
     proAi.getProData().setSeed(SEED);
+    proAi.seedBattleCalc(SEED);
     final ExecutorService executor = Executors.newSingleThreadExecutor();
     return new Session(
         "s-audit-" + UUID.randomUUID(),

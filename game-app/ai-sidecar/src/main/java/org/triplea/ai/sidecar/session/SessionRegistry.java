@@ -190,6 +190,10 @@ public final class SessionRegistry {
     final GameData data = canonical.cloneForSession();
     final ProAi proAi = new ProAi("sidecar-" + key.gameId() + "-" + key.nation(), key.nation());
     proAi.getProData().setSeed(seed);
+    // Seed the battle calculator BEFORE prepareData runs (which constructs workers). The
+    // calculator otherwise uses an unseeded MersenneTwister per trial, leaking process-wide
+    // entropy into the wire response (map-room/map-room#2376 / #2377).
+    proAi.seedBattleCalc(seed);
     final ExecutorService offensiveExecutor =
         Executors.newSingleThreadExecutor(
             r -> {

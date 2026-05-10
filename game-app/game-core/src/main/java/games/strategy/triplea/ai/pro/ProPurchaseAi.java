@@ -45,6 +45,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -815,7 +816,7 @@ class ProPurchaseAi {
               purchaseTerritories,
               remainingConstructions,
               t);
-          final Map<ProPurchaseOption, Double> defenseEfficiencies = new HashMap<>();
+          final Map<ProPurchaseOption, Double> defenseEfficiencies = new LinkedHashMap<>();
           for (final ProPurchaseOption ppo : purchaseOptionsForTerritory) {
             if (isLand) {
               defenseEfficiencies.put(
@@ -833,7 +834,7 @@ class ProPurchaseAi {
             }
           }
           final Optional<ProPurchaseOption> optionalSelectedOption =
-              ProPurchaseUtils.randomizePurchaseOption(defenseEfficiencies, "Defense");
+              ProPurchaseUtils.randomizePurchaseOption(proData, defenseEfficiencies, "Defense");
           if (optionalSelectedOption.isEmpty()) {
             break;
           }
@@ -1185,29 +1186,30 @@ class ProPurchaseAi {
         // Select purchase option
         Optional<ProPurchaseOption> optionalSelectedOption = Optional.empty();
         if (!selectFodderUnit && attackAndDefenseDifference > 0 && !landDefenseOptions.isEmpty()) {
-          final Map<ProPurchaseOption, Double> defenseEfficiencies = new HashMap<>();
+          final Map<ProPurchaseOption, Double> defenseEfficiencies = new LinkedHashMap<>();
           for (final ProPurchaseOption ppo : landDefenseOptions) {
             defenseEfficiencies.put(
                 ppo, ppo.getDefenseEfficiency(enemyDistance, data, ownedLocalUnits, unitsToPlace));
           }
           optionalSelectedOption =
-              ProPurchaseUtils.randomizePurchaseOption(defenseEfficiencies, "Land Defense");
+              ProPurchaseUtils.randomizePurchaseOption(
+                  proData, defenseEfficiencies, "Land Defense");
         } else if (!selectFodderUnit && !landAttackOptions.isEmpty()) {
-          final Map<ProPurchaseOption, Double> attackEfficiencies = new HashMap<>();
+          final Map<ProPurchaseOption, Double> attackEfficiencies = new LinkedHashMap<>();
           for (final ProPurchaseOption ppo : landAttackOptions) {
             attackEfficiencies.put(
                 ppo, ppo.getAttackEfficiency(enemyDistance, data, ownedLocalUnits, unitsToPlace));
           }
           optionalSelectedOption =
-              ProPurchaseUtils.randomizePurchaseOption(attackEfficiencies, "Land Attack");
+              ProPurchaseUtils.randomizePurchaseOption(proData, attackEfficiencies, "Land Attack");
         } else if (!landFodderOptions.isEmpty()) {
-          final Map<ProPurchaseOption, Double> fodderEfficiencies = new HashMap<>();
+          final Map<ProPurchaseOption, Double> fodderEfficiencies = new LinkedHashMap<>();
           for (final ProPurchaseOption ppo : landFodderOptions) {
             fodderEfficiencies.put(
                 ppo, ppo.getFodderEfficiency(enemyDistance, data, ownedLocalUnits, unitsToPlace));
           }
           optionalSelectedOption =
-              ProPurchaseUtils.randomizePurchaseOption(fodderEfficiencies, "Land Fodder");
+              ProPurchaseUtils.randomizePurchaseOption(proData, fodderEfficiencies, "Land Fodder");
           if (optionalSelectedOption.isPresent()) {
             addedFodderUnits += optionalSelectedOption.get().getQuantity();
           }
@@ -1647,7 +1649,7 @@ class ProPurchaseAi {
                 purchaseTerritories,
                 0,
                 t);
-            final Map<ProPurchaseOption, Double> defenseEfficiencies = new HashMap<>();
+            final Map<ProPurchaseOption, Double> defenseEfficiencies = new LinkedHashMap<>();
             for (final ProPurchaseOption ppo : seaPurchaseOptionsForTerritory) {
               defenseEfficiencies.put(
                   ppo,
@@ -1660,7 +1662,8 @@ class ProPurchaseAi {
                       unusedLocalCarrierCapacity));
             }
             final Optional<ProPurchaseOption> optionalSelectedOption =
-                ProPurchaseUtils.randomizePurchaseOption(defenseEfficiencies, "Sea Defense");
+                ProPurchaseUtils.randomizePurchaseOption(
+                    proData, defenseEfficiencies, "Sea Defense");
             if (optionalSelectedOption.isEmpty()) {
               break;
             }
@@ -1859,7 +1862,7 @@ class ProPurchaseAi {
               purchaseTerritories,
               0,
               t);
-          final Map<ProPurchaseOption, Double> defenseEfficiencies = new HashMap<>();
+          final Map<ProPurchaseOption, Double> defenseEfficiencies = new LinkedHashMap<>();
           for (final ProPurchaseOption ppo : seaPurchaseOptionsForTerritory) {
             defenseEfficiencies.put(
                 ppo,
@@ -1872,7 +1875,7 @@ class ProPurchaseAi {
                     unusedLocalCarrierCapacity));
           }
           final Optional<ProPurchaseOption> optionalSelectedOption =
-              ProPurchaseUtils.randomizePurchaseOption(defenseEfficiencies, "Sea Defense");
+              ProPurchaseUtils.randomizePurchaseOption(proData, defenseEfficiencies, "Sea Defense");
           if (optionalSelectedOption.isEmpty()) {
             break;
           }
@@ -2029,7 +2032,7 @@ class ProPurchaseAi {
                   purchaseTerritories,
                   0,
                   t);
-              final Map<ProPurchaseOption, Double> amphibEfficiencies = new HashMap<>();
+              final Map<ProPurchaseOption, Double> amphibEfficiencies = new LinkedHashMap<>();
               for (final ProPurchaseOption ppo : amphibPurchaseOptionsForTerritory) {
                 if (ppo.getTransportCost() <= transportCapacity) {
                   amphibEfficiencies.put(
@@ -2038,7 +2041,7 @@ class ProPurchaseAi {
                 }
               }
               final Optional<ProPurchaseOption> optionalSelectedOption =
-                  ProPurchaseUtils.randomizePurchaseOption(amphibEfficiencies, "Amphib");
+                  ProPurchaseUtils.randomizePurchaseOption(proData, amphibEfficiencies, "Amphib");
               if (optionalSelectedOption.isEmpty()) {
                 break;
               }
@@ -2065,12 +2068,13 @@ class ProPurchaseAi {
                 purchaseTerritories,
                 0,
                 t);
-            final Map<ProPurchaseOption, Double> transportEfficiencies = new HashMap<>();
+            final Map<ProPurchaseOption, Double> transportEfficiencies = new LinkedHashMap<>();
             for (final ProPurchaseOption ppo : seaTransportPurchaseOptionsForTerritory) {
               transportEfficiencies.put(ppo, ppo.getTransportEfficiencyRatio());
             }
             final Optional<ProPurchaseOption> optionalSelectedOption =
-                ProPurchaseUtils.randomizePurchaseOption(transportEfficiencies, "Sea Transport");
+                ProPurchaseUtils.randomizePurchaseOption(
+                    proData, transportEfficiencies, "Sea Transport");
             if (optionalSelectedOption.isEmpty()) {
               break;
             }
@@ -2244,7 +2248,7 @@ class ProPurchaseAi {
             purchaseTerritories,
             0,
             t);
-        final Map<ProPurchaseOption, Double> defenseEfficiencies = new HashMap<>();
+        final Map<ProPurchaseOption, Double> defenseEfficiencies = new LinkedHashMap<>();
         for (final ProPurchaseOption ppo : purchaseOptionsForTerritory) {
           defenseEfficiencies.put(
               ppo,
@@ -2253,7 +2257,7 @@ class ProPurchaseAi {
                       1, data, ownedLocalUnits, placeTerritory.getPlaceUnits()));
         }
         final Optional<ProPurchaseOption> optionalSelectedOption =
-            ProPurchaseUtils.randomizePurchaseOption(defenseEfficiencies, "Defense");
+            ProPurchaseUtils.randomizePurchaseOption(proData, defenseEfficiencies, "Defense");
         if (optionalSelectedOption.isEmpty()) {
           break;
         }

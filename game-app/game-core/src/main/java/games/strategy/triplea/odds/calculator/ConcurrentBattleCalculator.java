@@ -30,6 +30,16 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
   private final List<BattleCalculator> workers = new CopyOnWriteArrayList<>();
   // do not let calc be set up til data is set
   private volatile boolean isDataSet = false;
+
+  /**
+   * When non-null, switches the calculator into a deterministic single-worker mode: {@link
+   * #createWorkers} produces exactly one {@link BattleCalculator} seeded with this value, and
+   * {@link #calculate} runs all trials sequentially in that worker. Used by the AI sidecar to make
+   * ProAi a pure function of {@code (gamestate, seed)} (see map-room/map-room#2376 / #2377). When
+   * null, the calculator behaves as before — multi-worker, unseeded.
+   */
+  @Nullable private volatile Long seed = null;
+
   // shortcut setting of previous game data if we are trying to set it to a new one, or shutdown
   private final AtomicInteger cancelCurrentOperation = new AtomicInteger(0);
   // do not let setting of game data happen multiple times while we offload creating workers and
@@ -41,6 +51,14 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
   private final Object mutexSetGameData = new Object();
   // do not let multiple calculations or setting calc data happen at same time
   private final Object mutexCalcIsRunning = new Object();
+
+  /**
+   * Switch the calculator into deterministic single-worker mode (see {@link #seed} javadoc). Must
+   * be called before {@link #setGameData} for the next worker construction to pick it up.
+   */
+  public void setSeed(final long seed) {
+    this.seed = seed;
+  }
 
   /** Return value may be ignored. Exceptions are being handled properly. */
   public CompletableFuture<Boolean> setGameData(@Nullable final GameData data) {
@@ -129,16 +147,23 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
         }
       }
       if (cancelCurrentOperation.get() >= 0) {
-        // Create the first battle calc on the current thread to measure the end-to-end copy time.
-        workers.add(new BattleCalculator(serializedData));
-        int threadsToUse = getThreadsToUse((System.currentTimeMillis() - startTime), startMemory);
-        // Now, create the remaining ones in parallel.
-        workers.addAll(
-            IntStream.range(1, threadsToUse)
-                .parallel()
-                .filter(j -> cancelCurrentOperation.get() >= 0)
-                .mapToObj(j -> new BattleCalculator(serializedData))
-                .collect(Collectors.toList()));
+        if (seed != null) {
+          // Deterministic mode: exactly one seeded worker, no parallelism. The seed propagates
+          // into every per-trial PlainRandomSource via BattleCalculator. See seed-field javadoc.
+          workers.add(new BattleCalculator(serializedData, seed));
+        } else {
+          // Create the first battle calc on the current thread to measure the end-to-end copy
+          // time.
+          workers.add(new BattleCalculator(serializedData));
+          int threadsToUse = getThreadsToUse((System.currentTimeMillis() - startTime), startMemory);
+          // Now, create the remaining ones in parallel.
+          workers.addAll(
+              IntStream.range(1, threadsToUse)
+                  .parallel()
+                  .filter(j -> cancelCurrentOperation.get() >= 0)
+                  .mapToObj(j -> new BattleCalculator(serializedData))
+                  .collect(Collectors.toList()));
+        }
       }
     }
     if (cancelCurrentOperation.get() < 0 || data == null) {

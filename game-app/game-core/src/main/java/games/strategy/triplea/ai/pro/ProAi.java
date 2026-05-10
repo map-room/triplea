@@ -27,4 +27,15 @@ public class ProAi extends AbstractProAi {
   protected void prepareData(final GameData data) {
     concurrentCalc.setGameData(data);
   }
+
+  /**
+   * Switch this ProAi's battle calculator into deterministic single-worker mode (see {@link
+   * games.strategy.triplea.odds.calculator.ConcurrentBattleCalculator#setSeed} javadoc). Must be
+   * called before the first {@link #prepareData} so the seed is in place when worker construction
+   * runs. Used by the AI sidecar for {@code (gamestate, seed) → wire-response} purity (see
+   * map-room/map-room#2376 / #2377).
+   */
+  public void seedBattleCalc(final long seed) {
+    concurrentCalc.setSeed(seed);
+  }
 }

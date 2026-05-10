@@ -41,13 +41,23 @@ import org.triplea.java.collections.IntegerMap;
 public final class ProPurchaseUtils {
 
   /**
-   * Randomly selects one of the specified purchase options of the specified type.
+   * Randomly selects one of the specified purchase options of the specified type, using the
+   * deterministic RNG owned by {@link ProData} so that the same {@code (gamestate, seed)} pair
+   * produces the same selection sequence across runs.
+   *
+   * <p>Previously this method consulted {@link Math#random()}, a process-wide unseeded RNG that
+   * caused {@code invokePurchaseForSidecar} to produce divergent wire responses across fresh
+   * sessions even when the sidecar carefully seeded {@link ProData#setSeed(long)}. See the
+   * map-room/map-room#2376 audit for the empirical evidence and map-room/map-room#2377 for the fix
+   * rationale.
    *
    * @return The selected purchase option or empty if no purchase option of the specified type is
    *     available.
    */
   public static Optional<ProPurchaseOption> randomizePurchaseOption(
-      final Map<ProPurchaseOption, Double> purchaseEfficiencies, final String type) {
+      final ProData proData,
+      final Map<ProPurchaseOption, Double> purchaseEfficiencies,
+      final String type) {
 
     ProLogger.trace("Select purchase option for " + type);
     double totalEfficiency = 0;
@@ -66,7 +76,7 @@ public final class ProPurchaseUtils {
       ProLogger.trace(
           ppo.getUnitType().getName() + ", probability=" + chance + ", upperBound=" + upperBound);
     }
-    final double randomNumber = Math.random() * 100;
+    final double randomNumber = proData.getRng().nextDouble() * 100;
     ProLogger.trace("Random number: " + randomNumber);
     for (final ProPurchaseOption ppo : purchasePercentages.keySet()) {
       if (randomNumber <= purchasePercentages.get(ppo)) {

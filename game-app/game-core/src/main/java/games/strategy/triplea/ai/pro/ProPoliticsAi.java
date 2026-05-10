@@ -14,8 +14,8 @@ import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.PoliticsDelegate;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -60,8 +60,8 @@ class ProPoliticsAi {
     ProLogger.trace("Valid War options: " + validWarActions);
 
     // Divide war actions into enemy and neutral
-    final Map<PoliticalActionAttachment, List<GamePlayer>> enemyMap = new HashMap<>();
-    final Map<PoliticalActionAttachment, List<GamePlayer>> neutralMap = new HashMap<>();
+    final Map<PoliticalActionAttachment, List<GamePlayer>> enemyMap = new LinkedHashMap<>();
+    final Map<PoliticalActionAttachment, List<GamePlayer>> neutralMap = new LinkedHashMap<>();
     for (final PoliticalActionAttachment action : validWarActions) {
       final List<GamePlayer> warPlayers = new ArrayList<>();
       for (final PoliticalActionAttachment.RelationshipChange relationshipChange :
@@ -106,7 +106,7 @@ class ProPoliticsAi {
               + attackOptions);
 
       // Find attack options per war action
-      final Map<PoliticalActionAttachment, Double> attackPercentageMap = new HashMap<>();
+      final Map<PoliticalActionAttachment, Double> attackPercentageMap = new LinkedHashMap<>();
       for (final PoliticalActionAttachment action : enemyMap.keySet()) {
         int count = 0;
         final List<GamePlayer> enemyPlayers = enemyMap.get(action);
@@ -125,7 +125,10 @@ class ProPoliticsAi {
 
       // Decide whether to declare war on an enemy
       final List<PoliticalActionAttachment> options = new ArrayList<>(attackPercentageMap.keySet());
-      Collections.shuffle(options);
+      // Shuffle with the seeded rng so the war-target selection is deterministic given
+      // (gamestate, seed). The default Collections.shuffle(list) overload uses an unseeded
+      // ThreadLocalRandom and would leak process entropy here (map-room/map-room#2376 / #2377).
+      Collections.shuffle(options, rng);
       for (final PoliticalActionAttachment action : options) {
         final double roundFactor = (round - 1) * .05; // 0, .05, .1, .15, etc
         final double warChance =
@@ -142,7 +145,7 @@ class ProPoliticsAi {
 
       // Decide whether to declare war on a neutral
       final List<PoliticalActionAttachment> options = new ArrayList<>(neutralMap.keySet());
-      Collections.shuffle(options);
+      Collections.shuffle(options, rng);
       final double random = rng.nextDouble();
       final double warChance = .01;
       ProLogger.debug("warChance=" + warChance + ", random=" + random);
@@ -158,7 +161,7 @@ class ProPoliticsAi {
           AiPoliticalUtils.getPoliticalActionsOther(
               player, politicsDelegate.getTestedConditions(), data);
       if (!actionChoicesOther.isEmpty()) {
-        Collections.shuffle(actionChoicesOther);
+        Collections.shuffle(actionChoicesOther, rng);
         int i = 0;
         final double random = rng.nextDouble();
         final int maxOtherActionsPerTurn =
