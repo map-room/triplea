@@ -80,12 +80,12 @@ class NoncombatMoveExecutorIntegrationTest {
 
     // Step 1: purchase — populates storedFactoryMoveMap and storedPurchaseTerritories
     new PurchaseExecutor(store)
-        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans"), 0L));
 
     // Step 2: noncombat-move — consumes storedFactoryMoveMap, preserves storedPurchaseTerritories
     final NoncombatMovePlan plan =
         new NoncombatMoveExecutor(store)
-            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans"), 0L));
 
     assertNotNull(plan, "noncombat-move plan must not be null");
     // Germans typically move factories and units on noncombat-move
@@ -105,13 +105,13 @@ class NoncombatMoveExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     new PurchaseExecutor(store)
-        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans"), 0L));
 
     // If any captured move had isBombing==true, the executor would throw AssertionError.
     // The plan being returned means the invariant held.
     final NoncombatMovePlan plan =
         new NoncombatMoveExecutor(store)
-            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans"), 0L));
 
     assertNotNull(plan, "plan must not be null (no bombing invariant violation)");
   }
@@ -126,9 +126,9 @@ class NoncombatMoveExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     new PurchaseExecutor(store)
-        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans"), 0L));
     new NoncombatMoveExecutor(store)
-        .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+        .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans"), 0L));
 
     // storedPurchaseTerritories must still be non-null (not cleared by noncombat-move)
     final Field field = AbstractProAi.class.getDeclaredField("storedPurchaseTerritories");
@@ -200,10 +200,10 @@ class NoncombatMoveExecutorIntegrationTest {
     final Session session = freshSession("Germans");
 
     new PurchaseExecutor(store)
-        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans"), 0L));
     final NoncombatMovePlan plan =
         new NoncombatMoveExecutor(store)
-            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans"), 0L));
 
     assertNotNull(plan);
     assertTrue(
@@ -224,7 +224,7 @@ class NoncombatMoveExecutorIntegrationTest {
 
     // Run purchase normally to establish the session state
     new PurchaseExecutor(store)
-        .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
+        .execute(session, new PurchaseRequest(wireState("purchase", "Germans"), 0L));
 
     // Inject a stale UUID into the snapshot's factoryMoveMap
     final var staleUuid = UUID.randomUUID().toString();
@@ -249,7 +249,7 @@ class NoncombatMoveExecutorIntegrationTest {
 
     final NoncombatMovePlan plan =
         new NoncombatMoveExecutor(store)
-            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
+            .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans"), 0L));
 
     assertNotNull(plan, "plan must not be null even with stale snapshot stored");
   }

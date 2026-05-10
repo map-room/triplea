@@ -48,29 +48,38 @@ import org.triplea.ai.sidecar.wire.WireState;
  * <p>This audit is deliberately non-fixing. Failures surface specific divergence sites that are
  * filed as separate follow-up issues; the audit's only role is to capture the empirical evidence.
  *
- * <p><b>Status after map-room/map-room#2377:</b> the gross non-determinism (different unit types
- * bought entirely; completely different placement totals) has been eliminated. What remains is a
- * subtler residual flake where {@code politicalActions} occasionally flips at the {@code random <=
- * warChance} threshold check inside {@link games.strategy.triplea.ai.pro.ProPoliticsAi}.
- * Empirically (~10 reruns of each fixture):
+ * <p><b>Status after map-room/map-room#2384 (per-call wire seeding):</b> {@link
+ * org.triplea.ai.sidecar.exec.PurchaseExecutor#execute PurchaseExecutor.execute} and {@link
+ * org.triplea.ai.sidecar.exec.NoncombatMoveExecutor#execute NoncombatMoveExecutor.execute} now
+ * reseed {@code proData.getRng()} and the battle calculator from {@code request.seed()} on every
+ * call. The mechanical seeding contract is in place: every sidecar call is a function of {@code
+ * (gamestate, wire seed)} as far as the seeded RNG sources are concerned. Empirically (10 reruns
+ * per fixture against this branch):
  *
  * <ul>
- *   <li>Round-1 Russians purchase: deterministic (Russia has no war-declaration options on round 1,
- *       so the threshold flip can't bite).
- *   <li>Round-1 Germans / British purchase: {@code buys} and {@code placements} now identical
- *       across runs; only {@code politicalActions} occasionally flips between empty and a single
- *       war target.
- *   <li>Round-1 Japanese purchase: still cascading divergence (more diverse unit types and more
- *       potential war targets, so threshold drift cascades through the plan).
- *   <li>Round-1 Germans / Japanese NCM: residual move-source-territory drift.
+ *   <li>Round-1 Russians purchase: <b>GREEN</b> — buys, placements, politicalActions, combatMoves
+ *       all byte-identical. Russia has no war-declaration options on round 1, so threshold flips
+ *       can't bite, and Russia's combat-move plan converges on the same source-territory ordering.
+ *   <li>Round-1 Germans / Japanese / British purchase: {@code buys} and {@code placements} now
+ *       byte-identical across runs (the gross drift from before #2377 is gone), but {@code
+ *       politicalActions} and {@code combatMoves} source-ordering still flip across runs.
+ *   <li>Round-1 Germans / Japanese NCM: residual move-source-territory drift, downstream of the
+ *       same flake.
  * </ul>
+ *
+ * <p>The residual divergence is downstream of {@code HashMap<Territory, ?>} / {@code HashMap<Unit,
+ * ?>} iteration inside {@link games.strategy.triplea.ai.pro.data.ProTerritoryManager} and {@link
+ * games.strategy.triplea.ai.pro.AbstractProAi#storedCombatMoveMap storedCombatMoveMap}: identity
+ * hashes drift across {@code GameData} clones and HashMap iteration order shifts the attack-options
+ * list passed to {@link games.strategy.triplea.ai.pro.ProPoliticsAi}, which then cascades into the
+ * {@code random <= warChance} threshold check. Closing it requires either deterministic hashing or
+ * LinkedHashMap throughout {@code ProAi} — both larger scope than #2384 and tracked as a follow-up.
  *
  * <p>Per the discussion on map-room/map-room#2376, the remaining flake is not architecturally
  * load-bearing — sidecar calls are one-shot, the bot does not compare wire responses across
  * retries, and Session-elimination is gated on "calls being self-contained from gamestate" rather
- * than on byte-identical reproducibility. The remaining drift is captured as a follow-up for
- * incremental cleanup; this audit class stays {@link Disabled} so CI does not flake on the
- * threshold-boundary cases.
+ * than on byte-identical reproducibility. This audit class stays {@link Disabled} so CI does not
+ * flake on the threshold-boundary cases.
  *
  * <p>To re-run the audit manually (delete or comment-out the class-level {@link Disabled}):
  *
@@ -80,9 +89,9 @@ import org.triplea.ai.sidecar.wire.WireState;
  * }</pre>
  */
 @Disabled(
-    "Audit harness for map-room/map-room#2376. Politics threshold-flip flake remains after #2377;"
-        + " not architecturally load-bearing — see class javadoc. Re-enable progressively as"
-        + " further determinism fixes land.")
+    "Audit harness for map-room/map-room#2376. Residual HashMap-iteration flake remains after"
+        + " #2384 — not architecturally load-bearing, see class javadoc. Re-enable progressively"
+        + " as further determinism fixes (LinkedHashMap throughout ProAi) land.")
 class ProAiDeterminismAuditTest {
 
   /** Seed used for every audit run. Matches the constant in {@link PurchaseExecutorTest}. */
@@ -136,10 +145,11 @@ class ProAiDeterminismAuditTest {
   }
 
   // ---------------------------------------------------------------------------
-  // Noncombat-move determinism — full pipeline (purchase + combat-move +
-  // noncombat-move) per run. If purchase or combat-move is non-deterministic,
-  // NCM determinism cannot hold either; if NCM diverges but purchase passes,
-  // the divergence is in the move planning itself.
+  // Noncombat-move determinism — purchase + noncombat-move per run. (Combat-move
+  // executor was deleted in #2382 / triplea#86 once the bot bypassed it TS-side;
+  // purchase's snapshot is sufficient to seed NCM.) If purchase is
+  // non-deterministic, NCM determinism cannot hold either; if NCM diverges but
+  // purchase passes, the divergence is in the move planning itself.
   // ---------------------------------------------------------------------------
 
   @Test
@@ -193,7 +203,7 @@ class ProAiDeterminismAuditTest {
       try {
         final PurchasePlan plan =
             new PurchaseExecutor(store)
-                .execute(session, new PurchaseRequest(wireState("purchase", nation)));
+                .execute(session, new PurchaseRequest(wireState("purchase", nation), SEED));
         final String wire = MAPPER.writeValueAsString(plan);
         if (first == null) {
           first = wire;
@@ -220,10 +230,11 @@ class ProAiDeterminismAuditTest {
       final Session session = freshSession(nation);
       try {
         new PurchaseExecutor(store)
-            .execute(session, new PurchaseRequest(wireState("purchase", nation)));
+            .execute(session, new PurchaseRequest(wireState("purchase", nation), SEED));
         final NoncombatMovePlan plan =
             new NoncombatMoveExecutor(store)
-                .execute(session, new NoncombatMoveRequest(wireState("nonCombatMove", nation)));
+                .execute(
+                    session, new NoncombatMoveRequest(wireState("nonCombatMove", nation), SEED));
         final String wire = MAPPER.writeValueAsString(plan);
         if (first == null) {
           first = wire;

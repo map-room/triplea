@@ -130,6 +130,17 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     final int pusToSpend = player.getResources().getQuantity(pus);
 
     final ProAi proAi = session.proAi();
+
+    // Reseed proData.getRng() and the battle calculator from the per-call wire seed so the
+    // (gamestate, seed) → wire-response mapping is a pure function — independent of any
+    // RNG drift from prior decision calls on this session. Mirrors the seeding pattern
+    // established in SessionRegistry.buildSession (#2377) but at per-call granularity, which
+    // is what the stateless-sidecar campaign needs (#2384, #2376 audit gate). Applied before
+    // dispatching invokePurchaseForSidecar AND before the internal combat-move projection
+    // below (the projection consumes the same proAi instance and must see the same seed).
+    proAi.getProData().setSeed(request.seed());
+    proAi.seedBattleCalc(request.seed());
+
     final RecordingPurchaseDelegate recorder = new RecordingPurchaseDelegate();
     recorder.initialize("purchase", "Purchase");
     recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));

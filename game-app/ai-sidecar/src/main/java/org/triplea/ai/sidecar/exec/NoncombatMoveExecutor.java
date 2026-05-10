@@ -82,6 +82,14 @@ public final class NoncombatMoveExecutor
 
     final var proAi = session.proAi();
 
+    // Reseed proData.getRng() and the battle calculator from the per-call wire seed so the
+    // (gamestate, seed) → wire-response mapping is a pure function — independent of any
+    // RNG drift from prior decision calls on this session. Mirrors the seeding pattern
+    // established in SessionRegistry.buildSession (#2377) but at per-call granularity, which
+    // is what the stateless-sidecar campaign needs (#2384, #2376 audit gate).
+    proAi.getProData().setSeed(request.seed());
+    proAi.seedBattleCalc(request.seed());
+
     // Step 3: restore storedFactoryMoveMap and storedPurchaseTerritories
     snapOpt.ifPresent(
         snap -> {
