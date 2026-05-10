@@ -14,6 +14,7 @@ import games.strategy.triplea.Constants;
 import games.strategy.triplea.ai.pro.ProAi;
 import games.strategy.triplea.ai.pro.data.ProPlaceTerritory;
 import games.strategy.triplea.ai.pro.data.ProPurchaseTerritory;
+import games.strategy.triplea.ai.pro.data.ProSessionSnapshot;
 import games.strategy.triplea.ai.pro.data.ProSplitResourceTracker;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import games.strategy.triplea.attachments.PoliticalActionAttachment;
@@ -21,7 +22,6 @@ import games.strategy.triplea.delegate.EndRoundDelegate;
 import games.strategy.triplea.delegate.MoveDelegate;
 import games.strategy.triplea.delegate.PlaceDelegate;
 import games.strategy.triplea.delegate.PoliticsDelegate;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -29,9 +29,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import org.triplea.ai.sidecar.AiTraceLogger;
+import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.dto.PlacementGroup;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
@@ -39,8 +40,6 @@ import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RepairOrder;
 import org.triplea.ai.sidecar.dto.WarDeclaration;
 import org.triplea.ai.sidecar.dto.WireMoveDescription;
-import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
-import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.wire.WirePlayer;
 import org.triplea.ai.sidecar.wire.WireState;
 import org.triplea.ai.sidecar.wire.WireStateApplier;
@@ -48,10 +47,17 @@ import org.triplea.ai.sidecar.wire.WireTerritory;
 import org.triplea.java.collections.IntegerMap;
 
 /**
- * Runs {@link ProAi#invokePurchaseForSidecar} on the session's bounded offensive executor, captures
- * the resulting {@code IntegerMap<ProductionRule>} via a {@link RecordingPurchaseDelegate}, trims
- * the captured map to fit the session player's PU budget, and projects the result into a
- * wire-shaped {@link PurchasePlan}.
+ * Stateless purchase executor: builds a fresh {@link GameData} clone + {@link ProAi} per call,
+ * applies the wire state, runs {@link ProAi#invokePurchaseForSidecar}, captures the resulting
+ * {@code IntegerMap<ProductionRule>} via a {@link RecordingPurchaseDelegate}, trims the captured
+ * map to fit the player's PU budget, and projects the result into a wire-shaped {@link
+ * PurchasePlan}.
+ *
+ * <p>The combat-move projection at the end runs against the same per-call ProAi instance — its
+ * {@code storedCombatMoveMap} was populated during purchase simulation (against the dataCopy used
+ * by {@code ProPurchaseAi}), so the executor takes an in-memory {@link ProSessionSnapshot} and
+ * calls {@code restoreCombatMoveMapFromSnapshot} to re-resolve the references against the live
+ * {@link GameData} before {@code invokeCombatMoveForSidecar} runs the projection in dryRun mode.
  *
  * <h2>Why trim-to-fit is a necessary backstop (not a reimplementation)</h2>
  *
@@ -85,27 +91,24 @@ import org.triplea.java.collections.IntegerMap;
  */
 public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest, PurchasePlan> {
 
-  private final ProSessionSnapshotStore snapshotStore;
+  public PurchaseExecutor() {}
 
-  /** Production constructor — uses the provided snapshot store. */
-  public PurchaseExecutor(final ProSessionSnapshotStore snapshotStore) {
-    this.snapshotStore = snapshotStore;
+  @Override
+  public PurchasePlan execute(final CanonicalGameData canonical, final PurchaseRequest request) {
+    return executeOn(canonical.cloneForSession(), request);
   }
 
   /**
-   * No-arg constructor for tests and contexts where snapshot persistence is not needed. Saves go to
-   * a subdirectory of {@code java.io.tmpdir} and are harmless.
+   * Test/internal entry point: runs purchase planning on a caller-supplied {@link GameData}.
+   *
+   * <p>Public callers go through {@link #execute(CanonicalGameData, PurchaseRequest)}, which clones
+   * a fresh {@code GameData} from the canonical template per request. Tests that need to mutate the
+   * cloned data (e.g. zero out a player's resources before the executor runs) can clone via {@link
+   * CanonicalGameData#cloneForSession()}, mutate, and dispatch through this entry point.
    */
-  public PurchaseExecutor() {
-    this(
-        new ProSessionSnapshotStore(
-            Path.of(System.getProperty("java.io.tmpdir"), "sidecar-snapshots")));
-  }
-
-  @Override
-  public PurchasePlan execute(final Session session, final PurchaseRequest request) {
-    final GameData data = session.gameData();
-    WireStateApplier.apply(data, request.state(), session.unitIdMap());
+  PurchasePlan executeOn(final GameData data, final PurchaseRequest request) {
+    final ConcurrentMap<String, UUID> unitIdMap = new ConcurrentHashMap<>();
+    WireStateApplier.apply(data, request.state(), unitIdMap);
 
     final GamePlayer player = data.getPlayerList().getPlayerId(request.state().currentPlayer());
     if (player == null) {
@@ -113,7 +116,9 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
           "Unknown player in PurchaseRequest: " + request.state().currentPlayer());
     }
 
-    ExecutorSupport.ensureProAiInitialized(session, player);
+    final ProAi proAi =
+        new ProAi("sidecar-stateless-" + request.state().currentPlayer(), player.getName());
+    ExecutorSupport.initializeProAi(proAi, data, player);
     // ProPurchaseAi.repair -> ProMatches.territoryIsNotConqueredOwnedLand reads the
     // BattleTracker via GameData.getBattleDelegate(); the clone's internal GameDataUtils copy
     // (GameDataManager save/load with withDelegates=true) only persists delegates that exist
@@ -129,14 +134,9 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     final Resource pus = data.getResourceList().getResourceOrThrow(Constants.PUS);
     final int pusToSpend = player.getResources().getQuantity(pus);
 
-    final ProAi proAi = session.proAi();
-
     // Reseed proData.getRng() and the battle calculator from the per-call wire seed so the
-    // (gamestate, seed) → wire-response mapping is a pure function — independent of any
-    // RNG drift from prior decision calls on this session. Mirrors the seeding pattern
-    // established in SessionRegistry.buildSession (#2377) but at per-call granularity, which
-    // is what the stateless-sidecar campaign needs (#2384, #2376 audit gate). Applied before
-    // dispatching invokePurchaseForSidecar AND before the internal combat-move projection
+    // (gamestate, seed) → wire-response mapping is a pure function (#2384, #2376 audit gate).
+    // Applied before dispatching invokePurchaseForSidecar AND before the combat-move projection
     // below (the projection consumes the same proAi instance and must see the same seed).
     proAi.getProData().setSeed(request.seed());
     proAi.seedBattleCalc(request.seed());
@@ -150,36 +150,7 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     // ProResourceTracker for this purchase pass.
     maybeApplyBritishSplitEconomy(request.state(), proAi, data);
 
-    final Future<Void> future =
-        session
-            .offensiveExecutor()
-            .submit(
-                () -> {
-                  proAi.invokePurchaseForSidecar(
-                      /* purchaseForBid */ false, pusToSpend, recorder, data, player);
-                  return null;
-                });
-    try {
-      future.get();
-    } catch (final InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      throw new RuntimeException("PurchaseExecutor interrupted", ie);
-    } catch (final ExecutionException ee) {
-      final Throwable cause = ee.getCause();
-      if (cause instanceof RuntimeException re) {
-        throw re;
-      }
-      throw new RuntimeException("PurchaseExecutor failed", cause);
-    }
-
-    // Persist stored maps so that combat-move / noncombat-move / place executors can restore them
-    // if the next request arrives after a process restart or session re-use.
-    // Serialize the session's unitIdMap (wireId → UUID) into the snapshot so that subsequent
-    // executors can pre-populate it before WireStateApplier.apply() runs, ensuring the same
-    // UUIDs are assigned to the same wire unit IDs after a restart.
-    final Map<String, String> wireToUuid = new HashMap<>();
-    session.unitIdMap().forEach((wireId, uuid) -> wireToUuid.put(wireId, uuid.toString()));
-    snapshotStore.save(session.key(), session.proAi().snapshotForSidecar(wireToUuid));
+    proAi.invokePurchaseForSidecar(/* purchaseForBid */ false, pusToSpend, recorder, data, player);
 
     // Prefer per-territory PurchaseOrders from proAi.storedPurchaseTerritories — they carry the
     // real placement target that Map Room's dual-economy dispatch (British split) needs.
@@ -217,16 +188,20 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     //
     // Two setup steps mirror CombatMoveExecutor exactly:
     //
-    // 1. Restore the combat move map from the snapshot we just saved so that territory/unit
-    //    references inside storedCombatMoveMap point to the live GameData (not the dataCopy used
-    //    during purchase simulation). Without this, WireMoveDescriptionBuilder cannot resolve unit
-    //    UUIDs in uuidToWireId and produces empty unitIds lists.
+    // 1. Restore the combat move map from an in-memory snapshot so that territory/unit references
+    //    inside storedCombatMoveMap point to the live GameData (not the dataCopy used during
+    //    purchase simulation). Without this, WireMoveDescriptionBuilder cannot resolve unit UUIDs
+    //    in uuidToWireId and produces empty unitIds lists. The in-memory snapshot mirrors the
+    //    name-based round-trip the disk store used to perform — there is no longer disk
+    //    persistence in the sidecar.
     //
     // 2. Advance the game sequence to "combatMove" so MoveDelegate.performMove can resolve
     //    GameStepPropertiesHelper.isCombatMove. The sequence is still at "germansPurchase"; the
     //    minimal WireState (empty territories/players) only updates the step.
-    final var snapOpt = snapshotStore.load(session.key());
-    snapOpt.ifPresent(snap -> proAi.restoreCombatMoveMapFromSnapshot(snap, data));
+    final Map<String, String> wireToUuid = new HashMap<>();
+    unitIdMap.forEach((wireId, uuid) -> wireToUuid.put(wireId, uuid.toString()));
+    final ProSessionSnapshot snap = proAi.snapshotForSidecar(wireToUuid);
+    proAi.restoreCombatMoveMapFromSnapshot(snap, data);
 
     WireStateApplier.apply(
         data,
@@ -237,40 +212,21 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
             "combatMove",
             request.state().currentPlayer(),
             List.of()),
-        session.unitIdMap());
+        unitIdMap);
 
     final Map<UUID, String> uuidToWireId = new HashMap<>();
-    session.unitIdMap().forEach((wireId, uuid) -> uuidToWireId.put(uuid, wireId));
+    unitIdMap.forEach((wireId, uuid) -> uuidToWireId.put(uuid, wireId));
 
-    // dryRun=true: capture moves WITHOUT executing them so that CombatMoveExecutor can re-run the
-    // same storedCombatMoveMap (restored from snapshot) with units still in their starting
-    // positions. Calling super.performMove here would move units in live GameData, leaving them at
-    // destinations when CombatMoveExecutor later tries to replay the same plan.
+    // dryRun=true: capture moves WITHOUT executing them. The bot dispatches the resulting
+    // WireMoveDescription[] back through map-room's combat-move handler, which performs the
+    // actual moves; sidecar must not mutate live unit positions during the projection or the
+    // bot would double-execute.
     final RecordingMoveDelegate combatRecorder =
         new RecordingMoveDelegate(proAi, /* dryRun= */ true);
     combatRecorder.initialize("move", "Move");
     combatRecorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
-    final Future<Void> combatFuture =
-        session
-            .offensiveExecutor()
-            .submit(
-                () -> {
-                  proAi.reinitializeProDataForSidecar();
-                  proAi.invokeCombatMoveForSidecar(combatRecorder, data, player);
-                  return null;
-                });
-    try {
-      combatFuture.get();
-    } catch (final InterruptedException ie) {
-      Thread.currentThread().interrupt();
-      throw new RuntimeException("PurchaseExecutor (combat-move projection) interrupted", ie);
-    } catch (final ExecutionException ee) {
-      final Throwable cause = ee.getCause();
-      if (cause instanceof RuntimeException re) {
-        throw re;
-      }
-      throw new RuntimeException("PurchaseExecutor (combat-move projection) failed", cause);
-    }
+    proAi.reinitializeProDataForSidecar();
+    proAi.invokeCombatMoveForSidecar(combatRecorder, data, player);
 
     final List<WireMoveDescription> nonBombingMoves =
         combatRecorder.captured().stream()

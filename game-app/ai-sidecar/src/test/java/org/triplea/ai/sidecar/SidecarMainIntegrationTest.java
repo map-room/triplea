@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.http.HttpService;
-import org.triplea.ai.sidecar.session.SessionRegistry;
 
 class SidecarMainIntegrationTest {
 
@@ -27,8 +26,7 @@ class SidecarMainIntegrationTest {
   void bootsEndToEnd() throws Exception {
     final SidecarConfig cfg =
         SidecarConfig.fromEnv(Map.of("SIDECAR_PORT", "0", "SIDECAR_BIND_HOST", "127.0.0.1"));
-    final SessionRegistry registry = new SessionRegistry(CanonicalGameData.load());
-    final HttpService svc = HttpService.start(cfg, registry);
+    final HttpService svc = HttpService.start(cfg, CanonicalGameData.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =
@@ -40,18 +38,7 @@ class SidecarMainIntegrationTest {
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(200, health.statusCode());
-
-      final HttpResponse<String> create =
-          client.send(
-              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/sessions"))
-                  .header("Authorization", "Bearer dev-token")
-                  .POST(
-                      HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"g-1:Germans:r1\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"round\":1,\"seed\":42}"))
-                  .build(),
-              HttpResponse.BodyHandlers.ofString());
-      assertEquals(200, create.statusCode());
-      assertTrue(create.body().contains("\"sessionId\":\"g-1:Germans:r1\""));
+      assertTrue(health.body().contains("\"status\":\"ok\""));
     } finally {
       svc.stop();
     }

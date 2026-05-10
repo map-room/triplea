@@ -5,8 +5,8 @@ import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 import org.triplea.ai.sidecar.AiTraceLogger;
+import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.dto.DecisionPlan;
 import org.triplea.ai.sidecar.dto.DecisionRequest;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
@@ -17,11 +17,9 @@ import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
 import org.triplea.ai.sidecar.exec.NoncombatMoveExecutor;
 import org.triplea.ai.sidecar.exec.PurchaseExecutor;
-import org.triplea.ai.sidecar.session.Session;
-import org.triplea.ai.sidecar.session.SessionRegistry;
 
 /**
- * Dispatches {@code POST /session/{id}/decision} calls to a kind-specific {@link DecisionExecutor}.
+ * Dispatches {@code POST /decision} calls to a kind-specific {@link DecisionExecutor}.
  *
  * <p>The request body is deserialised through the polymorphic {@link DecisionRequest} sealed
  * interface (Jackson discriminator {@code kind}). The concrete request type drives a pattern switch
@@ -30,26 +28,30 @@ import org.triplea.ai.sidecar.session.SessionRegistry;
  *
  * <p>Known decision kinds: {@code purchase} and {@code noncombat-move}. Any other kind returns 400
  * via Jackson deserialisation failure (unknown discriminator value).
+ *
+ * <p>The handler holds no per-request state. Each call constructs its own {@link
+ * games.strategy.engine.data.GameData} clone (from {@link CanonicalGameData}) and {@link
+ * games.strategy.triplea.ai.pro.ProAi} — see executor implementations.
  */
 public final class DecisionHandler implements HttpHandler {
 
   private static final System.Logger LOG = System.getLogger(DecisionHandler.class.getName());
 
-  private final SessionRegistry registry;
+  private final CanonicalGameData canonical;
   private final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor;
   private final DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> noncombatMoveExecutor;
 
   /** Production constructor — wires all executors. */
-  public DecisionHandler(final SessionRegistry registry) {
-    this(registry, new PurchaseExecutor(registry.snapshotStore()), new NoncombatMoveExecutor());
+  public DecisionHandler(final CanonicalGameData canonical) {
+    this(canonical, new PurchaseExecutor(), new NoncombatMoveExecutor());
   }
 
   /** Test constructor — accepts executor stubs so handler logic can be exercised in isolation. */
   public DecisionHandler(
-      final SessionRegistry registry,
+      final CanonicalGameData canonical,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor,
       final DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> noncombatMoveExecutor) {
-    this.registry = registry;
+    this.canonical = canonical;
     this.purchaseExecutor = purchaseExecutor;
     this.noncombatMoveExecutor = noncombatMoveExecutor;
   }
@@ -60,19 +62,8 @@ public final class DecisionHandler implements HttpHandler {
       writeJson(exchange, 405, JsonBodies.errorBody("method-not-allowed"));
       return;
     }
-    final Optional<SessionPathRouter.Match> match =
-        SessionPathRouter.match(exchange.getRequestURI().getPath());
-    if (match.isEmpty() || !"decision".equals(match.get().subpath())) {
+    if (!"/decision".equals(exchange.getRequestURI().getPath())) {
       writeJson(exchange, 404, JsonBodies.errorBody("not-found"));
-      return;
-    }
-    final Optional<Session> session = registry.get(match.get().sessionId());
-    if (session.isEmpty()) {
-      LOG.log(
-          System.Logger.Level.WARNING,
-          "[sidecar] session not found matchID={0} endpoint=decision",
-          match.get().sessionId());
-      writeJson(exchange, 404, JsonBodies.errorBody("unknown-session"));
       return;
     }
 
@@ -84,10 +75,8 @@ public final class DecisionHandler implements HttpHandler {
     } catch (final IOException e) {
       LOG.log(
           System.Logger.Level.WARNING,
-          "[sidecar] decision validation failed matchID={0} exClass={1} message={2} bodyBytes={3}",
-          new Object[] {
-            match.get().sessionId(), e.getClass().getSimpleName(), e.getMessage(), body.length()
-          });
+          "[sidecar] decision validation failed exClass={0} message={1} bodyBytes={2}",
+          new Object[] {e.getClass().getSimpleName(), e.getMessage(), body.length()});
       writeJson(exchange, 400, JsonBodies.errorBody("bad-request"));
       return;
     }
@@ -96,15 +85,15 @@ public final class DecisionHandler implements HttpHandler {
       return;
     }
 
-    AiTraceLogger.setMatchId(session.get().key().gameId());
+    AiTraceLogger.setMatchId(matchIdFor(request));
     try {
       switch (request) {
         case PurchaseRequest pr -> {
-          final PurchasePlan plan = purchaseExecutor.execute(session.get(), pr);
+          final PurchasePlan plan = purchaseExecutor.execute(canonical, pr);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
         case NoncombatMoveRequest nm -> {
-          final NoncombatMovePlan plan = noncombatMoveExecutor.execute(session.get(), nm);
+          final NoncombatMovePlan plan = noncombatMoveExecutor.execute(canonical, nm);
           writeJson(exchange, 200, JsonBodies.readyBody(plan));
         }
         case OtherOffensiveRequest oo ->
@@ -119,6 +108,18 @@ public final class DecisionHandler implements HttpHandler {
     } finally {
       AiTraceLogger.clearMatchId();
     }
+  }
+
+  /**
+   * Best-effort match-id extraction for trace logging. Stateless requests don't carry an explicit
+   * gameId; fall back to "currentPlayer:r{round}" as the trace tag.
+   */
+  private static String matchIdFor(final DecisionRequest request) {
+    return switch (request) {
+      case PurchaseRequest pr -> pr.state().currentPlayer() + ":r" + pr.state().round();
+      case NoncombatMoveRequest nm -> nm.state().currentPlayer() + ":r" + nm.state().round();
+      case OtherOffensiveRequest oo -> "kind=" + oo.kind();
+    };
   }
 
   private static void writeJson(final HttpExchange ex, final int status, final String body)

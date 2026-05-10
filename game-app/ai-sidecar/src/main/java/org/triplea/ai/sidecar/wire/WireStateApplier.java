@@ -508,10 +508,9 @@ public final class WireStateApplier {
     final GamePlayer player = resolvePlayer(gameData, wp.playerId());
 
     // Clear the player's unit collection (holding pool). In a normal TripleA turn the holding
-    // pool is empty between phases — any units present here are from a prior place-phase
-    // simulation (invokePlaceForSidecar) where §20 validation rejected the placement so the unit
-    // was never moved to the territory. Without this clear, stale units accumulate across turns
-    // and inflate subsequent place-phase outputs (map-room#2210).
+    // pool is empty between phases; the sidecar is stateless per-request (#2386) so this is
+    // defensive against the canonical GameData clone carrying stale units. Harmless when the
+    // pool is already empty.
     final List<games.strategy.engine.data.Unit> holdingPool =
         new ArrayList<>(player.getUnitCollection().getUnits());
     if (!holdingPool.isEmpty()) {

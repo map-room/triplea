@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.SidecarConfig;
-import org.triplea.ai.sidecar.session.SessionRegistry;
 
 class HttpServiceTest {
 
@@ -27,8 +26,7 @@ class HttpServiceTest {
   void healthEndpointReturns200OverHttp() throws Exception {
     final SidecarConfig cfg =
         new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
-    final SessionRegistry reg = new SessionRegistry(CanonicalGameData.load());
-    final HttpService svc = HttpService.start(cfg, reg);
+    final HttpService svc = HttpService.start(cfg, CanonicalGameData.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =
@@ -47,36 +45,45 @@ class HttpServiceTest {
   }
 
   @Test
-  void sessionsEndpointRequiresAuth() throws Exception {
+  void decisionEndpointRequiresAuth() throws Exception {
     final SidecarConfig cfg =
         new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
-    final SessionRegistry reg = new SessionRegistry(CanonicalGameData.load());
-    final HttpService svc = HttpService.start(cfg, reg);
+    final HttpService svc = HttpService.start(cfg, CanonicalGameData.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =
           HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
       final HttpResponse<String> unauth =
           client.send(
-              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/sessions"))
-                  .POST(
-                      HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"g:Germans:r1\",\"gameId\":\"g\",\"nation\":\"Germans\",\"round\":1,\"seed\":1}"))
+              HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/decision"))
+                  .POST(HttpRequest.BodyPublishers.ofString("{}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
       assertEquals(401, unauth.statusCode());
+    } finally {
+      svc.stop();
+    }
+  }
 
-      final HttpResponse<String> ok =
+  @Test
+  void deletedSessionsEndpointReturns404() throws Exception {
+    final SidecarConfig cfg =
+        new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
+    final HttpService svc = HttpService.start(cfg, CanonicalGameData.load());
+    try {
+      final int port = svc.boundPort();
+      final HttpClient client =
+          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+      // The /sessions and /session/{id}/* routes are gone in #2386. Even with auth, the request
+      // should not match any handler.
+      final HttpResponse<String> resp =
           client.send(
               HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/sessions"))
                   .header("Authorization", "Bearer test-token")
-                  .POST(
-                      HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"g:Germans:r1\",\"gameId\":\"g\",\"nation\":\"Germans\",\"round\":1,\"seed\":1}"))
+                  .POST(HttpRequest.BodyPublishers.ofString("{}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
-      assertEquals(200, ok.statusCode());
-      assertTrue(ok.body().contains("\"sessionId\":\"g:Germans:r1\""));
+      assertEquals(404, resp.statusCode());
     } finally {
       svc.stop();
     }

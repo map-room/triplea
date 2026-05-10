@@ -15,14 +15,9 @@ public final class JsonBodies {
    * deserialize cleanly even before the Java POJO catches up.
    *
    * <p>This addresses the class of bug from map-room#2301 / map-room#2305: a TS-side wire emit of a
-   * previously-unknown field (in that case {@code WirePlayer.purchasedUnits}) caused Jackson to
-   * throw {@code UnrecognizedPropertyException}, which surfaced as opaque {@code 400 bad-request}
-   * on every {@code /session/{id}/update} call, which the bot mishandled by falling back to {@code
-   * skip*} moves with empty plans — silently burning AI turns.
-   *
-   * <p>The other two ObjectMappers in the sidecar ({@code ProSessionSnapshotStore.MAPPER}, {@code
-   * SessionStore.MAPPER}) are intentionally left strict — those files have schemas the sidecar
-   * fully owns, so unknown properties there indicate a real bug.
+   * previously-unknown field caused Jackson to throw {@code UnrecognizedPropertyException}, which
+   * surfaced as opaque {@code 400 bad-request} on the decision endpoint and the bot mishandled by
+   * falling back to {@code skip*} moves with empty plans — silently burning AI turns.
    */
   public static final ObjectMapper MAPPER =
       new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -35,21 +30,6 @@ public final class JsonBodies {
 
   public static String writeValue(final Object value) throws JsonProcessingException {
     return MAPPER.writeValueAsString(value);
-  }
-
-  /**
-   * Legacy error body used by non-decision handlers (SessionCreateHandler,
-   * SessionLifecycleHandler). Emits {@code {"error":"<code>","message":"<msg>"}}.
-   *
-   * <p>For the decision endpoint use {@link #errorBody(String)} or {@link
-   * #errorBodyWithKind(String, String)} which emit the TS-contract status envelope.
-   */
-  public static String errorBody(final String error, final String message)
-      throws JsonProcessingException {
-    final com.fasterxml.jackson.databind.node.ObjectNode n = MAPPER.createObjectNode();
-    n.put("error", error);
-    n.put("message", message);
-    return MAPPER.writeValueAsString(n);
   }
 
   /** Wraps a successful plan in the {@code {"status":"ready","plan":{...}}} envelope. */

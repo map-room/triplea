@@ -10,7 +10,6 @@ import games.strategy.triplea.delegate.battle.BattleTracker;
 import games.strategy.triplea.delegate.battle.IBattle;
 import java.lang.reflect.Field;
 import java.util.Set;
-import org.triplea.ai.sidecar.session.Session;
 
 /**
  * Shared plumbing used by decision executors that dispatch into {@code AbstractProAi}.
@@ -18,10 +17,11 @@ import org.triplea.ai.sidecar.session.Session;
  * <p>Two concerns show up in every executor and are centralised here:
  *
  * <ul>
- *   <li>Lazy {@link PlayerBridge}/{@link GamePlayer} initialisation on the session's {@link ProAi}
- *       (constructed bridge-less by {@link org.triplea.ai.sidecar.session.SessionRegistry}).
- *       Required so {@code AbstractBasePlayer.getGameData()} — called transitively from {@code
- *       ProData.initialize} — returns the session's cloned {@link GameData} rather than NPE.
+ *   <li>{@link PlayerBridge}/{@link GamePlayer} initialisation on the per-call {@link ProAi} —
+ *       every freshly-constructed ProAi is bridge-less until {@link ProAi#initialize(PlayerBridge,
+ *       GamePlayer)} runs. Required so {@code AbstractBasePlayer.getGameData()} — called
+ *       transitively from {@code ProData.initialize} — returns the cloned {@link GameData} rather
+ *       than NPE.
  *   <li>Lazy {@link BattleDelegate} re-registration after a {@code GameData} round-trip clears the
  *       delegate map during {@code postDeSerialize}.
  * </ul>
@@ -46,24 +46,12 @@ final class ExecutorSupport {
   private ExecutorSupport() {}
 
   /**
-   * Attach a {@link PlayerBridge} + {@link GamePlayer} to the session's {@link ProAi} on first use.
-   * No-op if already initialised.
-   *
-   * <p>Synchronized on the {@link Session} instance to prevent a check-then-act race: two
-   * concurrent HTTP threads on the same session could both observe {@code proAi.getGamePlayer() ==
-   * null} and call {@code initialize} twice, corrupting the ProAi internal state. The session
-   * record is a stable reference shared across all executors on the same session, so it is a safe
-   * monitor.
+   * Attach a {@link PlayerBridge} + {@link GamePlayer} to the per-call {@link ProAi}. Always called
+   * exactly once per executor invocation, before the first ProAi entry point runs.
    */
-  static void ensureProAiInitialized(final Session session, final GamePlayer player) {
-    synchronized (session) {
-      final ProAi proAi = session.proAi();
-      if (proAi.getGamePlayer() != null) {
-        return;
-      }
-      final PlayerBridge bridge = new PlayerBridge(new HeadlessGame(session.gameData()));
-      proAi.initialize(bridge, player);
-    }
+  static void initializeProAi(final ProAi proAi, final GameData data, final GamePlayer player) {
+    final PlayerBridge bridge = new PlayerBridge(new HeadlessGame(data));
+    proAi.initialize(bridge, player);
   }
 
   /**
