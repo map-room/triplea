@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import org.triplea.ai.sidecar.AiTraceLogger;
@@ -36,6 +37,7 @@ import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RepairOrder;
 import org.triplea.ai.sidecar.dto.WarDeclaration;
+import org.triplea.ai.sidecar.dto.WireMoveDescription;
 import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.wire.WirePlayer;
@@ -197,7 +199,82 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
       politicalActions = List.of();
     }
 
-    return new PurchasePlan(buys, repairs, placements, politicalActions);
+    // Project storedCombatMoveMap to WireMoveDescription[] (mirror CombatMoveExecutor.execute).
+    // invokeCombatMoveForSidecar takes the doMove branch because storedCombatMoveMap was populated
+    // by invokePurchaseForSidecar above — zero re-planning, pure translation.
+    //
+    // Two setup steps mirror CombatMoveExecutor exactly:
+    //
+    // 1. Restore the combat move map from the snapshot we just saved so that territory/unit
+    //    references inside storedCombatMoveMap point to the live GameData (not the dataCopy used
+    //    during purchase simulation). Without this, WireMoveDescriptionBuilder cannot resolve unit
+    //    UUIDs in uuidToWireId and produces empty unitIds lists.
+    //
+    // 2. Advance the game sequence to "combatMove" so MoveDelegate.performMove can resolve
+    //    GameStepPropertiesHelper.isCombatMove. The sequence is still at "germansPurchase"; the
+    //    minimal WireState (empty territories/players) only updates the step.
+    final var snapOpt = snapshotStore.load(session.key());
+    snapOpt.ifPresent(snap -> proAi.restoreCombatMoveMapFromSnapshot(snap, data));
+
+    WireStateApplier.apply(
+        data,
+        new WireState(
+            List.of(),
+            List.of(),
+            request.state().round(),
+            "combatMove",
+            request.state().currentPlayer(),
+            List.of()),
+        session.unitIdMap());
+
+    final Map<UUID, String> uuidToWireId = new HashMap<>();
+    session.unitIdMap().forEach((wireId, uuid) -> uuidToWireId.put(uuid, wireId));
+
+    // dryRun=true: capture moves WITHOUT executing them so that CombatMoveExecutor can re-run the
+    // same storedCombatMoveMap (restored from snapshot) with units still in their starting
+    // positions. Calling super.performMove here would move units in live GameData, leaving them at
+    // destinations when CombatMoveExecutor later tries to replay the same plan.
+    final RecordingMoveDelegate combatRecorder =
+        new RecordingMoveDelegate(proAi, /* dryRun= */ true);
+    combatRecorder.initialize("move", "Move");
+    combatRecorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
+    final Future<Void> combatFuture =
+        session
+            .offensiveExecutor()
+            .submit(
+                () -> {
+                  proAi.reinitializeProDataForSidecar();
+                  proAi.invokeCombatMoveForSidecar(combatRecorder, data, player);
+                  return null;
+                });
+    try {
+      combatFuture.get();
+    } catch (final InterruptedException ie) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException("PurchaseExecutor (combat-move projection) interrupted", ie);
+    } catch (final ExecutionException ee) {
+      final Throwable cause = ee.getCause();
+      if (cause instanceof RuntimeException re) {
+        throw re;
+      }
+      throw new RuntimeException("PurchaseExecutor (combat-move projection) failed", cause);
+    }
+
+    final List<WireMoveDescription> nonBombingMoves =
+        combatRecorder.captured().stream()
+            .filter(c -> !c.isBombing())
+            .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
+            .toList();
+    final List<WireMoveDescription> bombingMoves =
+        combatRecorder.captured().stream()
+            .filter(RecordingMoveDelegate.CapturedMove::isBombing)
+            .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
+            .toList();
+    final List<WireMoveDescription> combatMoves = new ArrayList<>();
+    combatMoves.addAll(nonBombingMoves);
+    combatMoves.addAll(bombingMoves);
+
+    return new PurchasePlan(buys, repairs, placements, politicalActions, combatMoves);
   }
 
   /**

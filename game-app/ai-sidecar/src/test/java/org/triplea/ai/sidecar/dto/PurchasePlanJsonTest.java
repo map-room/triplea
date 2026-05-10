@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class PurchasePlanJsonTest {
@@ -80,5 +81,51 @@ class PurchasePlanJsonTest {
     assertInstanceOf(PurchasePlan.class, decoded);
     PurchasePlan back = (PurchasePlan) decoded;
     assertEquals(0, back.politicalActions().size());
+  }
+
+  @Test
+  void purchasePlanRoundTripsWithCombatMoves() throws Exception {
+    PurchasePlan plan =
+        new PurchasePlan(
+            List.of(new PurchaseOrder("infantry", 2, "Germany")),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(
+                new WireMoveDescription(
+                    List.of("u1"),
+                    "Germany",
+                    "Poland",
+                    Map.of(),
+                    Map.of("u1", new WireUnitClassification(false, false)),
+                    Map.of()),
+                new WireMoveDescription(
+                    List.of("u2"),
+                    "Sea Zone 5",
+                    "Sea Zone 6",
+                    Map.of(),
+                    Map.of("u2", new WireUnitClassification(false, true)),
+                    Map.of())));
+    String json = mapper.writeValueAsString((DecisionPlan) plan);
+    assertTrue(json.contains("\"combatMoves\""));
+    assertTrue(json.contains("\"Germany\""));
+    DecisionPlan decoded = mapper.readValue(json, DecisionPlan.class);
+    assertInstanceOf(PurchasePlan.class, decoded);
+    PurchasePlan back = (PurchasePlan) decoded;
+    assertEquals(2, back.combatMoves().size());
+    assertEquals("Germany", back.combatMoves().get(0).from());
+    assertEquals("Poland", back.combatMoves().get(0).to());
+    assertEquals(List.of("u1"), back.combatMoves().get(0).unitIds());
+  }
+
+  @Test
+  void purchasePlanWithMissingCombatMovesDefaultsToEmpty() throws Exception {
+    String json =
+        "{\"kind\":\"purchase\",\"buys\":[{\"unitType\":\"infantry\",\"count\":1}],"
+            + "\"repairs\":[],\"placements\":[],\"politicalActions\":[]}";
+    DecisionPlan decoded = mapper.readValue(json, DecisionPlan.class);
+    assertInstanceOf(PurchasePlan.class, decoded);
+    PurchasePlan back = (PurchasePlan) decoded;
+    assertEquals(0, back.combatMoves().size());
   }
 }
