@@ -12,6 +12,8 @@ import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.engine.framework.GameDataManager;
 import games.strategy.engine.framework.GameDataUtils;
+import games.strategy.engine.random.IRandomSource;
+import games.strategy.engine.random.PlainRandomSource;
 import games.strategy.triplea.delegate.battle.BattleResults;
 import games.strategy.triplea.delegate.battle.BattleTracker;
 import games.strategy.triplea.delegate.battle.MustFightBattle;
@@ -23,6 +25,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import lombok.Setter;
 
 class BattleCalculator implements IBattleCalculator {
@@ -38,15 +41,33 @@ class BattleCalculator implements IBattleCalculator {
   private volatile boolean cancelled = false;
   private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
+  /**
+   * When non-null, every {@link DummyDelegateBridge} created in {@link #calculate} shares a single
+   * {@link PlainRandomSource} seeded with this value, instead of the default per-trial unseeded
+   * {@code MersenneTwister}. Enables deterministic battle calculator output for the AI sidecar (see
+   * map-room/map-room#2376 / #2377).
+   */
+  @Nullable private final Long seed;
+
   BattleCalculator(GameData data) {
+    this(data, null);
+  }
+
+  BattleCalculator(GameData data, @Nullable Long seed) {
     gameData =
         GameDataUtils.cloneGameData(data, GameDataManager.Options.forBattleCalculator())
             .orElseThrow();
+    this.seed = seed;
   }
 
   BattleCalculator(byte[] data) {
+    this(data, null);
+  }
+
+  BattleCalculator(byte[] data, @Nullable Long seed) {
     gameData = GameDataUtils.createGameDataFromBytes(data).orElseThrow();
     gameData.getProperties().set(EDIT_MODE, false);
+    this.seed = seed;
   }
 
   @Override
@@ -92,8 +113,14 @@ class BattleCalculator implements IBattleCalculator {
       final List<Unit> defenderOrderOfLosses =
           OrderOfLossesInputPanel.getUnitListByOrderOfLoss(
               this.defenderOrderOfLosses, defendingUnits, gameData);
+      // When seeded, all trials in this call share a single seeded random source so the
+      // aggregate is reproducible. When unseeded, each trial gets its own unseeded RNG (legacy
+      // behaviour) — see map-room/map-room#2377.
+      final IRandomSource sharedRandomSource = seed != null ? new PlainRandomSource(seed) : null;
       for (int i = 0; i < runCount && !cancelled; i++) {
         final CompositeChange allChanges = new CompositeChange();
+        final IRandomSource trialRandomSource =
+            sharedRandomSource != null ? sharedRandomSource : new PlainRandomSource();
         final DummyDelegateBridge bridge =
             new DummyDelegateBridge(
                 attacker2,
@@ -105,7 +132,8 @@ class BattleCalculator implements IBattleCalculator {
                 retreatAfterRound,
                 retreatAfterXUnitsLeft,
                 retreatWhenOnlyAirLeft,
-                tuvCalculator);
+                tuvCalculator,
+                trialRandomSource);
         final MustFightBattle battle =
             new MustFightBattle(location2, attacker2, gameData, battleTracker);
         battle.setHeadless(true);

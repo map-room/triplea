@@ -13,7 +13,21 @@ public final class PlainRandomSource implements IRandomSource {
   private final Object lock = new Object();
 
   @GuardedBy("lock")
-  private final RandomGenerator random = new MersenneTwister();
+  private final RandomGenerator random;
+
+  /** Default constructor: nondeterministic seeding (current behaviour). */
+  public PlainRandomSource() {
+    this.random = new MersenneTwister();
+  }
+
+  /**
+   * Seeded constructor: produces a deterministic sequence given the same {@code seed}. Used by the
+   * AI sidecar's deterministic battle-calculator path so {@code (gamestate, seed) → wire-response}
+   * is a pure function (see map-room/map-room#2376 / #2377).
+   */
+  public PlainRandomSource(final long seed) {
+    this.random = new MersenneTwister(seed);
+  }
 
   @Override
   public int[] getRandom(final int max, final int count, final String annotation) {
