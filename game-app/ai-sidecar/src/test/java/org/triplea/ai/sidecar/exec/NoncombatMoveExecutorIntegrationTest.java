@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
-import org.triplea.ai.sidecar.dto.CombatMoveRequest;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.NoncombatMoveRequest;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
@@ -30,9 +29,9 @@ import org.triplea.ai.sidecar.session.SessionKey;
 import org.triplea.ai.sidecar.wire.WireState;
 
 /**
- * Integration tests for {@link NoncombatMoveExecutor}. Runs a full purchase → combat-move →
- * noncombat-move sequence on the same session (purchase populates both {@code storedFactoryMoveMap}
- * and {@code storedPurchaseTerritories}; combat-move consumes {@code storedCombatMoveMap}).
+ * Integration tests for {@link NoncombatMoveExecutor}. Runs a full purchase → noncombat-move
+ * sequence on the same session (purchase populates both {@code storedFactoryMoveMap} and {@code
+ * storedPurchaseTerritories}).
  */
 class NoncombatMoveExecutorIntegrationTest {
 
@@ -71,24 +70,19 @@ class NoncombatMoveExecutorIntegrationTest {
   }
 
   /**
-   * Full pipeline: purchase → combat-move → noncombat-move. Asserts the returned plan is non-null
-   * and that no captured move has {@code isBombing == true}.
+   * Full pipeline: purchase → noncombat-move. Asserts the returned plan is non-null and that no
+   * captured move has {@code isBombing == true}.
    */
   @Test
   void germansNoncombatMoveAfterFullPipeline() {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
     final Session session = freshSession("Germans");
 
-    // Step 1: purchase — populates storedFactoryMoveMap, storedCombatMoveMap,
-    // storedPurchaseTerritories
+    // Step 1: purchase — populates storedFactoryMoveMap and storedPurchaseTerritories
     new PurchaseExecutor(store)
         .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
 
-    // Step 2: combat-move — consumes storedCombatMoveMap
-    new CombatMoveExecutor(store)
-        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
-
-    // Step 3: noncombat-move — consumes storedFactoryMoveMap, preserves storedPurchaseTerritories
+    // Step 2: noncombat-move — consumes storedFactoryMoveMap, preserves storedPurchaseTerritories
     final NoncombatMovePlan plan =
         new NoncombatMoveExecutor(store)
             .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
@@ -112,8 +106,6 @@ class NoncombatMoveExecutorIntegrationTest {
 
     new PurchaseExecutor(store)
         .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store)
-        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
 
     // If any captured move had isBombing==true, the executor would throw AssertionError.
     // The plan being returned means the invariant held.
@@ -135,8 +127,6 @@ class NoncombatMoveExecutorIntegrationTest {
 
     new PurchaseExecutor(store)
         .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store)
-        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
     new NoncombatMoveExecutor(store)
         .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
 
@@ -211,8 +201,6 @@ class NoncombatMoveExecutorIntegrationTest {
 
     new PurchaseExecutor(store)
         .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store)
-        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
     final NoncombatMovePlan plan =
         new NoncombatMoveExecutor(store)
             .execute(session, new NoncombatMoveRequest(noncombatWireState("Germans")));
@@ -234,11 +222,9 @@ class NoncombatMoveExecutorIntegrationTest {
     final ProSessionSnapshotStore store = new ProSessionSnapshotStore(snapshotDir);
     final Session session = freshSession("Germans");
 
-    // Run purchase and combat-move normally to establish the session state
+    // Run purchase normally to establish the session state
     new PurchaseExecutor(store)
         .execute(session, new PurchaseRequest(wireState("purchase", "Germans")));
-    new CombatMoveExecutor(store)
-        .execute(session, new CombatMoveRequest(wireState("combatMove", "Germans")));
 
     // Inject a stale UUID into the snapshot's factoryMoveMap
     final var staleUuid = UUID.randomUUID().toString();

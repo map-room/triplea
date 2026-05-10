@@ -6,20 +6,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.InputStream;
 import org.junit.jupiter.api.Test;
-import org.triplea.ai.sidecar.dto.DecisionPlan;
 
 class WireContractFixtureTest {
 
   private static final ObjectMapper MAPPER =
       new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-
-  @Test
-  void politicsPlanFixtureRoundTripsByteIdentical() throws Exception {
-    final byte[] original = readResource("wire-contract/politics-plan.json");
-    final DecisionPlan parsed = MAPPER.readValue(original, DecisionPlan.class);
-    final byte[] reserialized = MAPPER.writeValueAsBytes(parsed);
-    assertThat(normalize(reserialized)).isEqualTo(normalize(original));
-  }
 
   @Test
   void wireStateFixtureRoundTripsByteIdentical() throws Exception {

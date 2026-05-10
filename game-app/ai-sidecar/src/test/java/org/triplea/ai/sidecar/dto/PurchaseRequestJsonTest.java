@@ -17,17 +17,4 @@ class PurchaseRequestJsonTest {
     assertInstanceOf(PurchaseRequest.class, req);
     assertEquals("Germans", ((PurchaseRequest) req).state().currentPlayer());
   }
-
-  @Test
-  void combatMoveDeserialisesAsCombatMoveRequest() throws Exception {
-    ObjectMapper mapper = new ObjectMapper();
-    String json =
-        "{\"kind\":\"combat-move\",\"state\":{"
-            + "\"territories\":[],\"players\":[],\"round\":1,"
-            + "\"phase\":\"combatMove\",\"currentPlayer\":\"Germans\"}}";
-    DecisionRequest req = mapper.readValue(json, DecisionRequest.class);
-    assertInstanceOf(CombatMoveRequest.class, req);
-    assertEquals("Germans", ((CombatMoveRequest) req).state().currentPlayer());
-    assertEquals("combat-move", ((CombatMoveRequest) req).kind());
-  }
 }

@@ -5,21 +5,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "kind")
 @JsonSubTypes({
-  @JsonSubTypes.Type(value = RetreatPlan.class, name = "retreat-or-press"),
-  @JsonSubTypes.Type(value = ScramblePlan.class, name = "scramble"),
-  @JsonSubTypes.Type(value = InterceptPlan.class, name = "intercept"),
   @JsonSubTypes.Type(value = PurchasePlan.class, name = "purchase"),
-  @JsonSubTypes.Type(value = PoliticsPlan.class, name = "politics"),
-  @JsonSubTypes.Type(value = CombatMovePlan.class, name = "combat-move"),
   @JsonSubTypes.Type(value = NoncombatMovePlan.class, name = "noncombat-move"),
-  @JsonSubTypes.Type(value = PlacePlan.class, name = "place"),
 })
-public sealed interface DecisionPlan
-    permits RetreatPlan,
-        ScramblePlan,
-        InterceptPlan,
-        PurchasePlan,
-        PoliticsPlan,
-        CombatMovePlan,
-        NoncombatMovePlan,
-        PlacePlan {}
+public sealed interface DecisionPlan permits PurchasePlan, NoncombatMovePlan {}
