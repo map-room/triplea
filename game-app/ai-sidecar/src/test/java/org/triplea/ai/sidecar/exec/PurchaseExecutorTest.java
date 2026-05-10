@@ -12,13 +12,9 @@ import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.triplea.Constants;
-import games.strategy.triplea.ai.pro.ProAi;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.settings.ClientSetting;
 import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
@@ -27,8 +23,6 @@ import org.triplea.ai.sidecar.dto.PlacementGroup;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
-import org.triplea.ai.sidecar.session.Session;
-import org.triplea.ai.sidecar.session.SessionKey;
 import org.triplea.ai.sidecar.wire.WireState;
 
 class PurchaseExecutorTest {
@@ -39,19 +33,6 @@ class PurchaseExecutorTest {
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
     canonical = CanonicalGameData.load();
-  }
-
-  private Session freshSession(final String nation) {
-    final GameData data = canonical.cloneForSession();
-    final ProAi proAi = new ProAi("sidecar-test-" + nation, nation);
-    return new Session(
-        "s-test-" + UUID.randomUUID(),
-        new SessionKey("g1", nation, 1),
-        42L,
-        proAi,
-        data,
-        new ConcurrentHashMap<>(),
-        Executors.newSingleThreadExecutor());
   }
 
   private static PurchaseRequest purchaseRequestFor(final String nation) {
@@ -92,27 +73,24 @@ class PurchaseExecutorTest {
 
   @Test
   void returnsNonEmptyPlanForTurn1Germans() throws Exception {
-    final Session session = freshSession("Germans");
-    final PurchasePlan plan =
-        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final GameData data = canonical.cloneForSession();
+    final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
 
     assertThat(plan.buys()).isNotEmpty();
-    final int budget = playerPus(session.gameData(), "Germans");
-    assertThat(totalCost(session.gameData(), plan)).isLessThanOrEqualTo(budget);
+    final int budget = playerPus(data, "Germans");
+    assertThat(totalCost(data, plan)).isLessThanOrEqualTo(budget);
   }
 
   @Test
   void trimToFitClampsWhenProAiOverruns() throws Exception {
-    final Session session = freshSession("Germans");
-    final GameData data = session.gameData();
+    final GameData data = canonical.cloneForSession();
     final GamePlayer germans = data.getPlayerList().getPlayerId("Germans");
     final Resource pus = data.getResourceList().getResourceOrThrow(Constants.PUS);
     final int current = germans.getResources().getQuantity(pus);
     // Zero out Germans' PUs so any ProAi overrun is clamped to empty by trimToFit.
     data.performChange(ChangeFactory.changeResourcesChange(germans, pus, -current));
 
-    final PurchasePlan plan =
-        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
 
     assertThat(totalCost(data, plan)).isEqualTo(0);
   }
@@ -127,8 +105,7 @@ class PurchaseExecutorTest {
    */
   @Test
   void repairCostDeductedFromUnitBudgetWhenFactoryIsDamaged() {
-    final Session session = freshSession("Germans");
-    final GameData data = session.gameData();
+    final GameData data = canonical.cloneForSession();
     final Resource pus = data.getResourceList().getResourceOrThrow(Constants.PUS);
     final GamePlayer player = data.getPlayerList().getPlayerId("Germans");
 
@@ -146,8 +123,7 @@ class PurchaseExecutorTest {
 
     final int startingPus = player.getResources().getQuantity(pus);
 
-    final PurchasePlan plan =
-        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
 
     // ProAi must have decided to repair (the factory has damage and the player can afford it).
     assertThat(plan.repairs()).as("ProAi should repair the damaged factory").isNotEmpty();
@@ -166,15 +142,14 @@ class PurchaseExecutorTest {
 
   @Test
   void translatesProductionRuleToUnitTypeName() throws Exception {
-    final Session session = freshSession("Germans");
-    final PurchasePlan plan =
-        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final GameData data = canonical.cloneForSession();
+    final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
 
     for (final PurchaseOrder order : plan.buys()) {
       assertThat(order.unitType()).isNotNull();
       assertThat(order.count()).isGreaterThan(0);
       // The unit type must resolve to a real ProductionRule on the canonical map.
-      assertThat(findRuleForUnitType(session.gameData(), order.unitType()))
+      assertThat(findRuleForUnitType(data, order.unitType()))
           .as("unit type %s has a production rule", order.unitType())
           .isNotNull();
     }
@@ -192,9 +167,8 @@ class PurchaseExecutorTest {
    */
   @Test
   void placementsArePopulatedAndOrderedCorrectly() throws Exception {
-    final Session session = freshSession("Germans");
-    final PurchasePlan plan =
-        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final GameData data = canonical.cloneForSession();
+    final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
 
     // ProAi always buys something for turn-1 Germans; placements must follow from buys.
     assertThat(plan.buys()).as("ProAi should buy units for turn-1 Germans").isNotEmpty();
@@ -236,17 +210,11 @@ class PurchaseExecutorTest {
    * Smoke test: {@code politicalActions} is always a non-null list. Round 1 Germans will not
    * declare any wars, so the list is expected to be empty. The important invariant is that the
    * field is present and well-typed regardless of whether any actions were decided.
-   *
-   * <p>Note: {@code politicalActions} reflects the AI's decisions on the simulation clone ({@code
-   * dataCopy}), not the live session's {@link games.strategy.engine.data.RelationshipTracker}. The
-   * live tracker is only updated after the bot dispatches the returned war declarations to the
-   * engine via {@code declareWar} moves.
    */
   @Test
   void politicalActionsIsNonNullAfterPurchase() throws Exception {
-    final Session session = freshSession("Germans");
-    final PurchasePlan plan =
-        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final GameData data = canonical.cloneForSession();
+    final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
 
     assertThat(plan.politicalActions()).as("politicalActions must never be null").isNotNull();
   }
@@ -266,9 +234,8 @@ class PurchaseExecutorTest {
    */
   @Test
   void combatMovesArePopulatedAndOrderedCorrectlyAfterPurchase() throws Exception {
-    final Session session = freshSession("Germans");
-    final PurchasePlan plan =
-        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+    final GameData data = canonical.cloneForSession();
+    final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
 
     assertThat(plan.combatMoves()).as("combatMoves must never be null").isNotNull();
     assertThat(plan.combatMoves())
@@ -276,52 +243,40 @@ class PurchaseExecutorTest {
         .isNotEmpty();
 
     // Each move must reference a non-blank from/to territory.
-    // unitIds will be empty in this test context because session.unitIdMap() is not populated —
-    // the WireState used here is empty (no territories/units), so no wire-ID → UUID mappings are
-    // registered. In production the WireState carries all units, so unitIds are populated.
+    // unitIds will be empty in this test context because the empty WireState means no wire-ID →
+    // UUID mappings are registered. In production the WireState carries all units, so unitIds are
+    // populated.
     for (final var md : plan.combatMoves()) {
       assertThat(md.from()).as("combatMove.from must not be blank").isNotBlank();
       assertThat(md.to()).as("combatMove.to must not be blank").isNotBlank();
     }
-
-    // Ordering (non-bombing ++ bombing) is structurally guaranteed by PurchaseExecutor's
-    // concatenation of nonBombingMoves then bombingMoves. Verifying it via unit classifications
-    // here would require a populated session.unitIdMap(), which this test intentionally omits
-    // (empty WireState — see comment above). The classification-based ordering test is covered
-    // by CombatMoveExecutorTest for the real sidecar pipeline.
   }
 
   /**
    * Data-rooting audit: verifies that combat-move simulation predicates (ProMatches etc.) resolve
    * correctly during purchase-time planning. The returned combatMoves reference real territories
-   * that exist in the session's GameData, confirming that the ProAi's data references were rooted
-   * through the session clone rather than a stale copy.
-   *
-   * <p>If the data-rooting bug class (proData.getPlayer().getData() pointing to a detached
-   * dataCopy) affected combat-move planning, we would see empty combatMoves or moves referencing
-   * territories that do not exist in the session GameData. Both are caught here.
+   * that exist in the GameData clone, confirming that the ProAi's data references were rooted
+   * through the executor-supplied clone rather than a stale copy.
    */
   @Test
-  void combatMoveSimulationPredicatesResolveViaSessionData() throws Exception {
-    final Session session = freshSession("Germans");
-    final PurchasePlan plan =
-        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+  void combatMoveSimulationPredicatesResolveViaExecutorData() throws Exception {
+    final GameData data = canonical.cloneForSession();
+    final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
 
     assertThat(plan.combatMoves())
         .as("combatMoves must be non-empty — data-rooting failure would yield empty list")
         .isNotEmpty();
 
-    final var gameData = session.gameData();
     for (final var md : plan.combatMoves()) {
-      // Every from-territory referenced by the combat move must exist in the live session data.
-      assertThat(gameData.getMap().getTerritoryOrNull(md.from()))
+      // Every from-territory referenced by the combat move must exist in the live data.
+      assertThat(data.getMap().getTerritoryOrNull(md.from()))
           .as(
-              "combatMove.from '%s' must exist in session GameData — stale dataCopy would "
+              "combatMove.from '%s' must exist in GameData — stale dataCopy would "
                   + "reference territories unknown to the live clone",
               md.from())
           .isNotNull();
-      assertThat(gameData.getMap().getTerritoryOrNull(md.to()))
-          .as("combatMove.to '%s' must exist in session GameData", md.to())
+      assertThat(data.getMap().getTerritoryOrNull(md.to()))
+          .as("combatMove.to '%s' must exist in GameData", md.to())
           .isNotNull();
     }
   }

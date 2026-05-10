@@ -7,7 +7,6 @@ import games.strategy.engine.data.GameState;
 import games.strategy.engine.data.GameStep;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
-import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.engine.delegate.IDelegateBridge;
 import games.strategy.engine.framework.GameDataManager;
 import games.strategy.engine.framework.GameDataUtils;
@@ -458,50 +457,6 @@ public abstract class AbstractProAi extends AbstractAi {
       final GameData data,
       final GamePlayer player) {
     move(/* nonCombat= */ true, delegate, data, player);
-  }
-
-  /**
-   * Public bridge to the {@code protected} {@link #place} entry point for the AI sidecar's place
-   * phase.
-   *
-   * <p>Extends {@link #place(boolean, IAbstractPlaceDelegate, GameState, GamePlayer)} with one
-   * sidecar-specific step: before calling {@code purchaseAi.place()}, real (non-temp) units are
-   * created and added to {@code player}'s {@link GamePlayer#getUnitCollection()} for every unit
-   * type listed in {@code storedPurchaseTerritories}. In a normal TripleA turn the purchase phase
-   * adds units to the player's collection via the real {@code IPurchaseDelegate}; in the sidecar
-   * the {@code RecordingPurchaseDelegate} only captures purchases without modifying game state, so
-   * this step simulates the effect of the preceding purchase on the player's holding pool. {@code
-   * purchaseAi.place()} then matches these real units against the scratch units in {@code
-   * storedPurchaseTerritories} by type, exactly as in a live game.
-   *
-   * <p>Callers must ensure {@code storedPurchaseTerritories} is non-null before calling; {@link
-   * PlaceExecutor} enforces this with an {@link IllegalStateException} guard.
-   */
-  public void invokePlaceForSidecar(
-      final games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate placeDelegate,
-      final GameData data,
-      final GamePlayer player) {
-    initializeData();
-
-    // Populate player's holding pool from storedPurchaseTerritories so purchaseAi.place() has
-    // real units to match against. One non-temp unit per placeUnit entry, same type as the
-    // scratch unit stored in the snapshot.
-    if (storedPurchaseTerritories != null) {
-      final List<Unit> toAdd = new ArrayList<>();
-      for (final ProPurchaseTerritory t : storedPurchaseTerritories.values()) {
-        for (final ProPlaceTerritory ppt : t.getCanPlaceTerritories()) {
-          for (final Unit placeUnit : ppt.getPlaceUnits()) {
-            toAdd.addAll(placeUnit.getType().create(1, player));
-          }
-        }
-      }
-      if (!toAdd.isEmpty()) {
-        data.performChange(ChangeFactory.addUnits(player, toAdd));
-      }
-    }
-
-    purchaseAi.place(storedPurchaseTerritories, placeDelegate);
-    storedPurchaseTerritories = null;
   }
 
   /**

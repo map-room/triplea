@@ -3,35 +3,31 @@ package org.triplea.ai.sidecar.http;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.triplea.ai.sidecar.wire.SessionCreateRequest;
+import org.triplea.ai.sidecar.dto.PurchaseRequest;
+import org.triplea.ai.sidecar.wire.WireState;
 
 class JsonBodiesTest {
   @Test
   void readValueParsesKnownDto() throws Exception {
-    final SessionCreateRequest r =
+    final PurchaseRequest r =
         JsonBodies.readValue(
-            "{\"sessionId\":\"g-1:Germans:r1\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"round\":1,\"seed\":7}",
-            SessionCreateRequest.class);
-    assertEquals("g-1:Germans:r1", r.sessionId());
-    assertEquals("g-1", r.gameId());
-    assertEquals(1, r.round());
+            "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
+                + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"},\"seed\":7}",
+            PurchaseRequest.class);
+    assertEquals("Germans", r.state().currentPlayer());
+    assertEquals(1, r.state().round());
+    assertEquals(7L, r.seed());
   }
 
   @Test
   void writeValueSerializes() throws Exception {
-    final String s =
-        JsonBodies.writeValue(new SessionCreateRequest("g-1:Germans:r1", "g-1", "Germans", 1, 7));
-    assertTrue(s.contains("\"gameId\":\"g-1\""));
-    assertTrue(s.contains("\"sessionId\":\"g-1:Germans:r1\""));
-    assertTrue(s.contains("\"round\":1"));
-  }
-
-  @Test
-  void errorEnvelopeShape() throws Exception {
-    final String s = JsonBodies.errorBody("bad-request", "missing gameId");
-    assertTrue(s.contains("\"error\":\"bad-request\""));
-    assertTrue(s.contains("\"message\":\"missing gameId\""));
+    final WireState state =
+        new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of());
+    final String s = JsonBodies.writeValue(new PurchaseRequest(state, 7L));
+    assertTrue(s.contains("\"currentPlayer\":\"Germans\""));
+    assertTrue(s.contains("\"seed\":7"));
   }
 
   @Test
@@ -44,21 +40,17 @@ class JsonBodiesTest {
   /**
    * Regression for map-room#2305: the wire-surface ObjectMapper must tolerate unknown properties so
    * additive TS-side wire-schema changes (a new optional field on a Wire DTO) deserialize cleanly
-   * even before the Java POJO catches up. Pre-fix, an unknown property triggered {@code
-   * UnrecognizedPropertyException} which surfaced as opaque 400 on every {@code
-   * /session/{id}/update} call (map-room#2301).
+   * even before the Java POJO catches up.
    */
   @Test
   void readValueIgnoresUnknownProperties() throws Exception {
-    final SessionCreateRequest r =
+    final PurchaseRequest r =
         JsonBodies.readValue(
-            "{\"sessionId\":\"g-1:Germans\",\"gameId\":\"g-1\",\"nation\":\"Germans\","
-                + "\"seed\":7,\"unknownExtraField\":\"ignored\","
-                + "\"anotherUnknown\":{\"nested\":42}}",
-            SessionCreateRequest.class);
-    assertEquals("g-1:Germans", r.sessionId());
-    assertEquals("g-1", r.gameId());
-    assertEquals("Germans", r.nation());
+            "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
+                + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"},\"seed\":7,"
+                + "\"unknownExtraField\":\"ignored\",\"anotherUnknown\":{\"nested\":42}}",
+            PurchaseRequest.class);
+    assertEquals("Germans", r.state().currentPlayer());
     assertEquals(7L, r.seed());
   }
 }

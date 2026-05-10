@@ -21,10 +21,10 @@ import org.triplea.ai.sidecar.http.HttpService;
 /**
  * End-to-end integration test for Phase 3 purchase decisions.
  *
- * <p>Starts a real {@link HttpService} via {@link SidecarMain#startForTest} on port 0, creates a
- * Germans session, then fires two purchase decision requests in sequence (cold then warm) against
- * the real {@code PurchaseExecutor}/{@code ProAi} path. Timings are printed to stdout so they are
- * visible in the Gradle test report.
+ * <p>Starts a real {@link HttpService} via {@link SidecarMain#startForTest} on port 0 and fires two
+ * purchase decision requests against the real {@code PurchaseExecutor}/{@code ProAi} path. Each
+ * request constructs its own {@link games.strategy.engine.data.GameData} clone — there is no
+ * session lifecycle to set up.
  *
  * <p>Asserts:
  *
@@ -41,7 +41,6 @@ class Phase3PurchaseIntegrationTest {
   private static HttpClient client;
   private static String base;
   private static String auth;
-  private static String sessionId;
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   /** Germans is the purchasing nation; seed 42 gives deterministic ProAi decisions. */
@@ -60,10 +59,10 @@ class Phase3PurchaseIntegrationTest {
           + "}";
 
   private static final String PURCHASE_DECISION_BODY =
-      "{\"kind\":\"purchase\",\"state\":" + PURCHASE_WIRE_STATE + "}";
+      "{\"kind\":\"purchase\",\"state\":" + PURCHASE_WIRE_STATE + ",\"seed\":42}";
 
   @BeforeAll
-  static void startServiceAndCreateSession() throws Exception {
+  static void startService() throws Exception {
     ClientSetting.setPreferences(new MemoryPreferences());
 
     svc = SidecarMain.startForTest(Map.of("SIDECAR_BIND_HOST", "127.0.0.1", "SIDECAR_PORT", "0"));
@@ -71,25 +70,6 @@ class Phase3PurchaseIntegrationTest {
     client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     base = "http://127.0.0.1:" + port;
     auth = "Bearer dev-token";
-
-    final String gameId = "integration-purchase";
-    sessionId = gameId + ":" + NATION + ":r1";
-    final HttpResponse<String> create =
-        client.send(
-            HttpRequest.newBuilder(URI.create(base + "/sessions"))
-                .header("Authorization", auth)
-                .POST(
-                    HttpRequest.BodyPublishers.ofString(
-                        "{\"sessionId\":\""
-                            + sessionId
-                            + "\",\"gameId\":\""
-                            + gameId
-                            + "\",\"nation\":\""
-                            + NATION
-                            + "\",\"round\":1,\"seed\":42}"))
-                .build(),
-            HttpResponse.BodyHandlers.ofString());
-    assertEquals(200, create.statusCode(), "Session create must return 200");
   }
 
   @AfterAll
@@ -99,17 +79,13 @@ class Phase3PurchaseIntegrationTest {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Test 1: cold call — first invocation loads game data from canonical clone
-  // ---------------------------------------------------------------------------
-
   @Test
-  void purchase_coldCall_returns200WithNonEmptyBuys() throws Exception {
+  void purchase_firstCall_returns200WithNonEmptyBuys() throws Exception {
     final long start = System.nanoTime();
     final HttpResponse<String> resp = postDecision(PURCHASE_DECISION_BODY);
     final long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
-    System.out.println("[Phase3PurchaseIntegrationTest] cold call elapsed: " + elapsedMs + " ms");
+    System.out.println("[Phase3PurchaseIntegrationTest] first call elapsed: " + elapsedMs + " ms");
 
     assertEquals(200, resp.statusCode(), "purchase must return 200; body=" + resp.body());
 
@@ -128,54 +104,28 @@ class Phase3PurchaseIntegrationTest {
         "Germans must buy at least one unit on round 1; buys=" + plan.path("buys"));
   }
 
-  // ---------------------------------------------------------------------------
-  // Test 2: warm call — second invocation (session already initialised)
-  // ---------------------------------------------------------------------------
-
   @Test
-  void purchase_warmCall_returns200WithNonEmptyBuys() throws Exception {
-    // Ensure the cold path has been exercised first (test ordering not guaranteed by JUnit, but
-    // both tests share the same session; the warm call may in fact run first — ProAi handles
-    // repeated calls on the same GameData clone correctly because PurchaseExecutor calls
-    // WireStateApplier.apply() at the top of each execute() invocation).
-    final long start = System.nanoTime();
-    final HttpResponse<String> resp = postDecision(PURCHASE_DECISION_BODY);
-    final long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+  void purchase_repeatedCall_isDeterministicAndIndependent() throws Exception {
+    final HttpResponse<String> first = postDecision(PURCHASE_DECISION_BODY);
+    final HttpResponse<String> second = postDecision(PURCHASE_DECISION_BODY);
 
-    System.out.println("[Phase3PurchaseIntegrationTest] warm call elapsed: " + elapsedMs + " ms");
+    assertEquals(200, first.statusCode(), "first call must return 200; body=" + first.body());
+    assertEquals(200, second.statusCode(), "second call must return 200; body=" + second.body());
 
+    // Same (gamestate, seed) → same wire response. Sidecar is now stateless per-request.
     assertEquals(
-        200, resp.statusCode(), "purchase must return 200 on warm call; body=" + resp.body());
-
-    final JsonNode envelope = MAPPER.readTree(resp.body());
-    assertEquals("ready", envelope.path("status").asText());
-
-    final JsonNode plan = envelope.path("plan");
-    assertEquals("purchase", plan.path("kind").asText());
-    assertTrue(plan.path("buys").isArray(), "plan.buys must be an array");
-    assertTrue(plan.path("repairs").isArray(), "plan.repairs must be an array");
-    assertTrue(
-        plan.path("buys").size() > 0,
-        "warm call: Germans must still buy at least one unit; buys=" + plan.path("buys"));
+        first.body(),
+        second.body(),
+        "stateless sidecar: identical requests must yield byte-identical responses");
   }
-
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
 
   private HttpResponse<String> postDecision(final String body) throws Exception {
     return client.send(
-        HttpRequest.newBuilder(URI.create(base + "/session/" + sessionId + "/decision"))
+        HttpRequest.newBuilder(URI.create(base + "/decision"))
             .header("Authorization", auth)
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build(),
         HttpResponse.BodyHandlers.ofString());
-  }
-
-  private static String extractField(final String json, final String field) throws Exception {
-    final JsonNode node = MAPPER.readTree(json);
-    final JsonNode value = node.get(field);
-    return value != null && !value.isNull() ? value.asText() : null;
   }
 }

@@ -17,9 +17,6 @@ import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.WireMoveDescription;
-import org.triplea.ai.sidecar.session.Session;
-import org.triplea.ai.sidecar.session.SessionKey;
-import org.triplea.ai.sidecar.session.SessionRegistry;
 
 /**
  * Wire-format conformance tests for {@link DecisionHandler}.
@@ -32,9 +29,12 @@ class DecisionHandlerWireFormatTest {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
+  private static CanonicalGameData canonical;
+
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
+    canonical = CanonicalGameData.load();
   }
 
   // ---------------------------------------------------------------------
@@ -46,31 +46,21 @@ class DecisionHandlerWireFormatTest {
           + "\"phase\":\"combat\",\"currentPlayer\":\"Germans\"}";
 
   private static String offensiveBody(final String kind) {
-    return "{\"kind\":\"" + kind + "\"," + EMPTY_STATE + "}";
+    return "{\"kind\":\"" + kind + "\"," + EMPTY_STATE + ",\"seed\":42}";
   }
 
   // ---------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------
 
-  private SessionRegistry newRegistry() {
-    return new SessionRegistry(CanonicalGameData.load());
-  }
-
-  private Session newSession(final SessionRegistry registry) {
-    return registry
-        .createOrGet(new SessionKey("g-1", "Germans", 1), "g-1:Germans:r1", 42L)
-        .session();
-  }
-
-  private DecisionHandler stubHandler(final SessionRegistry registry) {
+  private static DecisionHandler stubHandler() {
     return new DecisionHandler(
-        registry,
-        (session, req) -> new PurchasePlan(List.of(), List.of(), List.of()),
-        (session, req) -> new NoncombatMovePlan(List.of()));
+        canonical,
+        (canonical, req) -> new PurchasePlan(List.of(), List.of(), List.of()),
+        (canonical, req) -> new NoncombatMovePlan(List.of()));
   }
 
-  private JsonNode responseJson(final FakeHttpExchange ex) throws Exception {
+  private static JsonNode responseJson(final FakeHttpExchange ex) throws Exception {
     return MAPPER.readTree(ex.responseBodyString());
   }
 
@@ -80,19 +70,16 @@ class DecisionHandlerWireFormatTest {
 
   @Test
   void purchase_200_wireShape() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
     final PurchasePlan fixedPlan =
         new PurchasePlan(List.of(new PurchaseOrder("infantry", 1, null)), List.of(), List.of());
     final DecisionHandler h =
         new DecisionHandler(
-            registry,
-            (session, req) -> fixedPlan,
-            (session, req) -> new NoncombatMovePlan(List.of()));
+            canonical,
+            (canonical, req) -> fixedPlan,
+            (canonical, req) -> new NoncombatMovePlan(List.of()));
 
     final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("purchase"));
+        new FakeHttpExchange("POST", "/decision", offensiveBody("purchase"));
     h.handle(ex);
 
     assertEquals(200, ex.responseCode(), "purchase must return 200");
@@ -109,8 +96,6 @@ class DecisionHandlerWireFormatTest {
 
   @Test
   void noncombatMove_success_wireShape() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
     final NoncombatMovePlan fixedPlan =
         new NoncombatMovePlan(
             List.of(
@@ -124,13 +109,12 @@ class DecisionHandlerWireFormatTest {
 
     final DecisionHandler h =
         new DecisionHandler(
-            registry,
-            (session, req) -> new PurchasePlan(List.of(), List.of(), List.of()),
-            (session, req) -> fixedPlan);
+            canonical,
+            (canonical, req) -> new PurchasePlan(List.of(), List.of(), List.of()),
+            (canonical, req) -> fixedPlan);
 
     final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("noncombat-move"));
+        new FakeHttpExchange("POST", "/decision", offensiveBody("noncombat-move"));
     h.handle(ex);
 
     assertEquals(200, ex.responseCode(), "noncombat-move must return 200");
@@ -141,22 +125,21 @@ class DecisionHandlerWireFormatTest {
   }
 
   // ---------------------------------------------------------------------
-  // 404 unknown session
+  // 404 wrong path
   // ---------------------------------------------------------------------
 
   @Test
-  void unknownSession_404_wireShape() throws Exception {
-    final DecisionHandler h = stubHandler(newRegistry());
+  void wrongPath_404_wireShape() throws Exception {
+    final DecisionHandler h = stubHandler();
 
     final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/no-such-session/decision", offensiveBody("purchase"));
+        new FakeHttpExchange("POST", "/some/wrong/path", offensiveBody("purchase"));
     h.handle(ex);
 
     assertEquals(404, ex.responseCode());
     final JsonNode root = responseJson(ex);
     assertEquals("error", root.path("status").asText());
-    assertEquals("unknown-session", root.path("error").asText());
+    assertEquals("not-found", root.path("error").asText());
     assertFalse(root.has("plan"));
   }
 
@@ -166,12 +149,9 @@ class DecisionHandlerWireFormatTest {
 
   @Test
   void malformedJson_400_wireShape() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final DecisionHandler h = stubHandler(registry);
+    final DecisionHandler h = stubHandler();
 
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", "{not-json");
+    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", "{not-json");
     h.handle(ex);
 
     assertEquals(400, ex.responseCode());
@@ -187,14 +167,11 @@ class DecisionHandlerWireFormatTest {
 
   @Test
   void missingDiscriminator_400_wireShape() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final DecisionHandler h = stubHandler(registry);
+    final DecisionHandler h = stubHandler();
 
     // Valid JSON but no "kind" field
-    final String body = "{" + EMPTY_STATE + "}";
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", body);
+    final String body = "{" + EMPTY_STATE + ",\"seed\":42}";
+    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", body);
     h.handle(ex);
 
     assertEquals(400, ex.responseCode());
@@ -210,12 +187,9 @@ class DecisionHandlerWireFormatTest {
 
   @Test
   void nonPost_405_wireShape() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final DecisionHandler h = stubHandler(registry);
+    final DecisionHandler h = stubHandler();
 
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("GET", "/session/" + s.sessionId() + "/decision", null);
+    final FakeHttpExchange ex = new FakeHttpExchange("GET", "/decision", null);
     h.handle(ex);
 
     assertEquals(405, ex.responseCode());

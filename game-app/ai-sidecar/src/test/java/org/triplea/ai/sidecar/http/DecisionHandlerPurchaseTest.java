@@ -16,9 +16,6 @@ import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.exec.DecisionExecutor;
-import org.triplea.ai.sidecar.session.Session;
-import org.triplea.ai.sidecar.session.SessionKey;
-import org.triplea.ai.sidecar.session.SessionRegistry;
 
 /**
  * Tests that {@link DecisionHandler} correctly dispatches purchase decisions to {@link
@@ -31,37 +28,29 @@ class DecisionHandlerPurchaseTest {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
+  private static CanonicalGameData canonical;
+
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
+    canonical = CanonicalGameData.load();
   }
 
   private static final String EMPTY_STATE =
       "\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
           + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}";
 
-  private static final String PURCHASE_BODY = "{\"kind\":\"purchase\"," + EMPTY_STATE + "}";
-
-  private SessionRegistry newRegistry() {
-    return new SessionRegistry(CanonicalGameData.load());
-  }
-
-  private Session newSession(final SessionRegistry registry) {
-    return registry
-        .createOrGet(
-            new SessionKey("g-purchase-test", "Germans", 1), "g-purchase-test:Germans:r1", 42L)
-        .session();
-  }
+  private static final String PURCHASE_BODY =
+      "{\"kind\":\"purchase\"," + EMPTY_STATE + ",\"seed\":42}";
 
   /**
    * Creates a {@link DecisionHandler} with a noncombat-move stub that throws on invocation, and the
    * supplied purchase executor stub.
    */
-  private DecisionHandler handlerWithPurchaseStub(
-      final SessionRegistry registry,
+  private static DecisionHandler handlerWithPurchaseStub(
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor) {
     return new DecisionHandler(
-        registry, purchaseExecutor, (session, req) -> new NoncombatMovePlan(List.of()));
+        canonical, purchaseExecutor, (canonical, req) -> new NoncombatMovePlan(List.of()));
   }
 
   // -------------------------------------------------------------------------
@@ -70,16 +59,12 @@ class DecisionHandlerPurchaseTest {
 
   @Test
   void purchase_success_returns200WithReadyEnvelope() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-
     final PurchasePlan fixedPlan =
         new PurchasePlan(List.of(new PurchaseOrder("infantry", 3, null)), List.of(), List.of());
 
-    final DecisionHandler h = handlerWithPurchaseStub(registry, (session, req) -> fixedPlan);
+    final DecisionHandler h = handlerWithPurchaseStub((canonical, req) -> fixedPlan);
 
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", PURCHASE_BODY);
+    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", PURCHASE_BODY);
     h.handle(ex);
 
     assertEquals(200, ex.responseCode(), "purchase decision must return 200");
@@ -96,9 +81,6 @@ class DecisionHandlerPurchaseTest {
 
   @Test
   void purchase_success_buysAndRepairsPresent() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-
     final PurchasePlan fixedPlan =
         new PurchasePlan(
             List.of(
@@ -106,10 +88,9 @@ class DecisionHandlerPurchaseTest {
             List.of(),
             List.of());
 
-    final DecisionHandler h = handlerWithPurchaseStub(registry, (session, req) -> fixedPlan);
+    final DecisionHandler h = handlerWithPurchaseStub((canonical, req) -> fixedPlan);
 
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", PURCHASE_BODY);
+    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", PURCHASE_BODY);
     h.handle(ex);
 
     assertEquals(200, ex.responseCode());
@@ -123,14 +104,10 @@ class DecisionHandlerPurchaseTest {
 
   @Test
   void purchase_emptyPlan_returns200WithEmptyArrays() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-
     final PurchasePlan emptyPlan = new PurchasePlan(List.of(), List.of(), List.of());
-    final DecisionHandler h = handlerWithPurchaseStub(registry, (session, req) -> emptyPlan);
+    final DecisionHandler h = handlerWithPurchaseStub((canonical, req) -> emptyPlan);
 
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", PURCHASE_BODY);
+    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", PURCHASE_BODY);
     h.handle(ex);
 
     assertEquals(200, ex.responseCode());

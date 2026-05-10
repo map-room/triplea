@@ -1,22 +1,24 @@
 package org.triplea.ai.sidecar.exec;
 
+import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.dto.DecisionPlan;
 import org.triplea.ai.sidecar.dto.DecisionRequest;
-import org.triplea.ai.sidecar.session.Session;
 
 /**
  * Kind-specific executor for a {@link DecisionRequest}.
  *
- * <p>Each implementation handles exactly one {@code DecisionRequest} subtype, applies the embedded
- * {@link org.triplea.ai.sidecar.wire.WireState} onto the session's {@link
- * games.strategy.engine.data.GameData} via {@link org.triplea.ai.sidecar.wire.WireStateApplier},
- * synthesises whatever transient combat-phase state the corresponding ProAi entry point reads (e.g.
- * a pending {@code IBattle} registered in {@code BattleTracker}), invokes the ProAi method, and
- * projects the returned Java object back into a wire-shaped {@link DecisionPlan}.
+ * <p>Each implementation handles exactly one {@code DecisionRequest} subtype. The executor builds
+ * its own per-call state — a fresh {@link games.strategy.engine.data.GameData} clone from {@link
+ * CanonicalGameData}, a fresh {@link games.strategy.triplea.ai.pro.ProAi}, a fresh wire-id → UUID
+ * map — applies the embedded {@link org.triplea.ai.sidecar.wire.WireState} via {@link
+ * org.triplea.ai.sidecar.wire.WireStateApplier}, reseeds the ProAi's RNG sources from {@code
+ * request.seed()}, invokes the ProAi entry point, and projects the returned Java object into a
+ * wire-shaped {@link DecisionPlan}.
  *
- * <p>Executors must leave no residual state in the BattleTracker or other shared game-data
- * structures: anything added for the call must be removed before returning (success or exception).
+ * <p>The sidecar keeps no state between requests: every executor invocation is hermetic and the
+ * (gamestate, seed) → wire-response mapping is therefore a pure function. Replay semantics are
+ * proved by the determinism harness (see {@code StatelessReplayDeterminismTest}).
  */
 public interface DecisionExecutor<REQ extends DecisionRequest, PLAN extends DecisionPlan> {
-  PLAN execute(Session session, REQ request);
+  PLAN execute(CanonicalGameData canonical, REQ request);
 }
