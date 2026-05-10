@@ -45,10 +45,24 @@ public final class RecordingMoveDelegate extends MoveDelegate {
   public record CapturedMove(MoveDescription move, boolean isBombing) {}
 
   private final ProAi proAi;
+  private final boolean dryRun;
   private final List<CapturedMove> captured = new ArrayList<>();
 
   public RecordingMoveDelegate(final ProAi proAi) {
+    this(proAi, false);
+  }
+
+  /**
+   * Constructs a recording delegate that optionally skips {@code super.performMove}.
+   *
+   * @param dryRun when {@code true}, moves are captured without being executed — units are not
+   *     moved and game state is not mutated. Use this for read-only projections (e.g. purchase-time
+   *     combat-move preview) to avoid side effects that would break subsequent real-execution calls
+   *     in {@link CombatMoveExecutor}.
+   */
+  public RecordingMoveDelegate(final ProAi proAi, final boolean dryRun) {
     this.proAi = proAi;
+    this.dryRun = dryRun;
   }
 
   /** Returns an unmodifiable snapshot of all successfully validated moves in call order. */
@@ -58,10 +72,12 @@ public final class RecordingMoveDelegate extends MoveDelegate {
 
   @Override
   public Optional<String> performMove(final MoveDescription move) {
-    final Optional<String> error = super.performMove(move);
-    if (error.isPresent()) {
-      // Move failed MoveValidator — do NOT record, propagate error to ProAi.
-      return error;
+    if (!dryRun) {
+      final Optional<String> error = super.performMove(move);
+      if (error.isPresent()) {
+        // Move failed MoveValidator — do NOT record, propagate error to ProAi.
+        return error;
+      }
     }
     final Territory end = move.getRoute().getEnd();
     captured.add(new CapturedMove(move, proAi.shouldBomberBomb(end)));

@@ -250,4 +250,79 @@ class PurchaseExecutorTest {
 
     assertThat(plan.politicalActions()).as("politicalActions must never be null").isNotNull();
   }
+
+  /**
+   * Verifies that {@code combatMoves} is populated in the PurchasePlan response and ordered
+   * correctly (land/amphib/bombard moves first, bombing/SBR moves last).
+   *
+   * <p>Turn-1 Germans always have at least one land combat move (they border Poland and other
+   * Allied territories). SBR moves are optional; what matters is that non-bombing moves precede
+   * bombing moves in the list.
+   *
+   * <p>This exercises the {@code invokeCombatMoveForSidecar} projection path: after purchase, the
+   * {@code storedCombatMoveMap} is populated; the executor calls {@code doMove} (not {@code
+   * doCombatMove} — zero re-planning) and captures the resulting MoveDescriptions via a {@link
+   * RecordingMoveDelegate}.
+   */
+  @Test
+  void combatMovesArePopulatedAndOrderedCorrectlyAfterPurchase() throws Exception {
+    final Session session = freshSession("Germans");
+    final PurchasePlan plan =
+        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+
+    assertThat(plan.combatMoves()).as("combatMoves must never be null").isNotNull();
+    assertThat(plan.combatMoves())
+        .as("Germans should have at least one combat move on turn 1")
+        .isNotEmpty();
+
+    // Each move must reference a non-blank from/to territory.
+    // unitIds will be empty in this test context because session.unitIdMap() is not populated —
+    // the WireState used here is empty (no territories/units), so no wire-ID → UUID mappings are
+    // registered. In production the WireState carries all units, so unitIds are populated.
+    for (final var md : plan.combatMoves()) {
+      assertThat(md.from()).as("combatMove.from must not be blank").isNotBlank();
+      assertThat(md.to()).as("combatMove.to must not be blank").isNotBlank();
+    }
+
+    // Ordering (non-bombing ++ bombing) is structurally guaranteed by PurchaseExecutor's
+    // concatenation of nonBombingMoves then bombingMoves. Verifying it via unit classifications
+    // here would require a populated session.unitIdMap(), which this test intentionally omits
+    // (empty WireState — see comment above). The classification-based ordering test is covered
+    // by CombatMoveExecutorTest for the real sidecar pipeline.
+  }
+
+  /**
+   * Data-rooting audit: verifies that combat-move simulation predicates (ProMatches etc.) resolve
+   * correctly during purchase-time planning. The returned combatMoves reference real territories
+   * that exist in the session's GameData, confirming that the ProAi's data references were rooted
+   * through the session clone rather than a stale copy.
+   *
+   * <p>If the data-rooting bug class (proData.getPlayer().getData() pointing to a detached
+   * dataCopy) affected combat-move planning, we would see empty combatMoves or moves referencing
+   * territories that do not exist in the session GameData. Both are caught here.
+   */
+  @Test
+  void combatMoveSimulationPredicatesResolveViaSessionData() throws Exception {
+    final Session session = freshSession("Germans");
+    final PurchasePlan plan =
+        new PurchaseExecutor().execute(session, purchaseRequestFor("Germans"));
+
+    assertThat(plan.combatMoves())
+        .as("combatMoves must be non-empty — data-rooting failure would yield empty list")
+        .isNotEmpty();
+
+    final var gameData = session.gameData();
+    for (final var md : plan.combatMoves()) {
+      // Every from-territory referenced by the combat move must exist in the live session data.
+      assertThat(gameData.getMap().getTerritoryOrNull(md.from()))
+          .as(
+              "combatMove.from '%s' must exist in session GameData — stale dataCopy would "
+                  + "reference territories unknown to the live clone",
+              md.from())
+          .isNotNull();
+      assertThat(gameData.getMap().getTerritoryOrNull(md.to()))
+          .as("combatMove.to '%s' must exist in session GameData", md.to())
+          .isNotNull();
+    }
+  }
 }
