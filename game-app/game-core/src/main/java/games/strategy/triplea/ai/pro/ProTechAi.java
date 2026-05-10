@@ -29,7 +29,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Predicate;
 import javax.annotation.Nullable;
 import org.triplea.java.PredicateBuilder;
@@ -40,7 +39,11 @@ import org.triplea.java.collections.IntegerMap;
 final class ProTechAi {
   private ProTechAi() {}
 
-  static void tech(final ITechDelegate techDelegate, final GameData data, final GamePlayer player) {
+  static void tech(
+      final ITechDelegate techDelegate,
+      final GameData data,
+      final GamePlayer player,
+      final ProData proData) {
     if (!Properties.getWW2V3TechModel(data.getProperties())) {
       return;
     }
@@ -57,16 +60,15 @@ final class ProTechAi {
     // If the token was not used, set the token num -1
     final int techTokensQuantity =
         techTokensOptional.map(resource -> player.getResources().getQuantity(resource)).orElse(-1);
-    final ThreadLocalRandom localRandom = ThreadLocalRandom.current();
     int tokensToBuy = 0;
-    if (!capDanger && techTokensQuantity < 3 && pusRemaining > localRandom.nextInt(160)) {
+    if (!capDanger && techTokensQuantity < 3 && pusRemaining > proData.getRng().nextInt(160)) {
       tokensToBuy = 1;
     }
     if (techTokensQuantity > 0 || tokensToBuy > 0) {
       final List<TechnologyFrontier> cats = TechAdvance.getPlayerTechCategories(player);
       // retaining 65% chance of choosing land advances using basic ww2v3 model.
       if (data.getTechnologyFrontier().isEmpty()) {
-        if (localRandom.nextFloat() > 0.35) {
+        if (proData.getRng().nextFloat() > 0.35) {
           techDelegate.rollTech(techTokensQuantity + tokensToBuy, cats.get(1), tokensToBuy, null);
         } else {
           techDelegate.rollTech(techTokensQuantity + tokensToBuy, cats.get(0), tokensToBuy, null);
@@ -74,7 +76,7 @@ final class ProTechAi {
       } else {
         techDelegate.rollTech(
             techTokensQuantity + tokensToBuy,
-            cats.get(localRandom.nextInt(cats.size())),
+            cats.get(proData.getRng().nextInt(cats.size())),
             tokensToBuy,
             null);
       }
