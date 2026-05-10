@@ -48,6 +48,9 @@ class NoncombatMoveExecutorIntegrationTest {
   private Session freshSession(final String nation) {
     final GameData data = canonical.cloneForSession();
     final ProAi proAi = new ProAi("sidecar-test-" + nation, nation);
+    // Mirror SessionRegistry.buildSession: seed both RNG sources so test output is deterministic.
+    proAi.getProData().setSeed(42L);
+    proAi.seedBattleCalc(42L);
     return new Session(
         "s-test-" + UUID.randomUUID(),
         new SessionKey("g1", nation, 1),
