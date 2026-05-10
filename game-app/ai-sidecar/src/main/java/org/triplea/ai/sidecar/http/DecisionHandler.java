@@ -41,10 +41,7 @@ public final class DecisionHandler implements HttpHandler {
 
   /** Production constructor — wires all executors. */
   public DecisionHandler(final SessionRegistry registry) {
-    this(
-        registry,
-        new PurchaseExecutor(registry.snapshotStore()),
-        new NoncombatMoveExecutor(registry.snapshotStore()));
+    this(registry, new PurchaseExecutor(registry.snapshotStore()), new NoncombatMoveExecutor());
   }
 
   /** Test constructor — accepts executor stubs so handler logic can be exercised in isolation. */

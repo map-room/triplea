@@ -6,7 +6,6 @@ import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -14,61 +13,57 @@ import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.NoncombatMoveRequest;
 import org.triplea.ai.sidecar.dto.WireMoveDescription;
-import org.triplea.ai.sidecar.session.ProSessionSnapshotStore;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.wire.WireStateApplier;
 
 /**
- * Runs {@link games.strategy.triplea.ai.pro.ProAi#invokeNonCombatMoveForSidecar} on the session's
- * bounded offensive executor, captures every {@link games.strategy.engine.data.MoveDescription} via
- * a {@link RecordingMoveDelegate}, and projects each to a {@link
- * org.triplea.ai.sidecar.dto.WireMoveDescription}.
+ * Stateless noncombat-move executor: runs {@link
+ * games.strategy.triplea.ai.pro.ProAi#invokeNonCombatMoveForSidecar} on the session's bounded
+ * offensive executor and projects each captured {@link games.strategy.engine.data.MoveDescription}
+ * to a {@link org.triplea.ai.sidecar.dto.WireMoveDescription}.
  *
  * <p>The noncombat phase never issues strategic-bombing-raid moves, so all captured moves land in
  * {@code moves}; an {@link AssertionError} is thrown if any captured move has {@code isBombing ==
  * true} (belt-and-suspenders invariant).
  *
- * <h2>Ordering contract</h2>
+ * <h2>Statelessness contract (map-room#2385)</h2>
+ *
+ * <p>NCM does not consult any cross-call state on the {@code Session} — no {@link
+ * org.triplea.ai.sidecar.session.ProSessionSnapshotStore snapshot store} read, no {@code
+ * storedFactoryMoveMap} / {@code storedPurchaseTerritories} restore from a prior purchase call.
+ * Before dispatch the executor calls {@code proAi.clearStoredMovePlans()} so any in-memory planning
+ * maps left over from a prior decision on the same session are wiped, then dispatches {@code
+ * invokeNonCombatMoveForSidecar}. {@code ProNonCombatMoveAi.doNonCombatMove(null, null, …)}
+ * rebuilds the factoryMoveMap internally and falls back to {@code
+ * ProPurchaseUtils.findMaxPurchaseDefenders} for the cantMove-unit estimate per factory territory
+ * (the same path {@code simulateNonCombatMove} takes during purchase planning).
+ *
+ * <p>The result is that NCM is a pure function of (wire payload, seed) — input to the {@code
+ * Session}-elimination work in #2386.
+ *
+ * <h2>Execution order</h2>
  *
  * <ol>
- *   <li>Load snapshot; call {@link ProSessionSnapshotStore#restoreUnitIdMap} before {@link
- *       WireStateApplier}.
  *   <li>{@link WireStateApplier#apply}.
- *   <li>{@link games.strategy.triplea.ai.pro.ProAi#restoreFactoryMoveMapFromSnapshot} and {@link
- *       games.strategy.triplea.ai.pro.ProAi#restorePurchaseTerritoriesFromSnapshot} — both maps are
- *       needed; {@code storedPurchaseTerritories} is preserved (not cleared) after this phase so
- *       the place executor can consume it.
- *   <li>Submit {@code invokeNonCombatMoveForSidecar} to the session's single-threaded executor.
+ *   <li>Reseed proData RNG and battle calculator from the per-call wire seed.
+ *   <li>{@code proAi.clearStoredMovePlans()}.
+ *   <li>Submit {@code invokeNonCombatMoveForSidecar} to the session's single-threaded offensive
+ *       executor.
  * </ol>
  */
 public final class NoncombatMoveExecutor
     implements DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> {
 
-  private static final System.Logger LOG = System.getLogger(NoncombatMoveExecutor.class.getName());
-
-  private final ProSessionSnapshotStore snapshotStore;
-
-  public NoncombatMoveExecutor(final ProSessionSnapshotStore snapshotStore) {
-    this.snapshotStore = snapshotStore;
-  }
+  public NoncombatMoveExecutor() {}
 
   @Override
   public NoncombatMovePlan execute(final Session session, final NoncombatMoveRequest request) {
     final GameData data = session.gameData();
 
-    // Step 1: load snapshot once; pre-seed unitIdMap before WireStateApplier runs
-    final Optional<games.strategy.triplea.ai.pro.data.ProSessionSnapshot> snapOpt =
-        snapshotStore.load(session.key());
-    if (snapOpt.isEmpty()) {
-      LOG.log(
-          System.Logger.Level.WARNING,
-          "[sidecar] snapshot missing for session {0} — purchase may not have run or snapshot was"
-              + " lost (e.g. sidecar restart with non-persistent snapshot dir)",
-          session.key());
-    }
-    snapOpt.ifPresent(snap -> ProSessionSnapshotStore.restoreUnitIdMap(snap, session.unitIdMap()));
-
-    // Step 2: hydrate GameData from wire state
+    // Step 1: hydrate GameData from wire state. unitIdMap is populated lazily by
+    // WireStateApplier; cross-call persistence of the wire-id → UUID mapping is no longer
+    // required because every NCM dispatch is self-contained — fresh UUIDs against fresh wire
+    // IDs are equivalent (units are addressed by wire id, not UUID, in the response).
     WireStateApplier.apply(data, request.state(), session.unitIdMap());
 
     final GamePlayer player = data.getPlayerList().getPlayerId(request.state().currentPlayer());
@@ -79,6 +74,11 @@ public final class NoncombatMoveExecutor
 
     ExecutorSupport.ensureProAiInitialized(session, player);
     ExecutorSupport.ensureBattleDelegate(data);
+    // findMaxPurchaseDefenders (the null-storedPurchaseTerritories fallback inside
+    // ProNonCombatMoveAi.findUnitsThatCantMove) calls data.getDelegate("place") — without this
+    // ensure, fresh-session NCM (no prior purchase to register the delegate) throws
+    // "place delegate not found".
+    ExecutorSupport.ensurePlaceDelegate(data);
 
     final var proAi = session.proAi();
 
@@ -90,21 +90,13 @@ public final class NoncombatMoveExecutor
     proAi.getProData().setSeed(request.seed());
     proAi.seedBattleCalc(request.seed());
 
-    // Step 3: restore storedFactoryMoveMap and storedPurchaseTerritories
-    snapOpt.ifPresent(
-        snap -> {
-          proAi.restoreFactoryMoveMapFromSnapshot(snap, data);
-          proAi.restorePurchaseTerritoriesFromSnapshot(snap, data);
-        });
+    // Step 2: enforce statelessness — wipe any storedFactoryMoveMap / storedPurchaseTerritories /
+    // storedCombatMoveMap / storedPoliticalActions left over from a prior call on this session.
+    // ProNonCombatMoveAi will rebuild factoryMoveMap internally (buildFactoryMoveMap) and
+    // estimate cantMove units via findMaxPurchaseDefenders (the simulateNonCombatMove path).
+    proAi.clearStoredMovePlans();
 
-    if (proAi.storedFactoryMoveMapIsNull()) {
-      throw new IllegalStateException(
-          "storedFactoryMoveMap is null for session "
-              + session.key()
-              + " — purchase must run before noncombat-move");
-    }
-
-    // Step 4: dispatch on the session's single-threaded offensive executor.
+    // Step 3: dispatch on the session's single-threaded offensive executor.
     // reinitializeProDataForSidecar() re-binds proData.getData() to the session GameData
     // before planning — otherwise purchase's simulation dataCopy leaks through and
     // ProNonCombatMoveAi reads stale alreadyMoved values, producing plans that move

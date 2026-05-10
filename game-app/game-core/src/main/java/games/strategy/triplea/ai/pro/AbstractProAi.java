@@ -143,6 +143,25 @@ public abstract class AbstractProAi extends AbstractAi {
   }
 
   /**
+   * Stateless-sidecar guarantee: clear every cross-phase {@code stored*} planning map on this ProAi
+   * instance so the next sidecar dispatch becomes a pure function of (gamestate, seed) rather than
+   * carrying state from the prior call on the same session.
+   *
+   * <p>Used by sidecar executors implementing the #2386 stateless-sidecar campaign: instead of
+   * restoring {@code storedFactoryMoveMap} / {@code storedPurchaseTerritories} from a {@link
+   * ProSessionSnapshot}, the executor calls this method then dispatches the {@code invoke*} entry
+   * point — which falls through to the path {@code ProNonCombatMoveAi#simulateNonCombatMove} uses
+   * (rebuild factoryMoveMap internally; estimate cantMove units via {@code
+   * findMaxPurchaseDefenders}).
+   */
+  public void clearStoredMovePlans() {
+    storedFactoryMoveMap = null;
+    storedPurchaseTerritories = null;
+    storedCombatMoveMap = null;
+    storedPoliticalActions = null;
+  }
+
+  /**
    * Sidecar-only toggle: disable the politics step inside {@link #purchase}'s turn-simulation loop.
    * The sidecar's bot calls {@code kind=politics} before {@code kind=purchase}, so by the time
    * {@code purchase} runs, real politics has already executed on the session GameData and the
