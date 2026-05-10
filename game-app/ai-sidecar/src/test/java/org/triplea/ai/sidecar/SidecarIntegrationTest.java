@@ -18,12 +18,9 @@ import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.http.HttpService;
 
 class SidecarIntegrationTest {
-  private static final String UPDATE_BODY =
-      "{\"state\":{\"territories\":[],\"players\":[],\"round\":1,\"phase\":\"purchase\","
-          + "\"currentPlayer\":\"Germans\"}}";
   private static final String DECISION_BODY =
       "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-          + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}}";
+          + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"},\"seed\":42}";
 
   @TempDir Path tempDir;
 
@@ -33,7 +30,7 @@ class SidecarIntegrationTest {
   }
 
   @Test
-  void fullLifecycleRoundTrip() throws Exception {
+  void statelessDecisionRoundTrip() throws Exception {
     final HttpService svc =
         SidecarMain.startForTest(
             Map.of(
@@ -47,61 +44,27 @@ class SidecarIntegrationTest {
       final String base = "http://127.0.0.1:" + port;
       final String auth = "Bearer dev-token";
 
-      // 1. create via v2 /sessions endpoint (deterministic sessionId)
-      final HttpResponse<String> create =
-          client.send(
-              HttpRequest.newBuilder(URI.create(base + "/sessions"))
-                  .header("Authorization", auth)
-                  .POST(
-                      HttpRequest.BodyPublishers.ofString(
-                          "{\"sessionId\":\"g-1:Germans:r1\",\"gameId\":\"g-1\",\"nation\":\"Germans\",\"round\":1,\"seed\":42}"))
-                  .build(),
-              HttpResponse.BodyHandlers.ofString());
-      assertEquals(200, create.statusCode());
-      assertTrue(create.body().contains("\"created\":true"));
-      final String sessionId = "g-1:Germans:r1"; // deterministic — no extraction needed
-
-      // 2. update
-      final HttpResponse<String> update =
-          client.send(
-              HttpRequest.newBuilder(URI.create(base + "/session/" + sessionId + "/update"))
-                  .header("Authorization", auth)
-                  .POST(HttpRequest.BodyPublishers.ofString(UPDATE_BODY))
-                  .build(),
-              HttpResponse.BodyHandlers.ofString());
-      assertEquals(204, update.statusCode());
-
-      // 3. decision → 200 (purchase is now wired to PurchaseExecutor)
+      // Stateless: a single POST /decision with seed in the body produces the plan.
       final HttpResponse<String> decision =
           client.send(
-              HttpRequest.newBuilder(URI.create(base + "/session/" + sessionId + "/decision"))
+              HttpRequest.newBuilder(URI.create(base + "/decision"))
                   .header("Authorization", auth)
                   .POST(HttpRequest.BodyPublishers.ofString(DECISION_BODY))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
-      assertEquals(200, decision.statusCode());
+      assertEquals(200, decision.statusCode(), "body=" + decision.body());
       assertTrue(decision.body().contains("\"status\":\"ready\""));
       assertTrue(decision.body().contains("\"kind\":\"purchase\""));
 
-      // 4. delete
-      final HttpResponse<String> delete =
+      // Deleted /sessions and /session/{id}/* routes return 404 (no handler context registered).
+      final HttpResponse<String> deletedSessions =
           client.send(
-              HttpRequest.newBuilder(URI.create(base + "/session/" + sessionId))
+              HttpRequest.newBuilder(URI.create(base + "/sessions"))
                   .header("Authorization", auth)
-                  .DELETE()
+                  .POST(HttpRequest.BodyPublishers.ofString("{}"))
                   .build(),
               HttpResponse.BodyHandlers.ofString());
-      assertEquals(204, delete.statusCode());
-
-      // 5. subsequent update → 404
-      final HttpResponse<String> post =
-          client.send(
-              HttpRequest.newBuilder(URI.create(base + "/session/" + sessionId + "/update"))
-                  .header("Authorization", auth)
-                  .POST(HttpRequest.BodyPublishers.ofString(UPDATE_BODY))
-                  .build(),
-              HttpResponse.BodyHandlers.ofString());
-      assertEquals(404, post.statusCode());
+      assertEquals(404, deletedSessions.statusCode());
     } finally {
       svc.stop();
     }
