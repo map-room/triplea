@@ -232,7 +232,7 @@ class ProAiDeterminismAuditTest {
         new PurchaseExecutor(store)
             .execute(session, new PurchaseRequest(wireState("purchase", nation), SEED));
         final NoncombatMovePlan plan =
-            new NoncombatMoveExecutor(store)
+            new NoncombatMoveExecutor()
                 .execute(
                     session, new NoncombatMoveRequest(wireState("nonCombatMove", nation), SEED));
         final String wire = MAPPER.writeValueAsString(plan);

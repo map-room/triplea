@@ -4,6 +4,7 @@ import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.player.PlayerBridge;
 import games.strategy.triplea.ai.pro.ProAi;
+import games.strategy.triplea.delegate.PlaceDelegate;
 import games.strategy.triplea.delegate.battle.BattleDelegate;
 import games.strategy.triplea.delegate.battle.BattleTracker;
 import games.strategy.triplea.delegate.battle.IBattle;
@@ -77,6 +78,25 @@ final class ExecutorSupport {
     }
     final BattleDelegate delegate = new BattleDelegate();
     delegate.initialize("battle", "Combat");
+    data.addDelegate(delegate);
+  }
+
+  /**
+   * Ensure the {@code place} delegate is registered. Required by the stateless {@link
+   * NoncombatMoveExecutor} path: with no snapshot-restored {@code storedPurchaseTerritories},
+   * {@link games.strategy.triplea.ai.pro.ProNonCombatMoveAi#findUnitsThatCantMove} falls through to
+   * {@link games.strategy.triplea.ai.pro.util.ProPurchaseUtils#findMaxPurchaseDefenders}, which
+   * calls {@code data.getDelegate("place")} via {@code ProPurchaseValidationUtils.canUnitsBePlaced}
+   * — and throws {@code "place delegate not found"} when that delegate is not registered. Same
+   * rationale as {@link #ensureBattleDelegate}: the canonical clone strips transient delegates
+   * during {@code postDeSerialize}.
+   */
+  static void ensurePlaceDelegate(final GameData data) {
+    if (data.getDelegateOptional("place").isPresent()) {
+      return;
+    }
+    final PlaceDelegate delegate = new PlaceDelegate();
+    delegate.initialize("place", "Place");
     data.addDelegate(delegate);
   }
 
