@@ -60,7 +60,7 @@ public final class AiTraceLogger {
   }
 
   /**
-   * Log a captured move from CombatMoveExecutor or NoncombatMoveExecutor.
+   * Log a captured move from {@link org.triplea.ai.sidecar.exec.NoncombatMoveExecutor}.
    *
    * @param uuidToWireId reverse map (Java UUID → Map Room wire ID) for transport resolution
    */
@@ -128,7 +128,9 @@ public final class AiTraceLogger {
         stringTypeCounts(unitTypes));
   }
 
-  /** Log a war declaration from PoliticsExecutor. */
+  /**
+   * Log a war declaration (dispatched from {@link org.triplea.ai.sidecar.exec.PurchaseExecutor}).
+   */
   public static void logWarDeclaration(final String nation, final String target) {
     LOG.log(
         System.Logger.Level.INFO,
@@ -243,49 +245,6 @@ public final class AiTraceLogger {
         unitWireIds(picked, uuidToWireId),
         unitTypeCounts(picked),
         scrambleReason(candidates, picked));
-  }
-
-  /**
-   * Log the rationale for an SBR interceptor-selection decision (#2105).
-   *
-   * <p>{@code InterceptExecutor} is currently a stub returning no interceptors — see the {@code
-   * TODO} on that class. The rationale line still emits because triagers benefit from seeing
-   * "intercept query reached the sidecar but the decision is not yet implemented" vs. silence. Once
-   * ProAI integration lands, the call site can pass the real picked set + a non-stub reason (e.g.
-   * {@code interceptor-favorable}) without changing this signature.
-   *
-   * <p>Wire-side identifiers are passed as parallel {@code candidateIds} / {@code candidateTypes}
-   * lists rather than {@code Collection<Unit>} because the stub executor never resolves {@link
-   * Unit} instances; keeping the helper string-typed avoids forcing the executor through an
-   * unnecessary live-unit lookup just to log.
-   *
-   * @param reason caller-supplied — the InterceptExecutor passes {@code stub-not-implemented}
-   *     today; the real heuristic moves in when ProAI integration replaces the stub.
-   */
-  public static void logSbrInterceptorDecision(
-      final String nation,
-      final String battleId,
-      final String territory,
-      final String attackerNation,
-      final Collection<String> candidateIds,
-      final Collection<String> candidateTypes,
-      final Collection<String> pickedIds,
-      final String reason) {
-    LOG.log(
-        System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=sbr kind=interceptor-decision"
-            + " battleId={2} territory={3} attacker={4}"
-            + " candidatesIds=[{5}] candidatesTypes=[{6}]"
-            + " pickedIds=[{7}] reason={8}",
-        currentMatchId(),
-        nation,
-        battleId,
-        maybeQuote(territory),
-        attackerNation,
-        stringCommaJoin(candidateIds),
-        stringTypeCounts(candidateTypes),
-        stringCommaJoin(pickedIds),
-        reason);
   }
 
   // --- package-private for tests ---
