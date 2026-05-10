@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
@@ -53,21 +54,14 @@ class DecisionHandlerPurchaseTest {
   }
 
   /**
-   * Creates a {@link DecisionHandler} with stub defensive executors that throw on invocation, and
-   * the supplied purchase executor stub.
+   * Creates a {@link DecisionHandler} with a noncombat-move stub that throws on invocation, and the
+   * supplied purchase executor stub.
    */
   private DecisionHandler handlerWithPurchaseStub(
       final SessionRegistry registry,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor) {
     return new DecisionHandler(
-        registry,
-        (session, req) -> {
-          throw new AssertionError("retreat must not be called");
-        },
-        (session, req) -> {
-          throw new AssertionError("scramble must not be called");
-        },
-        purchaseExecutor);
+        registry, purchaseExecutor, (session, req) -> new NoncombatMovePlan(List.of()));
   }
 
   // -------------------------------------------------------------------------

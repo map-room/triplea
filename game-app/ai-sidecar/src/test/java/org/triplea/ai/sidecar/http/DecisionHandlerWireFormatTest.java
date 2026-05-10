@@ -9,23 +9,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import games.strategy.triplea.settings.ClientSetting;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
-import org.triplea.ai.sidecar.dto.CombatMovePlan;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
-import org.triplea.ai.sidecar.dto.PlaceOrder;
-import org.triplea.ai.sidecar.dto.PlacePlan;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
-import org.triplea.ai.sidecar.dto.RetreatPlan;
-import org.triplea.ai.sidecar.dto.RetreatQueryRequest;
-import org.triplea.ai.sidecar.dto.ScramblePlan;
-import org.triplea.ai.sidecar.dto.ScrambleRequest;
 import org.triplea.ai.sidecar.dto.WireMoveDescription;
-import org.triplea.ai.sidecar.exec.DecisionExecutor;
 import org.triplea.ai.sidecar.session.Session;
 import org.triplea.ai.sidecar.session.SessionKey;
 import org.triplea.ai.sidecar.session.SessionRegistry;
@@ -34,8 +25,8 @@ import org.triplea.ai.sidecar.session.SessionRegistry;
  * Wire-format conformance tests for {@link DecisionHandler}.
  *
  * <p>Asserts the EXACT JSON shape written to the HTTP response body for every code path: success
- * envelopes, 501 offensive kinds, and all error paths. Uses stub executors to drive the success
- * cases — this is a wire-format test, not an executor test.
+ * envelopes and all error paths. Uses stub executors to drive the success cases — this is a
+ * wire-format test, not an executor test.
  */
 class DecisionHandlerWireFormatTest {
 
@@ -53,17 +44,6 @@ class DecisionHandlerWireFormatTest {
   private static final String EMPTY_STATE =
       "\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
           + "\"phase\":\"combat\",\"currentPlayer\":\"Germans\"}";
-
-  private static final String RETREAT_BODY =
-      "{\"kind\":\"retreat-or-press\","
-          + EMPTY_STATE
-          + ",\"battle\":{\"battleId\":\"b1\",\"battleTerritory\":\"Egypt\","
-          + "\"canSubmerge\":false,\"possibleRetreatTerritories\":[\"Libya\"]}}";
-
-  private static final String SCRAMBLE_BODY =
-      "{\"kind\":\"scramble\","
-          + EMPTY_STATE
-          + ",\"battle\":{\"defendingTerritory\":\"110 Sea Zone\",\"possibleScramblers\":{}}}";
 
   private static String offensiveBody(final String kind) {
     return "{\"kind\":\"" + kind + "\"," + EMPTY_STATE + "}";
@@ -83,14 +63,11 @@ class DecisionHandlerWireFormatTest {
         .session();
   }
 
-  private DecisionHandler stubHandler(
-      final SessionRegistry registry,
-      final DecisionExecutor<RetreatQueryRequest, RetreatPlan> rq,
-      final DecisionExecutor<ScrambleRequest, ScramblePlan> sr) {
-    // Default purchase stub: returns an empty plan so wire-format tests that don't exercise
-    // purchase still compile and route correctly.
+  private DecisionHandler stubHandler(final SessionRegistry registry) {
     return new DecisionHandler(
-        registry, rq, sr, (session, req) -> new PurchasePlan(List.of(), List.of(), List.of()));
+        registry,
+        (session, req) -> new PurchasePlan(List.of(), List.of(), List.of()),
+        (session, req) -> new NoncombatMovePlan(List.of()));
   }
 
   private JsonNode responseJson(final FakeHttpExchange ex) throws Exception {
@@ -102,89 +79,6 @@ class DecisionHandlerWireFormatTest {
   // ---------------------------------------------------------------------
 
   @Test
-  void retreatOrPress_success_wireShape() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final DecisionHandler h =
-        stubHandler(
-            registry,
-            (session, req) -> new RetreatPlan("Libya"),
-            (session, req) -> {
-              throw new AssertionError();
-            });
-
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", RETREAT_BODY);
-    h.handle(ex);
-
-    assertEquals(200, ex.responseCode());
-    final JsonNode root = responseJson(ex);
-
-    assertEquals("ready", root.path("status").asText());
-    assertTrue(root.has("plan"));
-
-    final JsonNode plan = root.path("plan");
-    assertEquals("retreat-or-press", plan.path("kind").asText(), "plan.kind");
-    assertTrue(plan.has("retreatTo"), "plan must have retreatTo");
-    assertEquals("Libya", plan.path("retreatTo").asText(), "plan.retreatTo");
-  }
-
-  @Test
-  void retreatOrPress_nullRetreatTo_wireShape() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final DecisionHandler h =
-        stubHandler(
-            registry,
-            (session, req) -> new RetreatPlan(null),
-            (session, req) -> {
-              throw new AssertionError();
-            });
-
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", RETREAT_BODY);
-    h.handle(ex);
-
-    assertEquals(200, ex.responseCode());
-    final JsonNode plan = responseJson(ex).path("plan");
-    assertEquals("retreat-or-press", plan.path("kind").asText());
-    assertTrue(plan.has("retreatTo"), "retreatTo must be present (null)");
-    assertTrue(plan.get("retreatTo").isNull(), "retreatTo must be JSON null");
-  }
-
-  @Test
-  void scramble_success_wireShape() throws Exception {
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final DecisionHandler h =
-        stubHandler(
-            registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> new ScramblePlan(Map.of("Western Germany", List.of("u-ftr-1"))));
-
-    final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", SCRAMBLE_BODY);
-    h.handle(ex);
-
-    assertEquals(200, ex.responseCode());
-    final JsonNode root = responseJson(ex);
-
-    assertEquals("ready", root.path("status").asText());
-    final JsonNode plan = root.path("plan");
-    assertEquals("scramble", plan.path("kind").asText(), "plan.kind");
-    assertTrue(plan.path("scramblers").isObject(), "plan.scramblers must be object");
-    assertTrue(plan.path("scramblers").has("Western Germany"));
-    assertTrue(plan.path("scramblers").path("Western Germany").isArray());
-    assertEquals("u-ftr-1", plan.path("scramblers").path("Western Germany").get(0).asText());
-  }
-
-  // ---------------------------------------------------------------------
-  // Purchase → 200 with status=ready, plan.kind=purchase (Phase 3 wired)
-  // ---------------------------------------------------------------------
-
-  @Test
   void purchase_200_wireShape() throws Exception {
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
@@ -193,13 +87,8 @@ class DecisionHandlerWireFormatTest {
     final DecisionHandler h =
         new DecisionHandler(
             registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> fixedPlan);
+            (session, req) -> fixedPlan,
+            (session, req) -> new NoncombatMovePlan(List.of()));
 
     final FakeHttpExchange ex =
         new FakeHttpExchange(
@@ -218,91 +107,26 @@ class DecisionHandlerWireFormatTest {
     assertTrue(plan.path("repairs").isArray(), "plan.repairs must be array");
   }
 
-  // ---------------------------------------------------------------------
-  // Remaining offensive kinds → 501 with status=error, error=not-implemented, kind=<kind>
-  // ---------------------------------------------------------------------
-
-  @Test
-  void combatMove_success_wireShape() throws Exception {
-    // combat-move is now wired to CombatMoveExecutor; verify it returns 200 + ready envelope
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final CombatMovePlan fixedPlan =
-        new CombatMovePlan(
-            List.of(
-                new WireMoveDescription(
-                    List.of("unit-1"), "Germany", "Poland", Map.of(), Map.of(), Map.of())),
-            List.of());
-
-    final DecisionHandler h =
-        new DecisionHandler(
-            registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> fixedPlan,
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            });
-
-    final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("combat-move"));
-    h.handle(ex);
-
-    assertEquals(200, ex.responseCode(), "combat-move must return 200");
-    final JsonNode root = responseJson(ex);
-    assertEquals("ready", root.path("status").asText());
-    assertEquals("combat-move", root.path("plan").path("kind").asText());
-    assertTrue(root.path("plan").has("moves"), "plan must have 'moves'");
-    assertTrue(root.path("plan").has("sbrMoves"), "plan must have 'sbrMoves'");
-  }
-
   @Test
   void noncombatMove_success_wireShape() throws Exception {
-    // noncombat-move is now wired to NoncombatMoveExecutor; verify it returns 200 + ready envelope
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
     final NoncombatMovePlan fixedPlan =
         new NoncombatMovePlan(
             List.of(
                 new WireMoveDescription(
-                    List.of("unit-2"), "Germany", "Eastern Europe", Map.of(), Map.of(), Map.of())));
+                    List.of("unit-2"),
+                    "Germany",
+                    "Eastern Europe",
+                    java.util.Map.of(),
+                    java.util.Map.of(),
+                    java.util.Map.of())));
 
     final DecisionHandler h =
         new DecisionHandler(
             registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> fixedPlan,
-            (session, req) -> {
-              throw new AssertionError();
-            });
+            (session, req) -> new PurchasePlan(List.of(), List.of(), List.of()),
+            (session, req) -> fixedPlan);
 
     final FakeHttpExchange ex =
         new FakeHttpExchange(
@@ -316,67 +140,17 @@ class DecisionHandlerWireFormatTest {
     assertTrue(root.path("plan").has("moves"), "plan must have 'moves'");
   }
 
-  @Test
-  void place_success_wireShape() throws Exception {
-    // place is now wired to PlaceExecutor; verify it returns 200 + ready envelope
-    final SessionRegistry registry = newRegistry();
-    final Session s = newSession(registry);
-    final PlacePlan fixedPlan =
-        new PlacePlan(List.of(new PlaceOrder("Germany", List.of("infantry", "infantry"))));
-
-    final DecisionHandler h =
-        new DecisionHandler(
-            registry,
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> {
-              throw new AssertionError();
-            },
-            (session, req) -> fixedPlan);
-
-    final FakeHttpExchange ex =
-        new FakeHttpExchange(
-            "POST", "/session/" + s.sessionId() + "/decision", offensiveBody("place"));
-    h.handle(ex);
-
-    assertEquals(200, ex.responseCode(), "place must return 200");
-    final JsonNode root = responseJson(ex);
-    assertEquals("ready", root.path("status").asText());
-    assertEquals("place", root.path("plan").path("kind").asText());
-    assertTrue(root.path("plan").has("placements"), "plan must have 'placements'");
-    assertEquals(1, root.path("plan").path("placements").size(), "one placement entry");
-    assertEquals(
-        "Germany", root.path("plan").path("placements").get(0).path("territoryName").asText());
-    assertTrue(root.path("plan").path("placements").get(0).path("unitTypes").isArray());
-  }
-
   // ---------------------------------------------------------------------
   // 404 unknown session
   // ---------------------------------------------------------------------
 
   @Test
   void unknownSession_404_wireShape() throws Exception {
-    final DecisionHandler h =
-        stubHandler(
-            newRegistry(),
-            (session, req) -> new RetreatPlan(null),
-            (session, req) -> new ScramblePlan(Map.of()));
+    final DecisionHandler h = stubHandler(newRegistry());
 
     final FakeHttpExchange ex =
-        new FakeHttpExchange("POST", "/session/no-such-session/decision", RETREAT_BODY);
+        new FakeHttpExchange(
+            "POST", "/session/no-such-session/decision", offensiveBody("purchase"));
     h.handle(ex);
 
     assertEquals(404, ex.responseCode());
@@ -394,11 +168,7 @@ class DecisionHandlerWireFormatTest {
   void malformedJson_400_wireShape() throws Exception {
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
-    final DecisionHandler h =
-        stubHandler(
-            registry,
-            (session, req) -> new RetreatPlan(null),
-            (session, req) -> new ScramblePlan(Map.of()));
+    final DecisionHandler h = stubHandler(registry);
 
     final FakeHttpExchange ex =
         new FakeHttpExchange("POST", "/session/" + s.sessionId() + "/decision", "{not-json");
@@ -419,11 +189,7 @@ class DecisionHandlerWireFormatTest {
   void missingDiscriminator_400_wireShape() throws Exception {
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
-    final DecisionHandler h =
-        stubHandler(
-            registry,
-            (session, req) -> new RetreatPlan(null),
-            (session, req) -> new ScramblePlan(Map.of()));
+    final DecisionHandler h = stubHandler(registry);
 
     // Valid JSON but no "kind" field
     final String body = "{" + EMPTY_STATE + "}";
@@ -446,11 +212,7 @@ class DecisionHandlerWireFormatTest {
   void nonPost_405_wireShape() throws Exception {
     final SessionRegistry registry = newRegistry();
     final Session s = newSession(registry);
-    final DecisionHandler h =
-        stubHandler(
-            registry,
-            (session, req) -> new RetreatPlan(null),
-            (session, req) -> new ScramblePlan(Map.of()));
+    final DecisionHandler h = stubHandler(registry);
 
     final FakeHttpExchange ex =
         new FakeHttpExchange("GET", "/session/" + s.sessionId() + "/decision", null);

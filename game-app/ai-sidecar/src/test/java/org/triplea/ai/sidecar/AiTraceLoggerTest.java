@@ -363,45 +363,4 @@ class AiTraceLoggerTest {
         .contains("pickedTypes=[fighter×1]")
         .contains("reason=partial");
   }
-
-  // ---------------------------------------------------------------------------
-  // SBR interceptor-selection rationale (#2105)
-  //
-  // InterceptExecutor is currently a stub returning no interceptors. The rationale line still
-  // emits — triagers benefit from seeing that an intercept query reached the sidecar but the
-  // decision is not yet implemented (vs. "the decision did happen and chose nothing"). Once
-  // ProAI integration lands, the helper signature already accepts a real reason and picked set
-  // so the call site can switch over without API churn.
-  // ---------------------------------------------------------------------------
-
-  @Test
-  void logSbrInterceptorDecision_emitsLineWithExpectedKeysAndMatchId() {
-    AiTraceLogger.setMatchId("match-sbr-001");
-    final AiTraceCapture cap = AiTraceCapture.attach();
-    try {
-      AiTraceLogger.logSbrInterceptorDecision(
-          /* nation */ "Germans",
-          /* battleId */ "sbr-1",
-          /* territory */ "Germany",
-          /* attackerNation */ "British",
-          /* candidateIds */ List.of("u-f-1", "u-f-2"),
-          /* candidateTypes */ List.of("fighter", "fighter"),
-          /* pickedIds */ List.of(),
-          /* reason */ "stub-not-implemented");
-    } finally {
-      cap.detach();
-    }
-
-    assertThat(cap.formatted()).hasSize(1);
-    assertThat(cap.formatted().get(0))
-        .startsWith("[AI-TRACE] matchID=match-sbr-001 side=sidecar nation=Germans")
-        .contains("phase=sbr kind=interceptor-decision")
-        .contains("battleId=sbr-1")
-        .contains("territory=Germany")
-        .contains("attacker=British")
-        .contains("candidatesIds=[u-f-1,u-f-2]")
-        .contains("candidatesTypes=[fighter×2]")
-        .contains("pickedIds=[]")
-        .contains("reason=stub-not-implemented");
-  }
 }

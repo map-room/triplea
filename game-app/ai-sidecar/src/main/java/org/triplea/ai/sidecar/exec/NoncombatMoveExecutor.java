@@ -101,8 +101,7 @@ public final class NoncombatMoveExecutor
     // before planning — otherwise purchase's simulation dataCopy leaks through and
     // ProNonCombatMoveAi reads stale alreadyMoved values, producing plans that move
     // units the engine already recorded as spent (INVALID_MOVE: "<unit> already moved
-    // during combat move"). Same pattern applied to PoliticsExecutor and
-    // CombatMoveExecutor.
+    // during combat move"). Same pattern as PurchaseExecutor.
     final RecordingMoveDelegate recorder = new RecordingMoveDelegate(proAi);
     recorder.initialize("move", "Move");
     recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));

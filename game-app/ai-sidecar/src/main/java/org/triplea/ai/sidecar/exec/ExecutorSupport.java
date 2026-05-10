@@ -14,7 +14,7 @@ import org.triplea.ai.sidecar.session.Session;
 /**
  * Shared plumbing used by decision executors that dispatch into {@code AbstractProAi}.
  *
- * <p>Three concerns show up in every defensive executor and are centralised here:
+ * <p>Two concerns show up in every executor and are centralised here:
  *
  * <ul>
  *   <li>Lazy {@link PlayerBridge}/{@link GamePlayer} initialisation on the session's {@link ProAi}
@@ -23,9 +23,6 @@ import org.triplea.ai.sidecar.session.Session;
  *       ProData.initialize} — returns the session's cloned {@link GameData} rather than NPE.
  *   <li>Lazy {@link BattleDelegate} re-registration after a {@code GameData} round-trip clears the
  *       delegate map during {@code postDeSerialize}.
- *   <li>Reflective splicing of a {@link SyntheticBattle} into {@link BattleTracker#pendingBattles
- *       pendingBattles} so ProAi entry points that read the tracker by battle {@link
- *       java.util.UUID} see non-null battle state.
  * </ul>
  *
  * <p>Package-private: consumed only by executors in this package.

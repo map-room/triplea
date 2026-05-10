@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
-import org.triplea.ai.sidecar.dto.CombatMoveRequest;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.NoncombatMoveRequest;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
@@ -222,8 +221,6 @@ class ProAiDeterminismAuditTest {
       try {
         new PurchaseExecutor(store)
             .execute(session, new PurchaseRequest(wireState("purchase", nation)));
-        new CombatMoveExecutor(store)
-            .execute(session, new CombatMoveRequest(wireState("combatMove", nation)));
         final NoncombatMovePlan plan =
             new NoncombatMoveExecutor(store)
                 .execute(session, new NoncombatMoveRequest(wireState("nonCombatMove", nation)));

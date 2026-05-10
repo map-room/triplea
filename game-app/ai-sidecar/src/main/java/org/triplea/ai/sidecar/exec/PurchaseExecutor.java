@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -193,7 +194,7 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     final List<PoliticalActionAttachment> storedActions = proAi.getStoredPoliticalActions();
     final List<WarDeclaration> politicalActions;
     if (storedActions != null && !storedActions.isEmpty()) {
-      politicalActions = PoliticsObserver.toWarDeclarations(storedActions, player);
+      politicalActions = toWarDeclarations(storedActions, player);
       proAi.clearStoredPoliticalActions();
     } else {
       politicalActions = List.of();
@@ -445,6 +446,57 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
       }
     }
     return "";
+  }
+
+  /**
+   * The 9 primary Map Room nations. War declarations against non-primary names (e.g. UK_Pacific,
+   * Dutch) are rejected by Map Room; filter them out before returning.
+   */
+  private static final Set<String> MAP_ROOM_PRIMARY_NATIONS =
+      Set.of(
+          "Americans",
+          "ANZAC",
+          "British",
+          "Chinese",
+          "French",
+          "Germans",
+          "Italians",
+          "Japanese",
+          "Russians");
+
+  /**
+   * Projects {@code storedPoliticalActions} (captured during purchase simulation) into wire {@link
+   * WarDeclaration}s made by {@code actingPlayer}. Inlined from the deleted {@code
+   * PoliticsObserver} helper class.
+   */
+  private static List<WarDeclaration> toWarDeclarations(
+      final List<PoliticalActionAttachment> actions, final GamePlayer actingPlayer) {
+    final List<WarDeclaration> out = new ArrayList<>();
+    for (final PoliticalActionAttachment action : actions) {
+      for (final PoliticalActionAttachment.RelationshipChange change :
+          action.getRelationshipChanges()) {
+        if (change.relationshipType == null
+            || !change.relationshipType.getRelationshipTypeAttachment().isWar()) {
+          continue;
+        }
+        final String p1 = change.player1.getName();
+        final String p2 = change.player2.getName();
+        final String acting = actingPlayer.getName();
+        final String target;
+        if (acting.equals(p1)) {
+          target = p2;
+        } else if (acting.equals(p2)) {
+          target = p1;
+        } else {
+          continue;
+        }
+        if (!MAP_ROOM_PRIMARY_NATIONS.contains(target)) {
+          continue;
+        }
+        out.add(new WarDeclaration(target));
+      }
+    }
+    return out;
   }
 
   private static void maybeApplyBritishSplitEconomy(

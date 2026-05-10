@@ -12,7 +12,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *
  * <p>Currently the sidecar's executors do not yet read this field — the POJO is in place so the
  * TS-side wire emission can be re-enabled without tripping {@code FAIL_ON_UNKNOWN_PROPERTIES}. A
- * subsequent change will wire it into {@code PurchaseExecutor} / {@code PlaceExecutor}.
+ * subsequent change will wire it into {@link org.triplea.ai.sidecar.exec.PurchaseExecutor}.
  */
 public record WirePurchasedUnit(String type, int count) {
   @JsonCreator
