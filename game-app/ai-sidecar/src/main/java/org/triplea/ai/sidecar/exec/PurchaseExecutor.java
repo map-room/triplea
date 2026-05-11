@@ -238,11 +238,9 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
             .filter(RecordingMoveDelegate.CapturedMove::isBombing)
             .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
             .toList();
-    final List<WireMoveDescription> combatMoves = new ArrayList<>();
-    combatMoves.addAll(nonBombingMoves);
-    combatMoves.addAll(bombingMoves);
 
-    return new PurchasePlan(buys, repairs, placements, politicalActions, combatMoves);
+    return new PurchasePlan(
+        buys, repairs, placements, politicalActions, nonBombingMoves, bombingMoves);
   }
 
   /**
