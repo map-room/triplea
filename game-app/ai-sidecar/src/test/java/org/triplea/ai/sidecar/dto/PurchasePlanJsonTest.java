@@ -128,4 +128,79 @@ class PurchasePlanJsonTest {
     PurchasePlan back = (PurchasePlan) decoded;
     assertEquals(0, back.combatMoves().size());
   }
+
+  @Test
+  void purchasePlanRoundTripsWithSbrMoves() throws Exception {
+    PurchasePlan plan =
+        new PurchasePlan(
+            List.of(new PurchaseOrder("bomber", 1, null)),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(
+                new WireMoveDescription(
+                    List.of("u-bomber"),
+                    "Germany",
+                    "Leningrad",
+                    Map.of(),
+                    Map.of("u-bomber", new WireUnitClassification(true, false)),
+                    Map.of())));
+    String json = mapper.writeValueAsString((DecisionPlan) plan);
+    assertTrue(json.contains("\"sbrMoves\""));
+    assertTrue(json.contains("\"Leningrad\""));
+    DecisionPlan decoded = mapper.readValue(json, DecisionPlan.class);
+    assertInstanceOf(PurchasePlan.class, decoded);
+    PurchasePlan back = (PurchasePlan) decoded;
+    assertEquals(0, back.combatMoves().size());
+    assertEquals(1, back.sbrMoves().size());
+    assertEquals("Germany", back.sbrMoves().get(0).from());
+    assertEquals("Leningrad", back.sbrMoves().get(0).to());
+    assertEquals(List.of("u-bomber"), back.sbrMoves().get(0).unitIds());
+  }
+
+  @Test
+  void purchasePlanWithMissingSbrMovesDefaultsToEmpty() throws Exception {
+    String json =
+        "{\"kind\":\"purchase\",\"buys\":[{\"unitType\":\"infantry\",\"count\":1}],"
+            + "\"repairs\":[],\"placements\":[],\"politicalActions\":[],\"combatMoves\":[]}";
+    DecisionPlan decoded = mapper.readValue(json, DecisionPlan.class);
+    assertInstanceOf(PurchasePlan.class, decoded);
+    PurchasePlan back = (PurchasePlan) decoded;
+    assertEquals(0, back.sbrMoves().size());
+  }
+
+  @Test
+  void purchasePlanCombatMovesAndSbrMovesAreIndependentFields() throws Exception {
+    PurchasePlan plan =
+        new PurchasePlan(
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(
+                new WireMoveDescription(
+                    List.of("u-tank"),
+                    "Germany",
+                    "Poland",
+                    Map.of(),
+                    Map.of("u-tank", new WireUnitClassification(false, false)),
+                    Map.of())),
+            List.of(
+                new WireMoveDescription(
+                    List.of("u-bomber"),
+                    "Germany",
+                    "Moscow",
+                    Map.of(),
+                    Map.of("u-bomber", new WireUnitClassification(true, false)),
+                    Map.of())));
+    String json = mapper.writeValueAsString((DecisionPlan) plan);
+    DecisionPlan decoded = mapper.readValue(json, DecisionPlan.class);
+    assertInstanceOf(PurchasePlan.class, decoded);
+    PurchasePlan back = (PurchasePlan) decoded;
+    assertEquals(1, back.combatMoves().size());
+    assertEquals("Poland", back.combatMoves().get(0).to());
+    assertEquals(1, back.sbrMoves().size());
+    assertEquals("Moscow", back.sbrMoves().get(0).to());
+  }
 }

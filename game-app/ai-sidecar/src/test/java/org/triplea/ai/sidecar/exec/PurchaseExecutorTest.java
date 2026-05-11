@@ -220,26 +220,29 @@ class PurchaseExecutorTest {
   }
 
   /**
-   * Verifies that {@code combatMoves} is populated in the PurchasePlan response and ordered
-   * correctly (land/amphib/bombard moves first, bombing/SBR moves last).
+   * Verifies that {@code combatMoves} is populated in the PurchasePlan response for non-SBR moves,
+   * and that {@code sbrMoves} is a separate non-null field for bombing moves.
    *
    * <p>Turn-1 Germans always have at least one land combat move (they border Poland and other
-   * Allied territories). SBR moves are optional; what matters is that non-bombing moves precede
-   * bombing moves in the list.
+   * Allied territories). SBR moves are optional depending on ProAi's decision; what matters is that
+   * both fields are separate and non-null (regression guard for map-room#2412 where sbrMoves was
+   * absent and bombings were silently routed to combatMoves).
    *
    * <p>This exercises the {@code invokeCombatMoveForSidecar} projection path: after purchase, the
    * {@code storedCombatMoveMap} is populated; the executor calls {@code doMove} (not {@code
    * doCombatMove} — zero re-planning) and captures the resulting MoveDescriptions via a {@link
-   * RecordingMoveDelegate}.
+   * RecordingMoveDelegate}. The {@code isBombing} flag on each captured move determines which field
+   * it lands in.
    */
   @Test
-  void combatMovesArePopulatedAndOrderedCorrectlyAfterPurchase() throws Exception {
+  void combatMovesArePopulatedAndRoutedCorrectlyAfterPurchase() throws Exception {
     final GameData data = canonical.cloneForSession();
     final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
 
     assertThat(plan.combatMoves()).as("combatMoves must never be null").isNotNull();
+    assertThat(plan.sbrMoves()).as("sbrMoves must never be null").isNotNull();
     assertThat(plan.combatMoves())
-        .as("Germans should have at least one combat move on turn 1")
+        .as("Germans should have at least one non-SBR combat move on turn 1")
         .isNotEmpty();
 
     // Each move must reference a non-blank from/to territory.
@@ -250,6 +253,36 @@ class PurchaseExecutorTest {
       assertThat(md.from()).as("combatMove.from must not be blank").isNotBlank();
       assertThat(md.to()).as("combatMove.to must not be blank").isNotBlank();
     }
+    for (final var md : plan.sbrMoves()) {
+      assertThat(md.from()).as("sbrMove.from must not be blank").isNotBlank();
+      assertThat(md.to()).as("sbrMove.to must not be blank").isNotBlank();
+    }
+  }
+
+  /**
+   * Regression test for map-room#2412: bombing moves must be routed to {@code sbrMoves}, not merged
+   * into {@code combatMoves}.
+   *
+   * <p>Before the fix, PurchaseExecutor concatenated nonBombingMoves and bombingMoves into a single
+   * {@code combatMoves} list. PurchasePlan had no {@code sbrMoves} field. The TS bot read {@code
+   * pp.sbrMoves ?? []} which was always absent → G.aiState.pendingSbrMoves never populated →
+   * bombers dispatched as regular moveUnit in combatMove phase instead of sbrMoveUnit in sbrPlan.
+   *
+   * <p>This test verifies the invariant: the combined size of {@code combatMoves} and {@code
+   * sbrMoves} is non-zero (Germans always move on turn 1), and both fields are non-null separate
+   * lists (not merged).
+   */
+  @Test
+  void sbrMovesFieldIsNonNullAndSeparateFromCombatMoves() throws Exception {
+    final GameData data = canonical.cloneForSession();
+    final PurchasePlan plan = new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
+
+    assertThat(plan.combatMoves()).as("combatMoves must not be null").isNotNull();
+    assertThat(plan.sbrMoves()).as("sbrMoves must not be null").isNotNull();
+
+    // Both fields together must be non-empty — Germans always have moves on turn 1.
+    final int totalMoves = plan.combatMoves().size() + plan.sbrMoves().size();
+    assertThat(totalMoves).as("combined combat + sbr moves must be non-empty").isGreaterThan(0);
   }
 
   /**

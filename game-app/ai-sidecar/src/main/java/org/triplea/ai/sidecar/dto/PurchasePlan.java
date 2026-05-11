@@ -12,15 +12,17 @@ import java.util.List;
  * water non-construction → land construction → water construction). {@code politicalActions} lists
  * war declarations the AI decided to make during purchase simulation; absent or {@code null} in
  * older responses is treated as an empty list on the TS side. {@code combatMoves} carries the
- * projected combat-move plan in execution order (land → amphib → bombard → bombing); absent or
- * {@code null} in older responses is treated as an empty list on the TS side.
+ * projected non-SBR combat-move plan (land → amphib → bombard); absent or {@code null} in older
+ * responses is treated as an empty list on the TS side. {@code sbrMoves} carries the projected
+ * strategic-bombing-raid moves; absent or {@code null} is treated as an empty list on the TS side.
  */
 public record PurchasePlan(
     List<PurchaseOrder> buys,
     List<RepairOrder> repairs,
     List<PlacementGroup> placements,
     List<WarDeclaration> politicalActions,
-    List<WireMoveDescription> combatMoves)
+    List<WireMoveDescription> combatMoves,
+    List<WireMoveDescription> sbrMoves)
     implements DecisionPlan {
 
   @JsonCreator
@@ -29,28 +31,43 @@ public record PurchasePlan(
       @JsonProperty("repairs") final List<RepairOrder> repairs,
       @JsonProperty("placements") final List<PlacementGroup> placements,
       @JsonProperty("politicalActions") final List<WarDeclaration> politicalActions,
-      @JsonProperty("combatMoves") final List<WireMoveDescription> combatMoves) {
+      @JsonProperty("combatMoves") final List<WireMoveDescription> combatMoves,
+      @JsonProperty("sbrMoves") final List<WireMoveDescription> sbrMoves) {
     this.buys = buys;
     this.repairs = repairs;
     this.placements = placements;
     this.politicalActions = politicalActions != null ? politicalActions : List.of();
     this.combatMoves = combatMoves != null ? combatMoves : List.of();
+    this.sbrMoves = sbrMoves != null ? sbrMoves : List.of();
   }
 
-  /** Convenience constructor for callsites that do not populate combatMoves. */
+  /** Convenience constructor for callsites that do not populate sbrMoves. */
+  public PurchasePlan(
+      final List<PurchaseOrder> buys,
+      final List<RepairOrder> repairs,
+      final List<PlacementGroup> placements,
+      final List<WarDeclaration> politicalActions,
+      final List<WireMoveDescription> combatMoves) {
+    this(buys, repairs, placements, politicalActions, combatMoves, List.of());
+  }
+
+  /** Convenience constructor for callsites that do not populate combatMoves or sbrMoves. */
   public PurchasePlan(
       final List<PurchaseOrder> buys,
       final List<RepairOrder> repairs,
       final List<PlacementGroup> placements,
       final List<WarDeclaration> politicalActions) {
-    this(buys, repairs, placements, politicalActions, List.of());
+    this(buys, repairs, placements, politicalActions, List.of(), List.of());
   }
 
-  /** Convenience constructor for callsites that do not populate politicalActions or combatMoves. */
+  /**
+   * Convenience constructor for callsites that do not populate politicalActions, combatMoves, or
+   * sbrMoves.
+   */
   public PurchasePlan(
       final List<PurchaseOrder> buys,
       final List<RepairOrder> repairs,
       final List<PlacementGroup> placements) {
-    this(buys, repairs, placements, List.of(), List.of());
+    this(buys, repairs, placements, List.of(), List.of(), List.of());
   }
 }
