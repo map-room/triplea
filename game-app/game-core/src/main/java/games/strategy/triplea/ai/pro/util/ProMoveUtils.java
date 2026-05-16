@@ -102,6 +102,12 @@ public final class ProMoveUtils {
                   u,
                   player);
         } else if (unitList.stream().allMatch(Matches.unitIsLand())) {
+          // Land unit on a transport must move via calculateAmphibRoutes, not here.
+          // Routing from a sea zone would produce a multi-step unload route which
+          // MoveValidator rejects with "Unloading units must stop where they are unloaded".
+          if (startTerritory.isWater()) {
+            continue;
+          }
           // Land unit
           optionalRoute =
               map.getRouteForUnit(

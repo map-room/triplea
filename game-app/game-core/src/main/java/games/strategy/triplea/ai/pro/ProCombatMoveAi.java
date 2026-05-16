@@ -321,11 +321,12 @@ public class ProCombatMoveAi {
     // Assign units to territories by prioritization
     int numToAttack = Math.min(1, prioritizedTerritories.size());
     boolean haveRemovedAllAmphibTerritories = false;
+    final Map<Unit, Territory> prevAmphibAssignmentsScaling = new HashMap<>();
     while (true) {
       final List<ProTerritory> territoriesToTryToAttack =
           prioritizedTerritories.subList(0, numToAttack);
       ProLogger.debug("Current number of territories: " + numToAttack);
-      tryToAttackTerritories(territoriesToTryToAttack, List.of());
+      tryToAttackTerritories(territoriesToTryToAttack, List.of(), prevAmphibAssignmentsScaling);
 
       // Determine if all attacks are successful
       boolean areSuccessful = true;
@@ -856,9 +857,10 @@ public class ProCombatMoveAi {
         territoryManager.getAttackOptions().getUnitMoveMap();
 
     // Assign units to territories by prioritization
+    final Map<Unit, Territory> prevAmphibAssignments = new HashMap<>();
     while (true) {
       Map<Unit, Set<Territory>> sortedUnitAttackOptions =
-          tryToAttackTerritories(prioritizedTerritories, alreadyMovedUnits);
+          tryToAttackTerritories(prioritizedTerritories, alreadyMovedUnits, prevAmphibAssignments);
 
       // Clear bombers
       attackMap.values().forEach(proTerritory -> proTerritory.getBombers().clear());
@@ -1244,7 +1246,9 @@ public class ProCombatMoveAi {
   }
 
   private Map<Unit, Set<Territory>> tryToAttackTerritories(
-      final List<ProTerritory> prioritizedTerritories, final List<Unit> alreadyMovedUnits) {
+      final List<ProTerritory> prioritizedTerritories,
+      final List<Unit> alreadyMovedUnits,
+      final Map<Unit, Territory> prevAmphibAssignments) {
 
     final Map<Territory, ProTerritory> attackMap =
         territoryManager.getAttackOptions().getTerritoryMap();
@@ -1687,13 +1691,16 @@ public class ProCombatMoveAi {
         for (final Unit unit : minAmphibUnitsToAdd) {
           sortedUnitAttackOptions.remove(unit);
         }
-        ProLogger.trace(
-            "Adding amphibious attack to "
-                + minWinTerritory
-                + ", units="
-                + minAmphibUnitsToAdd.size()
-                + ", unloadFrom="
-                + minUnloadFromTerritory);
+        if (!minWinTerritory.equals(prevAmphibAssignments.get(transport))) {
+          ProLogger.trace(
+              "Adding amphibious attack to "
+                  + minWinTerritory
+                  + ", units="
+                  + minAmphibUnitsToAdd.size()
+                  + ", unloadFrom="
+                  + minUnloadFromTerritory);
+          prevAmphibAssignments.put(transport, minWinTerritory);
+        }
       }
     }
 
