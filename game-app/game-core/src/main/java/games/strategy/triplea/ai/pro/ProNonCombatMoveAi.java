@@ -83,6 +83,9 @@ class ProNonCombatMoveAi {
       final IMoveDelegate moveDel) {
     ProLogger.info("Starting non-combat move phase");
 
+    // Clear per-decision battle-calc cache so this decision starts clean.
+    calc.clearDecisionCache();
+
     // Current data at the start of non-combat move
     data = proData.getData();
     player = proData.getPlayer();
@@ -519,7 +522,7 @@ class ProNonCombatMoveAi {
           CollectionUtils.getMatches(
               patd.getCantMoveUnits(), Matches.unitIsAaForAnything().negate());
       final ProBattleResult minResult =
-          calc.calculateBattleResults(
+          calc.estimateAttackBattleResults(
               proData,
               t,
               enemyAttackingUnits,
@@ -551,7 +554,7 @@ class ProNonCombatMoveAi {
       final List<Unit> defendingUnitsAndNotAa =
           CollectionUtils.getMatches(defendingUnits, Matches.unitIsAaForAnything().negate());
       final ProBattleResult result =
-          calc.calculateBattleResults(
+          calc.estimateDefendBattleResults(
               proData,
               t,
               enemyAttackingUnits,
@@ -1320,7 +1323,14 @@ class ProNonCombatMoveAi {
     final List<ProTransport> transportMapList =
         territoryManager.getDefendOptions().getTransportList();
 
+    // Cap iterations to avoid O(units × territories × battle-calc) blowup in late-game states.
+    final int maxIterations = 25;
+    int iterationCount = 0;
     while (true) {
+      if (++iterationCount > maxIterations) {
+        ProLogger.warn("moveUnitsToBestTerritories: hit iteration cap (" + maxIterations + ")");
+        break;
+      }
       ProLogger.info("Move units to best value territories");
       final Set<Territory> territoriesToDefend = new HashSet<>();
       final Map<Unit, Set<Territory>> currentUnitMoveMap = new HashMap<>(unitMoveMap);
@@ -2129,7 +2139,7 @@ class ProNonCombatMoveAi {
         final Collection<Unit> defendingUnits = proTerritory.getAllDefenders();
         defendingUnits.add(u);
         proTerritory.setBattleResultIfNull(
-            () -> calc.calculateBattleResults(proData, proTerritory, defendingUnits));
+            () -> calc.estimateAttackBattleResults(proData, proTerritory, defendingUnits));
         final ProBattleResult result = proTerritory.getBattleResult();
         ProLogger.trace(
             String.format(
@@ -2149,7 +2159,7 @@ class ProNonCombatMoveAi {
         final List<Unit> myDefenders =
             CollectionUtils.getMatches(defendingUnits, Matches.unitIsOwnedBy(player));
         final ProBattleResult result2 =
-            calc.calculateBattleResults(proData, proTerritory, myDefenders);
+            calc.estimateDefendBattleResults(proData, proTerritory, myDefenders);
         int cantHoldWithoutAllies = 0;
         if (result2.getWinPercentage() >= proData.getMinWinPercentage()
             || result2.getTuvSwing() > 0) {
