@@ -32,6 +32,16 @@ class DecisionHandlerTest {
     return "{\"kind\":\"" + kind + "\"," + EMPTY_STATE + ",\"seed\":42}";
   }
 
+  private static String bodyWithMatchId(final String kind, final String matchId) {
+    return "{\"kind\":\""
+        + kind
+        + "\","
+        + EMPTY_STATE
+        + ",\"seed\":42,\"matchId\":\""
+        + matchId
+        + "\"}";
+  }
+
   private static DecisionHandler stubHandler() {
     return new DecisionHandler(
         canonical,
@@ -89,7 +99,34 @@ class DecisionHandlerTest {
   // ---------------------------------------------------------------------
 
   @Test
-  void matchIdIsBoundDuringDispatchAndClearedAfter() throws Exception {
+  void matchId_fromEnvelope_usedDirectly() throws Exception {
+    // Regression for #2555: when the wire envelope carries a real bgio matchId,
+    // it must appear verbatim in the log context — never a synthetic composite.
+    final AtomicReference<String> seenInExecutor = new AtomicReference<>();
+    final DecisionHandler h =
+        new DecisionHandler(
+            canonical,
+            (canonical, req) -> {
+              seenInExecutor.set(AiTraceLogger.currentMatchId());
+              return new PurchasePlan(List.of(), List.of(), List.of());
+            },
+            (canonical, req) -> {
+              throw new AssertionError();
+            });
+
+    AiTraceLogger.clearAll();
+    final FakeHttpExchange ex =
+        new FakeHttpExchange("POST", "/decision", bodyWithMatchId("purchase", "bgio-abc123"));
+    h.handle(ex);
+
+    assertEquals("bgio-abc123", seenInExecutor.get());
+    assertEquals(AiTraceLogger.SENTINEL, AiTraceLogger.currentMatchId());
+  }
+
+  @Test
+  void matchId_absentFromEnvelope_usesSentinel() throws Exception {
+    // Regression for #2555: when matchId is absent, the log context must use '-',
+    // never a synthetic player:r{round} fallback.
     final AtomicReference<String> seenInExecutor = new AtomicReference<>();
     final DecisionHandler h =
         new DecisionHandler(
@@ -106,11 +143,7 @@ class DecisionHandlerTest {
     final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", body("purchase"));
     h.handle(ex);
 
-    // During dispatch the executor saw a request-scoped matchID derived from
-    // currentPlayer:r{round}.
-    assertEquals("Germans:r1", seenInExecutor.get());
-    // After dispatch the per-thread context is cleared so a thread-pool worker reused for the
-    // next request doesn't leak the previous matchID.
+    assertEquals(AiTraceLogger.SENTINEL, seenInExecutor.get());
     assertEquals(AiTraceLogger.SENTINEL, AiTraceLogger.currentMatchId());
   }
 

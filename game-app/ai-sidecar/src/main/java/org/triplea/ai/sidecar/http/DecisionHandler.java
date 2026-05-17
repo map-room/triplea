@@ -112,15 +112,19 @@ public final class DecisionHandler implements HttpHandler {
   }
 
   /**
-   * Best-effort match-id extraction for trace logging. Stateless requests don't carry an explicit
-   * gameId; fall back to "currentPlayer:r{round}" as the trace tag.
+   * Extract the bgio match ID for log correlation. Returns the real match ID when the wire envelope
+   * includes one; falls back to {@link AiTraceLogger#SENTINEL} when absent. Never synthesises a
+   * composite like {@code player:r{round}} — that would break {@code grep 'match=<bgioId>'} across
+   * server, bot-worker, and sidecar logs.
    */
   private static String matchIdFor(final DecisionRequest request) {
-    return switch (request) {
-      case PurchaseRequest pr -> pr.state().currentPlayer() + ":r" + pr.state().round();
-      case NoncombatMoveRequest nm -> nm.state().currentPlayer() + ":r" + nm.state().round();
-      case OtherOffensiveRequest oo -> "kind=" + oo.kind();
-    };
+    final String id =
+        switch (request) {
+          case PurchaseRequest pr -> pr.matchId();
+          case NoncombatMoveRequest nm -> nm.matchId();
+          case OtherOffensiveRequest ignored -> null;
+        };
+    return (id != null && !id.isBlank()) ? id : AiTraceLogger.SENTINEL;
   }
 
   private static void setRoundAndPlayer(final DecisionRequest request) {
