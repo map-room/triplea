@@ -13,6 +13,8 @@ import java.util.logging.Logger;
 import org.triplea.ai.sidecar.http.HttpService;
 
 public final class SidecarMain {
+  private static final System.Logger LOG = System.getLogger(SidecarMain.class.getName());
+
   private SidecarMain() {}
 
   public static void main(final String[] args) throws IOException, InterruptedException {
@@ -23,7 +25,7 @@ public final class SidecarMain {
     final CanonicalGameData canonical = CanonicalGameData.load();
 
     final HttpService svc = HttpService.start(cfg, canonical);
-    System.out.printf("[ai-sidecar] listening on %s:%d%n", cfg.bindHost(), svc.boundPort());
+    LOG.log(System.Logger.Level.INFO, "listening on {0}:{1}", cfg.bindHost(), svc.boundPort());
 
     final CountDownLatch latch = new CountDownLatch(1);
     Runtime.getRuntime()
@@ -51,7 +53,11 @@ public final class SidecarMain {
         LogManager.getLogManager().readConfiguration(is);
       }
     } catch (final IOException e) {
-      System.err.println("Failed to load sidecar logging.properties: " + e.getMessage());
+      // Logger may not be configured yet — this failure is rare startup infrastructure.
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "Failed to load sidecar logging.properties: {0}",
+          e.getMessage());
     }
 
     // Apply SIDECAR_LOG_LEVEL env var override on top of the baseline.
@@ -70,9 +76,7 @@ public final class SidecarMain {
     // Mirror the level into ProLogSettings so ProLogger's own depth filter matches.
     ProLogSettings.loadSettings().setLogLevel(julLevel);
 
-    System.getLogger(SidecarMain.class.getName())
-        .log(
-            System.Logger.Level.INFO, "Sidecar logging initialized: level={0}", julLevel.getName());
+    LOG.log(System.Logger.Level.INFO, "Sidecar logging initialized: level={0}", julLevel.getName());
   }
 
   static Level parseJulLevel(final String envValue) {
@@ -82,11 +86,11 @@ public final class SidecarMain {
     try {
       return Level.parse(envValue.toUpperCase(Locale.ROOT));
     } catch (final IllegalArgumentException e) {
-      System.err.println(
-          "SIDECAR_LOG_LEVEL="
-              + envValue
-              + " is not a valid java.util.logging level; "
-              + "defaulting to INFO. Valid: SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST.");
+      LOG.log(
+          System.Logger.Level.WARNING,
+          "SIDECAR_LOG_LEVEL={0} is not a valid java.util.logging level; defaulting to INFO."
+              + " Valid: SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST.",
+          envValue);
       return Level.INFO;
     }
   }

@@ -23,40 +23,77 @@ import java.util.UUID;
  * a {@link ThreadLocal} carries the matchID through the executor stack without having to thread it
  * through every method signature.
  *
- * <p>If no matchID is set when an emit happens (e.g. tests, or a background path that never went
- * through {@code DecisionHandler}), the line is tagged {@code matchID=unknown} so the Loki query
- * {@code {matchID=~"unknown|..."} } still surfaces those lines for triage.
+ * <p>If no context is bound when an emit happens (e.g. tests, or a background path that never went
+ * through {@code DecisionHandler}), every field falls back to the {@code -} sentinel so grep
+ * patterns like {@code grep 'player=Germans'} never miss a line due to field absence.
  */
 public final class AiTraceLogger {
 
   private static final System.Logger LOG = System.getLogger(AiTraceLogger.class.getName());
-  private static final String UNKNOWN_MATCH_ID = "unknown";
+
+  /** Sentinel used for any context field not bound on the current thread. */
+  public static final String SENTINEL = "-";
+
   private static final ThreadLocal<String> MATCH_ID = new ThreadLocal<>();
+  private static final ThreadLocal<String> ROUND = new ThreadLocal<>();
+  private static final ThreadLocal<String> PLAYER = new ThreadLocal<>();
 
   private AiTraceLogger() {}
 
   /**
    * Bind the matchID for the current thread. Call at the request boundary (e.g. start of {@code
-   * DecisionHandler.handle}). Pair with {@link #clearMatchId()} in a finally block so a thread-pool
-   * worker doesn't leak a stale matchID into the next request.
+   * DecisionHandler.handle}). Pair with {@link #clearAll()} in a finally block so a thread-pool
+   * worker doesn't leak a stale context into the next request.
    */
   public static void setMatchId(final String matchId) {
     MATCH_ID.set(matchId);
   }
 
-  /** Clear the per-thread matchID. Always call from a finally block. */
+  /** Bind the game round for the current thread. */
+  public static void setRound(final int round) {
+    ROUND.set(Integer.toString(round));
+  }
+
+  /** Bind the current player name for the current thread. */
+  public static void setPlayer(final String player) {
+    PLAYER.set(player);
+  }
+
+  /** Clear all per-thread context fields. Always call from a finally block. */
+  public static void clearAll() {
+    MATCH_ID.remove();
+    ROUND.remove();
+    PLAYER.remove();
+  }
+
+  /**
+   * @deprecated Use {@link #clearAll()} to clear all context fields together.
+   */
+  @Deprecated
   public static void clearMatchId() {
     MATCH_ID.remove();
   }
 
   /**
-   * Read the per-thread matchID, falling back to {@code "unknown"} when no boundary set one. Public
-   * so request-boundary tests can assert that {@code DecisionHandler} binds and clears the matchID
+   * Read the per-thread matchID, falling back to {@link #SENTINEL} when no boundary set one. Public
+   * so request-boundary tests can assert that {@code DecisionHandler} binds and clears the context
    * around executor dispatch.
    */
   public static String currentMatchId() {
     final String v = MATCH_ID.get();
-    return v == null ? UNKNOWN_MATCH_ID : v;
+    return v == null ? SENTINEL : v;
+  }
+
+  /** Read the per-thread round, falling back to {@link #SENTINEL}. */
+  public static String currentRound() {
+    final String v = ROUND.get();
+    return v == null ? SENTINEL : v;
+  }
+
+  /** Read the per-thread player, falling back to {@link #SENTINEL}. */
+  public static String currentPlayer() {
+    final String v = PLAYER.get();
+    return v == null ? SENTINEL : v;
   }
 
   /**
