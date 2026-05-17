@@ -91,22 +91,49 @@ class AiTraceLoggerTest {
   // ---------------------------------------------------------------------------
 
   @AfterEach
-  void clearMatchIdContext() {
-    AiTraceLogger.clearMatchId();
+  void clearContext() {
+    AiTraceLogger.clearAll();
   }
 
   @Test
-  void currentMatchId_unset_returnsUnknown() {
-    AiTraceLogger.clearMatchId();
-    assertThat(AiTraceLogger.currentMatchId()).isEqualTo("unknown");
+  void currentMatchId_unset_returnsSentinel() {
+    AiTraceLogger.clearAll();
+    assertThat(AiTraceLogger.currentMatchId()).isEqualTo(AiTraceLogger.SENTINEL);
   }
 
   @Test
   void setAndClearMatchId_roundTrip() {
     AiTraceLogger.setMatchId("match-abc-123");
     assertThat(AiTraceLogger.currentMatchId()).isEqualTo("match-abc-123");
-    AiTraceLogger.clearMatchId();
-    assertThat(AiTraceLogger.currentMatchId()).isEqualTo("unknown");
+    AiTraceLogger.clearAll();
+    assertThat(AiTraceLogger.currentMatchId()).isEqualTo(AiTraceLogger.SENTINEL);
+  }
+
+  @Test
+  void setAndClearRound_roundTrip() {
+    AiTraceLogger.setRound(5);
+    assertThat(AiTraceLogger.currentRound()).isEqualTo("5");
+    AiTraceLogger.clearAll();
+    assertThat(AiTraceLogger.currentRound()).isEqualTo(AiTraceLogger.SENTINEL);
+  }
+
+  @Test
+  void setAndClearPlayer_roundTrip() {
+    AiTraceLogger.setPlayer("Germans");
+    assertThat(AiTraceLogger.currentPlayer()).isEqualTo("Germans");
+    AiTraceLogger.clearAll();
+    assertThat(AiTraceLogger.currentPlayer()).isEqualTo(AiTraceLogger.SENTINEL);
+  }
+
+  @Test
+  void clearAll_clearsAllFields() {
+    AiTraceLogger.setMatchId("m");
+    AiTraceLogger.setRound(2);
+    AiTraceLogger.setPlayer("Russians");
+    AiTraceLogger.clearAll();
+    assertThat(AiTraceLogger.currentMatchId()).isEqualTo(AiTraceLogger.SENTINEL);
+    assertThat(AiTraceLogger.currentRound()).isEqualTo(AiTraceLogger.SENTINEL);
+    assertThat(AiTraceLogger.currentPlayer()).isEqualTo(AiTraceLogger.SENTINEL);
   }
 
   @Test
@@ -118,14 +145,14 @@ class AiTraceLoggerTest {
     final Thread worker =
         new Thread(
             () -> {
-              // Worker has no inherited matchID — must see "unknown".
+              // Worker has no inherited matchID — must see sentinel.
               seenInWorker.set(AiTraceLogger.currentMatchId());
               AiTraceLogger.setMatchId("worker-thread-match");
             });
     worker.start();
     worker.join();
 
-    assertThat(seenInWorker.get()).isEqualTo("unknown");
+    assertThat(seenInWorker.get()).isEqualTo(AiTraceLogger.SENTINEL);
     // Main thread context was never touched by worker's setMatchId — still its own value.
     assertThat(AiTraceLogger.currentMatchId()).isEqualTo("main-thread-match");
   }

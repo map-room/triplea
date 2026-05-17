@@ -86,6 +86,7 @@ public final class DecisionHandler implements HttpHandler {
     }
 
     AiTraceLogger.setMatchId(matchIdFor(request));
+    setRoundAndPlayer(request);
     try {
       switch (request) {
         case PurchaseRequest pr -> {
@@ -106,7 +107,7 @@ public final class DecisionHandler implements HttpHandler {
       LOG.log(System.Logger.Level.ERROR, "Decision handler internal error", e);
       writeJson(exchange, 500, JsonBodies.errorBody("internal"));
     } finally {
-      AiTraceLogger.clearMatchId();
+      AiTraceLogger.clearAll();
     }
   }
 
@@ -120,6 +121,22 @@ public final class DecisionHandler implements HttpHandler {
       case NoncombatMoveRequest nm -> nm.state().currentPlayer() + ":r" + nm.state().round();
       case OtherOffensiveRequest oo -> "kind=" + oo.kind();
     };
+  }
+
+  private static void setRoundAndPlayer(final DecisionRequest request) {
+    switch (request) {
+      case PurchaseRequest pr -> {
+        AiTraceLogger.setRound(pr.state().round());
+        AiTraceLogger.setPlayer(pr.state().currentPlayer());
+      }
+      case NoncombatMoveRequest nm -> {
+        AiTraceLogger.setRound(nm.state().round());
+        AiTraceLogger.setPlayer(nm.state().currentPlayer());
+      }
+      case OtherOffensiveRequest ignored -> {
+        // OtherOffensiveRequest has no state — leave round/player as sentinel.
+      }
+    }
   }
 
   private static void writeJson(final HttpExchange ex, final int status, final String body)

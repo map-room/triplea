@@ -102,7 +102,7 @@ class DecisionHandlerTest {
               throw new AssertionError();
             });
 
-    AiTraceLogger.clearMatchId();
+    AiTraceLogger.clearAll();
     final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", body("purchase"));
     h.handle(ex);
 
@@ -111,7 +111,7 @@ class DecisionHandlerTest {
     assertEquals("Germans:r1", seenInExecutor.get());
     // After dispatch the per-thread context is cleared so a thread-pool worker reused for the
     // next request doesn't leak the previous matchID.
-    assertEquals("unknown", AiTraceLogger.currentMatchId());
+    assertEquals(AiTraceLogger.SENTINEL, AiTraceLogger.currentMatchId());
   }
 
   @Test
@@ -126,13 +126,13 @@ class DecisionHandlerTest {
               throw new AssertionError();
             });
 
-    AiTraceLogger.clearMatchId();
+    AiTraceLogger.clearAll();
     final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", body("purchase"));
     h.handle(ex);
 
     assertEquals(400, ex.responseCode());
     // finally block must clear the matchID even when the executor throws.
-    assertEquals("unknown", AiTraceLogger.currentMatchId());
+    assertEquals(AiTraceLogger.SENTINEL, AiTraceLogger.currentMatchId());
   }
 
   @Test
