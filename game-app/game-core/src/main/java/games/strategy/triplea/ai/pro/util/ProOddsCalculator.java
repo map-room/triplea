@@ -123,6 +123,16 @@ public class ProOddsCalculator {
     return callBattleCalc(proData, t, attackingUnits, defendingUnits, bombardingUnits);
   }
 
+  public ProBattleResult estimateAttackBattleResults(
+      final ProData proData, final ProTerritory proTerritory, final Collection<Unit> defenders) {
+    return estimateAttackBattleResults(
+        proData,
+        proTerritory.getTerritory(),
+        proTerritory.getMaxEnemyUnits(),
+        defenders,
+        proTerritory.getMaxEnemyBombardUnits());
+  }
+
   public ProBattleResult estimateDefendBattleResults(
       final ProData proData, final ProTerritory proTerritory, final Collection<Unit> defenders) {
     return estimateDefendBattleResults(
