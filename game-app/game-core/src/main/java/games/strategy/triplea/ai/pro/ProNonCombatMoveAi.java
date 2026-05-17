@@ -519,7 +519,7 @@ class ProNonCombatMoveAi {
           CollectionUtils.getMatches(
               patd.getCantMoveUnits(), Matches.unitIsAaForAnything().negate());
       final ProBattleResult minResult =
-          calc.calculateBattleResults(
+          calc.estimateAttackBattleResults(
               proData,
               t,
               enemyAttackingUnits,
@@ -551,7 +551,7 @@ class ProNonCombatMoveAi {
       final List<Unit> defendingUnitsAndNotAa =
           CollectionUtils.getMatches(defendingUnits, Matches.unitIsAaForAnything().negate());
       final ProBattleResult result =
-          calc.calculateBattleResults(
+          calc.estimateDefendBattleResults(
               proData,
               t,
               enemyAttackingUnits,
@@ -2129,7 +2129,7 @@ class ProNonCombatMoveAi {
         final Collection<Unit> defendingUnits = proTerritory.getAllDefenders();
         defendingUnits.add(u);
         proTerritory.setBattleResultIfNull(
-            () -> calc.calculateBattleResults(proData, proTerritory, defendingUnits));
+            () -> calc.estimateAttackBattleResults(proData, proTerritory, defendingUnits));
         final ProBattleResult result = proTerritory.getBattleResult();
         ProLogger.trace(
             String.format(
@@ -2149,7 +2149,7 @@ class ProNonCombatMoveAi {
         final List<Unit> myDefenders =
             CollectionUtils.getMatches(defendingUnits, Matches.unitIsOwnedBy(player));
         final ProBattleResult result2 =
-            calc.calculateBattleResults(proData, proTerritory, myDefenders);
+            calc.estimateDefendBattleResults(proData, proTerritory, myDefenders);
         int cantHoldWithoutAllies = 0;
         if (result2.getWinPercentage() >= proData.getMinWinPercentage()
             || result2.getTuvSwing() > 0) {

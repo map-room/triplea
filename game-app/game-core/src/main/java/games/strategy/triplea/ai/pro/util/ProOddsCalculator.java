@@ -108,6 +108,16 @@ public class ProOddsCalculator {
         proTerritory.getMaxEnemyBombardUnits());
   }
 
+  public ProBattleResult estimateAttackBattleResults(
+      final ProData proData, final ProTerritory proTerritory, final Collection<Unit> defenders) {
+    return estimateAttackBattleResults(
+        proData,
+        proTerritory.getTerritory(),
+        proTerritory.getMaxEnemyUnits(),
+        defenders,
+        proTerritory.getMaxEnemyBombardUnits());
+  }
+
   public ProBattleResult calculateBattleResultsNoSubmerge(
       final ProData proData,
       final Territory t,
