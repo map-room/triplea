@@ -303,10 +303,25 @@ public final class ProMoveUtils {
         // Set territory transport is moving to
         attackMap.get(t).getTransportTerritoryMap().put(transport, transportTerritory);
 
-        // Unload transport
+        // Unload transport — only if the transport reached an adjacent position.
+        // A closed canal (e.g. Turkish Straits when Turkey is neutral) can stop the
+        // transport short of its planned sea zone; in that case t is not a neighbour of
+        // transportTerritory and the unload route would be non-adjacent/invalid.
         if (!loadedUnits.isEmpty() && !t.isWater()) {
-          final Route route = new Route(transportTerritory, t);
-          moves.addMove(loadedUnits, route);
+          if (map.getNeighbors(transportTerritory).contains(t)) {
+            final Route route = new Route(transportTerritory, t);
+            moves.addMove(loadedUnits, route);
+          } else {
+            ProLogger.warn(
+                data.getSequence().getRound()
+                    + "-"
+                    + data.getSequence().getStep().getName()
+                    + ": skipping non-adjacent unload "
+                    + transportTerritory
+                    + " -> "
+                    + t
+                    + " (transport blocked before reaching planned sea zone)");
+          }
         }
       }
     }
