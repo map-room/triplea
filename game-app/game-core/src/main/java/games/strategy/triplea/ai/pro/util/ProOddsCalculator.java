@@ -15,14 +15,34 @@ import games.strategy.triplea.odds.calculator.AggregateResults;
 import games.strategy.triplea.odds.calculator.IBattleCalculator;
 import games.strategy.triplea.util.TuvUtils;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.triplea.java.collections.CollectionUtils;
 
 /** Pro AI odds calculator. */
 public class ProOddsCalculator {
 
+  /**
+   * Cache key for a single battle-calc invocation within one AI decision. Unit collections are
+   * reduced to UUID sets so repeated calls with the same logical armies hit the cache regardless of
+   * collection type or ordering.
+   */
+  private record BattleCalcKey(
+      Territory territory,
+      Set<UUID> attackerIds,
+      Set<UUID> defenderIds,
+      Set<UUID> bombardIds,
+      boolean checkSubmerge,
+      boolean retreatWhenOnlyAirLeft) {}
+
   private final IBattleCalculator calc;
   private boolean stopped = false;
+
+  /** Per-decision memoization cache; must be cleared at the start of each AI decision. */
+  private final HashMap<BattleCalcKey, ProBattleResult> decisionCache = new HashMap<>();
 
   public ProOddsCalculator(final IBattleCalculator calc) {
     this.calc = calc;
@@ -30,6 +50,11 @@ public class ProOddsCalculator {
 
   public void stop() {
     stopped = true;
+  }
+
+  /** Clears the per-decision battle-calc cache. Call once at the start of each AI decision. */
+  public void clearDecisionCache() {
+    decisionCache.clear();
   }
 
   /**
@@ -241,6 +266,20 @@ public class ProOddsCalculator {
       return new ProBattleResult();
     }
 
+    // Check per-decision cache before running expensive Monte Carlo simulations.
+    final BattleCalcKey cacheKey =
+        new BattleCalcKey(
+            t,
+            attackingUnits.stream().map(Unit::getId).collect(Collectors.toSet()),
+            defendingUnits.stream().map(Unit::getId).collect(Collectors.toSet()),
+            bombardingUnits.stream().map(Unit::getId).collect(Collectors.toSet()),
+            checkSubmerge,
+            retreatWhenOnlyAirLeft);
+    final ProBattleResult cached = decisionCache.get(cacheKey);
+    if (cached != null) {
+      return cached;
+    }
+
     final int minArmySize = Math.min(attackingUnits.size(), defendingUnits.size());
     final int runCount = Math.max(16, 100 - minArmySize);
     final GamePlayer attacker = CollectionUtils.getAny(attackingUnits).getOwner();
@@ -309,12 +348,15 @@ public class ProOddsCalculator {
     } else {
       hasLandUnitsRemaining = averageAttackersRemaining.stream().anyMatch(Matches.unitIsLand());
     }
-    return new ProBattleResult(
-        winPercentage,
-        tuvSwing,
-        hasLandUnitsRemaining,
-        averageAttackersRemaining,
-        averageDefendersRemaining,
-        results.getAverageBattleRoundsFought());
+    final ProBattleResult result =
+        new ProBattleResult(
+            winPercentage,
+            tuvSwing,
+            hasLandUnitsRemaining,
+            averageAttackersRemaining,
+            averageDefendersRemaining,
+            results.getAverageBattleRoundsFought());
+    decisionCache.put(cacheKey, result);
+    return result;
   }
 }
