@@ -299,8 +299,6 @@ public final class ProBattleUtils {
     }
     final int enemyDistance = Math.max(3, (landDistance + 1));
     final Set<Territory> nearbyTerritories = data.getMap().getNeighbors(t, enemyDistance);
-    final List<Territory> nearbyLandTerritories =
-        CollectionUtils.getMatches(nearbyTerritories, Matches.territoryIsLand());
     final Set<Territory> nearbyEnemySeaTerritories =
         data.getMap().getNeighbors(t, enemyDistance, Matches.territoryIsWater());
     nearbyEnemySeaTerritories.add(t);
@@ -319,10 +317,17 @@ public final class ProBattleUtils {
     }
     myUnits.addAll(alliedUnitsInSeaTerritories);
 
+    // Replaced rangeless nearbyLandTerritories scan: now checks each unit's actual movement
+    // range and includes carrier-borne air (the sea-unit loop's water-route filter excludes
+    // air units since they need air routes, not water routes). (#2575)
     final List<Unit> enemyUnitsInLandTerritories = new ArrayList<>();
-    for (final Territory nearbyLandTerritory : nearbyLandTerritories) {
-      enemyUnitsInLandTerritories.addAll(
-          nearbyLandTerritory.getMatches(ProMatches.unitIsEnemyAir(player)));
+    for (final Territory nearbyTerritory : nearbyTerritories) {
+      for (final Unit airUnit : nearbyTerritory.getMatches(ProMatches.unitIsEnemyAir(player))) {
+        final int unitRange = airUnit.getUnitAttachment().getMovement(airUnit.getOwner());
+        if (data.getMap().getNeighbors(nearbyTerritory, unitRange).contains(t)) {
+          enemyUnitsInLandTerritories.add(airUnit);
+        }
+      }
     }
     final Predicate<Unit> enemyNonLandUnit = ProMatches.unitIsEnemyNotLand(player);
     final List<Unit> enemyUnitsInSeaTerritories = new ArrayList<>();

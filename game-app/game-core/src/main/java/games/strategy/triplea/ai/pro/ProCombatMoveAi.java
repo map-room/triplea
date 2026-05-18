@@ -769,7 +769,9 @@ public class ProCombatMoveAi {
                     enemyAttackOptions.getMax(unloadTerritory).getMaxUnits(),
                     territoryTransportAndBombardMap.get(unloadTerritory),
                     List.of());
-            final double minTuvSwing = Math.min(result.getTuvSwing(), minResult.getTuvSwing());
+            // Use committed-defenders result (transport+bombard only); drop the Math.min
+            // optimism that assumed max defenders would materialize and help. (#2575)
+            final double minTuvSwing = minResult.getTuvSwing();
             if (minTuvSwing > 0) {
               enemyTuvSwing += minTuvSwing;
             }
@@ -803,7 +805,9 @@ public class ProCombatMoveAi {
             result.getTuvSwing()
                 + initialProductionAndIsCapital.production
                     * (1 + 3.0 * initialProductionAndIsCapital.isCapital);
-        if (!patd.isStrafing() && (0.75 * enemyTuvSwing) > attackValue) {
+        // Full expected loss — removed 0.75 discount that let high-value amphib attacks
+        // keep transports exposed too readily. (#2575)
+        if (!patd.isStrafing() && enemyTuvSwing > attackValue) {
           ProLogger.debug(
               "Removing amphib territory: "
                   + patd.getTerritory()

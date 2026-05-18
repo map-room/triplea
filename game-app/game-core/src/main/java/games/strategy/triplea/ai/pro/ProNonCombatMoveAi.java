@@ -1171,8 +1171,14 @@ class ProNonCombatMoveAi {
             unsafeTransports.add(transport);
           }
         }
+        // Include cargo so ProAI prices losing a loaded transport as hull + cargo, not hull only.
+        // TuvUtils.getTuv never expands transport.getTransporting(). (#2575)
+        final List<Unit> unsafeTransportAndCargo = new ArrayList<>(unsafeTransports);
+        for (final Unit transport : unsafeTransports) {
+          unsafeTransportAndCargo.addAll(transport.getTransporting());
+        }
         final int unsafeTransportValue =
-            TuvUtils.getTuv(unsafeTransports, proData.getUnitValueMap());
+            TuvUtils.getTuv(unsafeTransportAndCargo, proData.getUnitValueMap());
         final double holdValue =
             extraUnitValue / 8 * (1 + 0.5 * isFactory) * (1 + 2.0 * isMyCapital)
                 - unsafeTransportValue;
