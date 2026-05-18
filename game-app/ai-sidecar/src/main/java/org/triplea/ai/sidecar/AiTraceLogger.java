@@ -142,6 +142,43 @@ public final class AiTraceLogger {
         transportId);
   }
 
+  /**
+   * Log the purchase-budget reconciliation summary once per nation per purchase phase (#2576).
+   *
+   * <p>Grep anchor: {@code PURCHASE-BUDGET}. Paired with the bot-side {@code
+   * kind=purchase-budget-reconciliation} line, these two lines together reconstruct ProAI's plan vs
+   * the per-pool execution for any match/round/player.
+   *
+   * @param startPUs total resources before factory repair (== PUsRemaining at repair start)
+   * @param repairCost total IPC spent on factory repair this phase
+   * @param availableAfterRepair {@code startPUs - repairCost}
+   * @param plannedSpend sum of the populated production-rule map cost (pre-trim)
+   * @param overspend true when {@code plannedSpend > availableAfterRepair}
+   * @param overBy {@code max(0, plannedSpend - availableAfterRepair)}
+   */
+  public static void logPurchaseBudget(
+      final String nation,
+      final int startPUs,
+      final int repairCost,
+      final int availableAfterRepair,
+      final int plannedSpend,
+      final boolean overspend,
+      final int overBy) {
+    LOG.log(
+        System.Logger.Level.INFO,
+        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=purchase kind=PURCHASE-BUDGET"
+            + " startPUs={2} repairCost={3} availableAfterRepair={4}"
+            + " plannedSpend={5} overspend={6} overBy={7}",
+        currentMatchId(),
+        nation,
+        startPUs,
+        repairCost,
+        availableAfterRepair,
+        plannedSpend,
+        overspend,
+        overBy);
+  }
+
   /** Log a single purchase order (call once per order in the trimmed plan). */
   public static void logPurchaseOrder(final String nation, final String unitType, final int count) {
     LOG.log(

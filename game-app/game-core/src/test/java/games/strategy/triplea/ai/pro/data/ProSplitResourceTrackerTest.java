@@ -142,4 +142,15 @@ final class ProSplitResourceTrackerTest {
     assertThat(s).contains("europe");
     assertThat(s).contains("pacific");
   }
+
+  @Test
+  void toStringProducesSingleLineWithActualPuValues() {
+    // Fix #2576: toString() must not embed IntegerMap.toString() newlines — each pool must show
+    // its actual PU amount so the line is usable in structured logs.
+    final ProSplitResourceTracker t = new ProSplitResourceTracker(33, 17, poolByTerritory, data);
+    final String s = t.toString();
+    assertThat(s).doesNotContain("\n");
+    assertThat(s).contains("33");
+    assertThat(s).contains("17");
+  }
 }

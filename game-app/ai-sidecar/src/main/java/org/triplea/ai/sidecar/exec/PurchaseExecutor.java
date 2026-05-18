@@ -173,6 +173,21 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     }
     final List<RepairOrder> repairs = toRepairOrders(recorder.capturedRepair(), data);
 
+    // Emit PURCHASE-BUDGET reconciliation line (#2576). Uses pre-trim capturedPurchase so
+    // plannedSpend reflects ProAI's actual plan, not the trim-to-fit backstop output.
+    final int repairCost = totalRepairCost(recorder.capturedRepair(), pus);
+    final int availableAfterRepair = pusToSpend - repairCost;
+    final int plannedSpend = totalPuCost(recorder.capturedPurchase(), pus);
+    final int overBy = Math.max(0, plannedSpend - availableAfterRepair);
+    AiTraceLogger.logPurchaseBudget(
+        player.getName(),
+        pusToSpend,
+        repairCost,
+        availableAfterRepair,
+        plannedSpend,
+        overBy > 0,
+        overBy);
+
     final List<PoliticalActionAttachment> storedActions = proAi.getStoredPoliticalActions();
     final List<WarDeclaration> politicalActions;
     if (storedActions != null && !storedActions.isEmpty()) {
@@ -272,6 +287,17 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     int sum = 0;
     for (final ProductionRule rule : map.keySet()) {
       sum += rule.getCosts().getInt(pus) * map.getInt(rule);
+    }
+    return sum;
+  }
+
+  private static int totalRepairCost(
+      final Map<Unit, IntegerMap<RepairRule>> repairMap, final Resource pus) {
+    int sum = 0;
+    for (final IntegerMap<RepairRule> ruleMap : repairMap.values()) {
+      for (final RepairRule rule : ruleMap.keySet()) {
+        sum += rule.getCosts().getInt(pus) * ruleMap.getInt(rule);
+      }
     }
     return sum;
   }
