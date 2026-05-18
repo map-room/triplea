@@ -355,6 +355,56 @@ class AiTraceLoggerTest {
     assertThat(AiTraceLogger.scrambleReason(List.of(f1, f2), List.of(f1, f2))).isEqualTo("all");
   }
 
+  // ---------------------------------------------------------------------------
+  // purchase-budget reconciliation (#2576)
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void logPurchaseBudget_normalScenario_emitsLineWithOverspendFalse() {
+    AiTraceLogger.setMatchId("match-pb-001");
+    final AiTraceCapture cap = AiTraceCapture.attach();
+    try {
+      // startPUs=40, repairCost=7, available=33, plannedSpend=30 → no overspend
+      AiTraceLogger.logPurchaseBudget("Germans", 40, 7, 33, 30, false, 0);
+    } finally {
+      cap.detach();
+    }
+
+    assertThat(cap.formatted()).hasSize(1);
+    assertThat(cap.formatted().get(0))
+        .startsWith("[AI-TRACE] matchID=match-pb-001 side=sidecar nation=Germans")
+        .contains("phase=purchase kind=PURCHASE-BUDGET")
+        .contains("startPUs=40")
+        .contains("repairCost=7")
+        .contains("availableAfterRepair=33")
+        .contains("plannedSpend=30")
+        .contains("overspend=false")
+        .contains("overBy=0");
+  }
+
+  @Test
+  void logPurchaseBudget_overBudgetScenario_emitsLineWithOverspendTrue() {
+    AiTraceLogger.setMatchId("match-pb-002");
+    final AiTraceCapture cap = AiTraceCapture.attach();
+    try {
+      // startPUs=40, repairCost=7, available=33, plannedSpend=46 → overBy=13
+      AiTraceLogger.logPurchaseBudget("British", 40, 7, 33, 46, true, 13);
+    } finally {
+      cap.detach();
+    }
+
+    assertThat(cap.formatted()).hasSize(1);
+    assertThat(cap.formatted().get(0))
+        .startsWith("[AI-TRACE] matchID=match-pb-002 side=sidecar nation=British")
+        .contains("phase=purchase kind=PURCHASE-BUDGET")
+        .contains("startPUs=40")
+        .contains("repairCost=7")
+        .contains("availableAfterRepair=33")
+        .contains("plannedSpend=46")
+        .contains("overspend=true")
+        .contains("overBy=13");
+  }
+
   @Test
   void logScrambleDecision_emitsLineWithExpectedKeysAndMatchId() {
     final var gd = canonical.cloneForSession();

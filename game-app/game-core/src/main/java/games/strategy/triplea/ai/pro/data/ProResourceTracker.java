@@ -97,7 +97,17 @@ public class ProResourceTracker {
 
   @Override
   public String toString() {
-    return getRemaining().toString().replaceAll("\n", " ");
+    // Render as "Resource=N ..." — IntegerMap.toString() is multi-line and breaks structured log
+    // lines when embedded verbatim. (#2576)
+    final IntegerMap<Resource> remaining = getRemaining();
+    final StringBuilder sb = new StringBuilder();
+    for (final Resource r : remaining.keySet()) {
+      if (sb.length() > 0) {
+        sb.append(' ');
+      }
+      sb.append(r.getName()).append('=').append(remaining.getInt(r));
+    }
+    return sb.isEmpty() ? "empty" : sb.toString();
   }
 
   private IntegerMap<Resource> getRemaining() {

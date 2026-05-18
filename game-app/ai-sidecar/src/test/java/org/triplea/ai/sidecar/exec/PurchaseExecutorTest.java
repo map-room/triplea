@@ -18,6 +18,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
+import org.triplea.ai.sidecar.AiTraceCapture;
 import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.dto.PlacementGroup;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
@@ -283,6 +284,45 @@ class PurchaseExecutorTest {
     // Both fields together must be non-empty — Germans always have moves on turn 1.
     final int totalMoves = plan.combatMoves().size() + plan.sbrMoves().size();
     assertThat(totalMoves).as("combined combat + sbr moves must be non-empty").isGreaterThan(0);
+  }
+
+  /**
+   * Real-state integration test for the PURCHASE-BUDGET structured log (#2576). Verifies that
+   * exactly one {@code kind=PURCHASE-BUDGET} line is emitted per purchase run, with all required
+   * fields present and arithmetically consistent: {@code availableAfterRepair == startPUs -
+   * repairCost} and {@code overspend=false} for a turn-1 Germans plan (no factory damage, ample
+   * budget).
+   */
+  @Test
+  void purchaseBudgetLineEmittedOnceWithConsistentFieldsForNormalRun() {
+    final GameData data = canonical.cloneForSession();
+    final Resource pus = data.getResourceList().getResourceOrThrow(Constants.PUS);
+    final int startPUs =
+        data.getPlayerList().getPlayerId("Germans").getResources().getQuantity(pus);
+
+    final AiTraceCapture cap = AiTraceCapture.attach();
+    try {
+      new PurchaseExecutor().executeOn(data, purchaseRequestFor("Germans"));
+    } finally {
+      cap.detach();
+    }
+
+    final List<String> budgetLines =
+        cap.formatted().stream().filter(l -> l.contains("kind=PURCHASE-BUDGET")).toList();
+    assertThat(budgetLines)
+        .as("exactly one PURCHASE-BUDGET line must be emitted per purchase run")
+        .hasSize(1);
+
+    final String line = budgetLines.get(0);
+    assertThat(line).contains("side=sidecar");
+    assertThat(line).contains("nation=Germans");
+    assertThat(line).contains("phase=purchase");
+    assertThat(line).contains("startPUs=" + startPUs);
+    // Turn-1 Germans: no factory damage, so repairCost must be 0.
+    assertThat(line).contains("repairCost=0");
+    assertThat(line).contains("availableAfterRepair=" + startPUs);
+    // No overspend on a normal turn-1 Germans run.
+    assertThat(line).contains("overspend=false").contains("overBy=0");
   }
 
   /**

@@ -127,7 +127,12 @@ public class ProSplitResourceTracker extends ProResourceTracker {
 
   @Override
   public String toString() {
-    return "europe=" + poolRemaining(Pool.EUROPE) + " pacific=" + poolRemaining(Pool.PACIFIC);
+    // Extract int values directly — IntegerMap.toString() is multi-line and breaks structured log
+    // lines when embedded verbatim. (#2576)
+    return "europe="
+        + poolRemaining(Pool.EUROPE).getInt(pusResource)
+        + " pacific="
+        + poolRemaining(Pool.PACIFIC).getInt(pusResource);
   }
 
   // --- Helpers ---
