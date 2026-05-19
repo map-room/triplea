@@ -12,6 +12,7 @@ import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.triplea.attachments.TechAttachment;
+import games.strategy.triplea.attachments.TerritoryAttachment;
 import games.strategy.triplea.delegate.battle.BattleDelegate;
 import games.strategy.triplea.delegate.battle.BattleTracker;
 import java.lang.System.Logger;
@@ -94,10 +95,45 @@ public final class WireStateApplier {
     applyConqueredThisTurn(gameData, wire);
     applyOperationalDamage(gameData, wire, unitIdMap);
     applyUnitProperties(gameData, wire, unitIdMap);
+    // Bonus production from national objectives and victory cities. Runs after the main
+    // CompositeChange so territory ownership is live when we read TerritoryAttachment.
+    applyProductionBonuses(gameData, wire);
     // Round/step last — GameSequence mutation has no interaction with the earlier branches,
     // but keeping it at the tail means nothing downstream can overwrite it.
     applyRoundAndStep(gameData, wire);
     WireStateVerifier.verifyApply(gameData, wire, unitIdMap);
+  }
+
+  /**
+   * Apply {@code bonusProduction} from the wire to each territory's {@link TerritoryAttachment}.
+   * When present, the bonus is added to the territory's current static production value so that
+   * ProAI territory-selection weighs national-objective clusters and victory cities more heavily.
+   *
+   * <p>Each AI request operates on a freshly cloned {@link GameData} (see {@code
+   * ExecutorSupport.cloneForSession}), so there is no need to reset the production value between
+   * calls — the next request starts from the canonical unmodified clone.
+   */
+  private static void applyProductionBonuses(final GameData gameData, final WireState wire) {
+    final CompositeChange changes = new CompositeChange();
+    for (final WireTerritory wt : wire.territories()) {
+      if (wt.bonusProduction() == null || wt.bonusProduction() <= 0) {
+        continue;
+      }
+      final Territory t = gameData.getMap().getTerritoryOrNull(wt.territoryId());
+      if (t == null) {
+        continue;
+      }
+      final TerritoryAttachment ta = TerritoryAttachment.get(t).orElse(null);
+      if (ta == null) {
+        continue;
+      }
+      final int newProduction = ta.getProduction() + wt.bonusProduction();
+      changes.add(
+          ChangeFactory.attachmentPropertyChange(ta, String.valueOf(newProduction), "production"));
+    }
+    if (!changes.isEmpty()) {
+      gameData.performChange(changes);
+    }
   }
 
   /**
