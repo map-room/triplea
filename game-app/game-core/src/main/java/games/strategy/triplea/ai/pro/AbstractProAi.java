@@ -207,6 +207,24 @@ public abstract class AbstractProAi extends AbstractAi {
   }
 
   /**
+   * Deducts factory-repair PU costs from {@link #britishEuropePus} or {@link #britishPacificPus}
+   * according to the pool each repaired territory maps to. Must be called after {@link
+   * ProPurchaseAi#repair} and before {@link #createResourceTracker} so the split tracker is seeded
+   * with post-repair balances (#2608).
+   */
+  private void deductRepairsFromBritishPools(final Map<Territory, Integer> repairCostByTerritory) {
+    for (final Map.Entry<Territory, Integer> entry : repairCostByTerritory.entrySet()) {
+      final ProSplitResourceTracker.Pool pool =
+          britishPoolByTerritory.getOrDefault(entry.getKey(), ProSplitResourceTracker.Pool.EUROPE);
+      if (pool == ProSplitResourceTracker.Pool.EUROPE) {
+        britishEuropePus -= entry.getValue();
+      } else {
+        britishPacificPus -= entry.getValue();
+      }
+    }
+  }
+
+  /**
    * Some implementations of {@link IBattleCalculator} do require setting a GameData instance before
    * actually being able to run properly. This method should take care of that.
    */
@@ -269,8 +287,15 @@ public abstract class AbstractProAi extends AbstractAi {
       prepareData(data);
       storedPurchaseTerritories = purchaseAi.bid(pusToSpend, purchaseDelegate, data);
     } else {
-      // Repair factories
-      purchaseAi.repair(pusToSpend, purchaseDelegate, data, player);
+      // Repair factories; deduct from the British split pools so createResourceTracker() seeds
+      // the correct per-pool budget (#2608 — repair PUs were charged to a pool-mapped territory
+      // but britishEuropePus/britishPacificPus were never decremented, causing the planner to
+      // over-allocate the europe pool).
+      final Map<Territory, Integer> repairCostByTerritory =
+          purchaseAi.repair(pusToSpend, purchaseDelegate, data, player);
+      if (britishSplitEconomyActive && "British".equals(player.getName())) {
+        deductRepairsFromBritishPools(repairCostByTerritory);
+      }
 
       // Check if any place territories exist
       final Map<Territory, ProPurchaseTerritory> purchaseTerritories =

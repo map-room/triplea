@@ -73,13 +73,21 @@ class ProPurchaseAi {
     this.proData = ai.getProData();
   }
 
-  void repair(
+  /**
+   * Repairs all damaged friendly factories and returns the PU cost charged per territory. The
+   * returned map is used by the caller to deduct repair spending from per-pool budgets (e.g.,
+   * {@link AbstractProAi#deductRepairsFromBritishPools}) before the resource tracker is seeded.
+   * Returns an empty map when repairs are disabled or no factories needed repair.
+   */
+  Map<Territory, Integer> repair(
       final int initialPusRemaining,
       final IPurchaseDelegate purchaseDelegate,
       final GameData data,
       final GamePlayer player) {
     int pusRemaining = initialPusRemaining;
     ProLogger.info("Repairing factories with PUsRemaining=" + pusRemaining);
+
+    final Map<Territory, Integer> repairCostByTerritory = new HashMap<>();
 
     // Current data at the start of combat move
     this.data = data;
@@ -120,9 +128,10 @@ class ProPurchaseAi {
           if (fixUnit == null || !fixUnit.getType().equals(repairRule.getAnyResultKey())) {
             continue;
           }
+          final Territory fixTerr = unitsThatCanProduceNeedingRepair.get(fixUnit);
           if (!Matches.territoryIsOwnedAndHasOwnedUnitMatching(
                   player, Matches.unitCanProduceUnitsAndCanBeDamaged())
-              .test(unitsThatCanProduceNeedingRepair.get(fixUnit))) {
+              .test(fixTerr)) {
             continue;
           }
           final int diff = fixUnit.getUnitDamage();
@@ -135,10 +144,12 @@ class ProPurchaseAi {
             ProLogger.debug(
                 "Repairing factory=" + fixUnit + ", damage=" + diff + ", repairRule=" + repairRule);
             purchaseDelegate.purchaseRepair(repair);
+            repairCostByTerritory.merge(fixTerr, diff, Integer::sum);
           }
         }
       }
     }
+    return repairCostByTerritory;
   }
 
   /**
