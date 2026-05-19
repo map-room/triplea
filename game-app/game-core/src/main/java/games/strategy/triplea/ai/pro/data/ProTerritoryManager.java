@@ -1078,6 +1078,15 @@ public class ProTerritoryManager {
             final Set<Territory> loadFromTerritories = new HashSet<>();
             if (!transport.getTransporting(transportTerritory).isEmpty()) {
               haveUnitsToTransport = true;
+              // Pre-loaded transport: cargo is already aboard from a prior round.
+              // Use 'from' (the current sea zone) as the load territory so that
+              // addTerritories(unloadTerritories, loadFromTerritories) produces a non-empty
+              // value set, preventing the entry from being pruned by
+              // transportMap.values().removeIf(Collection::isEmpty). The sea zone is also
+              // added to seaTransportMap so the downstream sea-staging check can match it.
+              // getUnitsToTransportFromTerritories ignores loadFromTerritories for pre-loaded
+              // transports (it returns transport.getTransporting() early) so this is safe.
+              loadFromTerritories.add(from);
             } else if (Matches.territoryHasEnemySeaUnits(player).negate().test(from)) {
               int capacity = transport.getUnitAttachment().getTransportCapacity();
               Predicate<Unit> canFitOnTransport =
