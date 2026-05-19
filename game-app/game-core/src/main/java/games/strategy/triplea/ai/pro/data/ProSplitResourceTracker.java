@@ -135,6 +135,13 @@ public class ProSplitResourceTracker extends ProResourceTracker {
         + poolRemaining(Pool.PACIFIC).getInt(pusResource);
   }
 
+  // --- Numeric accessors ---
+
+  /** Returns the remaining PUs in the given pool (net of any pending temp purchases). */
+  public int poolPUs(final Pool pool) {
+    return poolRemaining(pool).getInt(pusResource);
+  }
+
   // --- Helpers ---
 
   private Pool poolFor(final Territory t) {
