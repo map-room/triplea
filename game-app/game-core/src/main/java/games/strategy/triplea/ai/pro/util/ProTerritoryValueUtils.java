@@ -326,6 +326,14 @@ public final class ProTerritoryValueUtils {
       value *= 1.1; // prefer territories with factories
     }
 
+    // Island territories (no land-accessible neighbors within 6 hops) produce value=0 from
+    // the proximity math regardless of their production, because all distance calculations
+    // use land-only routing. Apply a production-based floor so islands aren't silently zeroed
+    // in the hold-value map and discarded before amphibious planning considers them.
+    if (landMassSize == 1) {
+      value = Math.max(value, TerritoryAttachment.getProduction(t) * 0.5);
+    }
+
     return value;
   }
 
