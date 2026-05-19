@@ -2,7 +2,7 @@ package games.strategy.triplea.ai.pro;
 
 import static games.strategy.triplea.delegate.MockDelegateBridge.newDelegateBridge;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
 import games.strategy.engine.data.GameData;
@@ -11,7 +11,6 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.delegate.IDelegateBridge;
 import games.strategy.engine.player.PlayerBridge;
-import games.strategy.triplea.ai.pro.data.ProResourceTracker;
 import games.strategy.triplea.ai.pro.data.ProSplitResourceTracker;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.PurchaseDelegate;
@@ -115,9 +114,11 @@ public class ProPurchaseAiSplitEconomyTest {
     // was called, so a new tracker seeded from britishEuropePus shows europe=0.
     // Without the fix: britishEuropePus would still equal repairCost and the tracker would show
     // europe=6, meaning the planner incorrectly believed it had 6 more PUs to spend on europe buys.
-    final ProResourceTracker tracker = proAi.createResourceTracker(british, gameData);
-    assertTrue(
-        tracker.toString().contains("europe=0"),
+    final ProSplitResourceTracker tracker =
+        (ProSplitResourceTracker) proAi.createResourceTracker(british, gameData);
+    assertEquals(
+        0,
+        tracker.poolPUs(ProSplitResourceTracker.Pool.EUROPE),
         "Expected europe pool to be 0 after repair deduction, but got: " + tracker);
   }
 }
