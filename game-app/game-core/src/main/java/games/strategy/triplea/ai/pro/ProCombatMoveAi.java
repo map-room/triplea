@@ -178,6 +178,15 @@ public class ProCombatMoveAi {
 
     ProLogger.info("Prioritizing territories to try to attack");
 
+    // If every available attack option requires amphib units the player has no overland
+    // alternative this round — suppress the amphib penalty so the planner values these
+    // attacks on the same footing as equivalent land attacks. This naturally covers island
+    // powers (US, UK, Japan in G40) without hard-coding player names or map geography.
+    final boolean isIslandPower =
+        !attackOptions.isEmpty()
+            && attackOptions.stream().allMatch(ProTerritory::isNeedAmphibUnits);
+    ProLogger.debug("Player has no land alternative (island-power mode): " + isIslandPower);
+
     // Calculate value of attacking territory
     for (final Iterator<ProTerritory> it = attackOptions.iterator(); it.hasNext(); ) {
       final ProTerritory patd = it.next();
@@ -192,7 +201,9 @@ public class ProCombatMoveAi {
           CollectionUtils.getMatches(
               patd.getMaxEnemyDefenders(player), ProMatches.unitIsEnemyAndNotInfa(player));
       final int isEmptyLand =
-          (!t.isWater() && defendingUnits.isEmpty() && !patd.isNeedAmphibUnits()) ? 1 : 0;
+          (!t.isWater() && defendingUnits.isEmpty() && (!patd.isNeedAmphibUnits() || isIslandPower))
+              ? 1
+              : 0;
       final boolean isAdjacentToMyCapital =
           !data.getMap().getNeighbors(t, Matches.territoryIs(proData.getMyCapital())).isEmpty();
       final int isNotNeutralAdjacentToMyCapital =
@@ -215,7 +226,7 @@ public class ProCombatMoveAi {
           (1 + isLand + isCanHold * (1 + 2.0 * isFfa * isLand))
               * (1 + isEmptyLand)
               * (1 + isFactory)
-              * (1 - 0.5 * isAmphib)
+              * (isIslandPower ? 1.0 : (1 - 0.5 * isAmphib))
               * productionAndIsCapital.production;
       double attackValue =
           (tuvSwing + territoryValue)
