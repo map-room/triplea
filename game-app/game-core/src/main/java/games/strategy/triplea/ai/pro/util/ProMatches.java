@@ -187,6 +187,18 @@ public final class ProMatches {
           && Matches.isTerritoryEnemyAndNotUnownedWater(player).test(t)) {
         return false;
       }
+      // US-Japan neutrality restriction (Global 1940): while neutral with Japan, US sea units
+      // cannot enter sea zones adjacent to Japanese-controlled territories.
+      // Mirrors engine movement-validator.ts getUSNeutralityRestriction Rule 1.
+      if (t.isWater() && player.getName().equals("Americans")) {
+        final GamePlayer japanese = player.getData().getPlayerList().getPlayerId("Japanese");
+        if (japanese != null && !player.isAllied(japanese) && !player.isAtWar(japanese)) {
+          if (player.getData().getMap().getNeighbors(t).stream()
+              .anyMatch(adj -> !adj.isWater() && adj.isOwnedBy(japanese))) {
+            return false;
+          }
+        }
+      }
       final Predicate<Territory> match =
           Matches.territoryDoesNotCostMoneyToEnter(properties)
               .and(
