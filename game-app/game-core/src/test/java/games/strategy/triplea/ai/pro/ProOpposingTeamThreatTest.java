@@ -56,7 +56,6 @@ public class ProOpposingTeamThreatTest {
 
   private static final String WESTERN_GERMANY = "Western Germany";
   private static final String SEA_ZONE_112 = "112 Sea Zone";
-  private static final String UNITED_KINGDOM = "United Kingdom";
 
   private GameData data;
   private GamePlayer americans;

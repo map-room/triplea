@@ -1,6 +1,9 @@
 package games.strategy.triplea.ai.pro;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
@@ -18,7 +21,6 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 
 /**
@@ -192,13 +194,13 @@ public class ProNeutralCascadeTest {
 
   private List<MoveDescription> runCombatMoveFor(final GamePlayer player) {
     final ProAi proAi = new ProAi("Test " + player.getName(), player.getName() + " AI");
-    final PlayerBridge playerBridgeMock = Mockito.mock(PlayerBridge.class);
+    final PlayerBridge playerBridgeMock = mock(PlayerBridge.class);
     proAi.initialize(playerBridgeMock, player);
-    Mockito.when(playerBridgeMock.getGameData()).thenReturn(data);
+    when(playerBridgeMock.getGameData()).thenReturn(data);
 
     final List<MoveDescription> dispatched = new ArrayList<>();
-    final IMoveDelegate moveDelegate = Mockito.mock(IMoveDelegate.class);
-    Mockito.when(moveDelegate.performMove(Mockito.any()))
+    final IMoveDelegate moveDelegate = mock(IMoveDelegate.class);
+    when(moveDelegate.performMove(any()))
         .then(
             inv -> {
               dispatched.add(inv.getArgument(0));
