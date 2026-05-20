@@ -63,6 +63,38 @@ public final class ProUtils {
     return players;
   }
 
+  /**
+   * Returns the players on the opposing team to {@code player} in turn order.
+   *
+   * <p>A refinement of {@link #getEnemyPlayersInTurnOrder}: any non-allied player who is also at
+   * war with one of {@code player}'s declared enemies is on the <em>same</em> side — they share a
+   * common enemy — and is therefore excluded from the opposing team.
+   *
+   * <p>Example (G40 round 2): Americans at war with Germany. British is also at war with Germany.
+   * British shares Germany as an enemy with Americans → British is excluded from Americans'
+   * opposing team even though politics has not yet made them formally allied.
+   *
+   * <p>Neutral players (e.g. G40 Pirates, who are at war with everyone) are excluded from the
+   * shared-enemy reference set so they do not poison the team detection and cause all candidates to
+   * be removed.
+   *
+   * <p>When {@code player} has no non-neutral declared enemies the result falls back to the full
+   * non-allied list — without a meaningful common reference point team membership is indeterminate.
+   */
+  public static List<GamePlayer> getOpposingTeamPlayersInTurnOrder(final GamePlayer player) {
+    final var rt = player.getData().getRelationshipTracker();
+    final List<GamePlayer> candidates = getEnemyPlayersInTurnOrder(player);
+    // Exclude universal-hostility players (e.g. Pirates) that are at war with everyone: their
+    // presence in myEnemies would cause every candidate to be removed.
+    final Set<GamePlayer> myEnemies =
+        rt.getEnemies(player).stream().filter(e -> !isNeutralPlayer(e)).collect(Collectors.toSet());
+    if (myEnemies.isEmpty()) {
+      return candidates;
+    }
+    candidates.removeIf(p -> rt.isAtWarWithAnyOfThesePlayers(p, myEnemies));
+    return candidates;
+  }
+
   public static boolean isPlayersTurnFirst(
       final List<GamePlayer> playersInOrder, final GamePlayer player1, final GamePlayer player2) {
     for (final GamePlayer p : playersInOrder) {

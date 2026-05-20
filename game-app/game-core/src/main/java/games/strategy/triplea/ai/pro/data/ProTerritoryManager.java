@@ -511,8 +511,10 @@ public class ProTerritoryManager {
       final Collection<Territory> territoriesToCheck) {
     final GameState data = proData.getData();
 
-    // Get enemy players in order of turn
-    final List<GamePlayer> enemyPlayers = ProUtils.getEnemyPlayersInTurnOrder(player);
+    // Get opposing-team players in order of turn, excluding future-ally players who happen to
+    // share a declared enemy with the current player (e.g. British when assessing threats to
+    // American amphib staging zones).
+    final List<GamePlayer> enemyPlayers = ProUtils.getOpposingTeamPlayersInTurnOrder(player);
     final List<Map<Territory, ProTerritory>> enemyAttackMaps = new ArrayList<>();
     final Set<Territory> alliedTerritories = new HashSet<>();
     final List<Territory> enemyTerritories = new ArrayList<>(clearedTerritories);
@@ -677,8 +679,9 @@ public class ProTerritoryManager {
       final ProData proData, final GamePlayer player) {
     final GameState data = proData.getData();
 
-    // Get enemy players in order of turn
-    final List<GamePlayer> enemyPlayers = ProUtils.getEnemyPlayersInTurnOrder(player);
+    // Use opposing-team detection (same fix as findEnemyAttackOptions) so future-ally units
+    // don't inflate enemy defend estimates.
+    final List<GamePlayer> enemyPlayers = ProUtils.getOpposingTeamPlayersInTurnOrder(player);
     final List<Map<Territory, ProTerritory>> enemyMoveMaps = new ArrayList<>();
     final List<Territory> clearedTerritories =
         CollectionUtils.getMatches(
