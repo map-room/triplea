@@ -29,6 +29,29 @@ import org.triplea.java.collections.CollectionUtils;
 public final class ProTerritoryValueUtils {
   static final int MIN_FACTORY_CHECK_DISTANCE = 9;
 
+  /** Bonus added to territory value when an airfield is present. */
+  public static final double AIRFIELD_BONUS = 5.0;
+
+  /** Bonus added to territory value when a naval base is present. */
+  public static final double NAVAL_BASE_BONUS = 5.0;
+
+  // G40 represents bases as placed units: airfield (isAirBase=true) and harbour (givesMovement).
+  // TerritoryAttachment.hasAirBase/hasNavalBase cover maps that use territory-attribute flags
+  // instead, so we check both to be game-agnostic.
+  private static boolean territoryHasAirBase(final Territory t) {
+    return TerritoryAttachment.hasAirBase(t)
+        || t.getUnits().stream().anyMatch(Matches.unitIsAirBase());
+  }
+
+  private static boolean territoryHasNavalBase(final Territory t) {
+    return TerritoryAttachment.hasNavalBase(t)
+        // Airfields also have givesMovement (to air units); exclude them so we match only
+        // harbour-type units that give movement to naval units.
+        || t.getUnits().stream()
+            .filter(Matches.unitIsAirBase().negate())
+            .anyMatch(u -> !u.getUnitAttachment().getGivesMovement().isEmpty());
+  }
+
   /**
    * Returns the relative value of attacking the specified territory compared to other territories.
    */
@@ -37,6 +60,12 @@ public final class ProTerritoryValueUtils {
     final int isEnemyFactory =
         ProMatches.territoryHasInfraFactoryAndIsEnemyLand(player).test(t) ? 1 : 0;
     double value = 3.0 * TerritoryAttachment.getProduction(t) * (isEnemyFactory + 1);
+    if (territoryHasAirBase(t)) {
+      value += AIRFIELD_BONUS;
+    }
+    if (territoryHasNavalBase(t)) {
+      value += NAVAL_BASE_BONUS;
+    }
     if (ProUtils.isNeutralLand(t)) {
       final double strength =
           ProBattleUtils.estimateStrength(
@@ -332,6 +361,17 @@ public final class ProTerritoryValueUtils {
     // in the hold-value map and discarded before amphibious planning considers them.
     if (landMassSize == 1) {
       value = Math.max(value, TerritoryAttachment.getProduction(t) * 0.5);
+    }
+
+    // Prefer base-bearing territories: airfields extend fighter/bomber range; naval bases
+    // extend fleet range and enable faster repairs. A 5-IPC bonus makes these competitive
+    // with a modest production-territory advantage without overriding a substantially richer
+    // industrial target.
+    if (territoryHasAirBase(t)) {
+      value += AIRFIELD_BONUS;
+    }
+    if (territoryHasNavalBase(t)) {
+      value += NAVAL_BASE_BONUS;
     }
 
     return value;
