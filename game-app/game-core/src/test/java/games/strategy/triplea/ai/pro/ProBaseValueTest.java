@@ -15,26 +15,30 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Regression tests for #2633: ProTerritoryValueUtils ignores airfields and naval bases.
+ * Regression tests for #2633 (base detection) and calibration fix in #2637.
  *
- * <p>Root cause: {@code findTerritoryAttackValue} and {@code findLandValue} used only IPC
- * production to score territories, ignoring the strategic value of airfields (extend fighter/bomber
- * range) and naval bases (extend fleet range, enable repairs). This caused the planner to
- * deprioritise or discard base-bearing islands entirely.
+ * <p>#2633 root cause: {@code findTerritoryAttackValue} and {@code findLandValue} ignored airfields
+ * and naval bases, causing the planner to deprioritise base-bearing islands entirely.
  *
- * <p>Fix: add {@code AIRFIELD_BONUS = 5.0} and {@code NAVAL_BASE_BONUS = 5.0} to both value
- * functions. Bases are detected via unit presence ({@code UnitAttachment.isAirBase()} for
- * airfields; non-empty {@code UnitAttachment.getGivesMovement()} for harbours), covering the G40
- * unit-model and also maps that use territory-attachment flags.
+ * <p>#2637 calibration: bonuses reduced from 5.0 → 2.0 each and gated behind a production threshold
+ * ({@code production ≤ 1}). At 5.0 the bonuses added noise to higher-IPC mainland scoring; the gate
+ * restricts them to marginal low-IPC territories where base presence is the primary discriminator.
  *
- * <p>Test anchor: G40 Pacific island cluster.
+ * <p>All three formula call sites share a single helper {@link
+ * ProTerritoryValueUtils#computeBaseBonus} so gate logic and constants stay in sync.
+ *
+ * <p>Test anchor: G40 Pacific island cluster + mainland sanity checks.
  *
  * <ul>
- *   <li>Midway: production=0, airfield only → value=5 (bonus exceeds Iwo Jima production=1,
- *       value=3)
- *   <li>Caroline Islands: production=0, airfield + harbour → value=10 (bonus well above Iwo Jima)
- *   <li>Borneo: production=4, no base → value=12 (substantially higher IPC still wins over Caroline
- *       Islands=10 — base is a nudge, not an override)
+ *   <li>Midway (prod=0, airfield): base contribution = 2.0
+ *   <li>Caroline Islands (prod=0, airfield + harbour): base contribution = 4.0
+ *   <li>Iwo Jima (prod=1, no base): base contribution = 0.0
+ *   <li>Hawaiian Islands (prod=1, airfield + harbour): base contribution = 4.0 (gate boundary —
+ *       prod=1 IS within threshold)
+ *   <li>Philippines (prod=2, airfield + harbour): base contribution = 0.0 (gate boundary — prod=2
+ *       EXCEEDS threshold)
+ *   <li>Eastern United States (prod=20, airfield + harbour): base contribution = 0.0 (high-IPC
+ *       mainland)
  * </ul>
  */
 public class ProBaseValueTest {
@@ -43,6 +47,9 @@ public class ProBaseValueTest {
   private static final String IWO_JIMA = "Iwo Jima";
   private static final String MIDWAY = "Midway";
   private static final String BORNEO = "Borneo";
+  private static final String HAWAIIAN_ISLANDS = "Hawaiian Islands";
+  private static final String PHILIPPINES = "Philippines";
+  private static final String EASTERN_UNITED_STATES = "Eastern United States";
 
   private GameData data;
   private GamePlayer americans;
@@ -56,58 +63,102 @@ public class ProBaseValueTest {
   }
 
   /**
-   * Acceptance criterion 1: airfield bonus must outweigh a modest production advantage.
+   * Midway (prod=0, airfield only) → base contribution = AIRFIELD_BONUS = 2.0.
    *
-   * <p>Midway (production=0, airfield) → {@code findTerritoryAttackValue} = 5.0 Iwo Jima
-   * (production=1, no base) → {@code findTerritoryAttackValue} = 3.0 Midway must score higher.
+   * <p>Attack value = 3×prod×factory_mult + baseBonus = 0 + 2.0 = 2.0.
    */
   @Test
-  void airfieldBonusOutweighsLowerProduction() {
+  void midwayBaseContributionMatchesAirfieldBonus() {
     final Territory midway = data.getMap().getTerritoryOrThrow(MIDWAY);
-    final Territory iwoJima = data.getMap().getTerritoryOrThrow(IWO_JIMA);
 
-    final double midwayValue =
-        ProTerritoryValueUtils.findTerritoryAttackValue(proData, americans, midway);
-    final double iwoJimaValue =
-        ProTerritoryValueUtils.findTerritoryAttackValue(proData, americans, iwoJima);
+    assertThat(ProTerritoryValueUtils.computeBaseBonus(midway))
+        .as("Midway (prod=0, airfield) base contribution must equal AIRFIELD_BONUS")
+        .isEqualTo(ProTerritoryValueUtils.AIRFIELD_BONUS);
 
-    assertThat(midwayValue)
-        .as("Midway (airfield, prod=0) must outvalue Iwo Jima (no base, prod=1)")
-        .isGreaterThan(iwoJimaValue);
-    assertThat(midwayValue)
-        .as("Midway attack value must include the AIRFIELD_BONUS")
+    assertThat(ProTerritoryValueUtils.findTerritoryAttackValue(proData, americans, midway))
+        .as("Midway attack value = 0 (prod) + AIRFIELD_BONUS (base)")
         .isEqualTo(ProTerritoryValueUtils.AIRFIELD_BONUS);
   }
 
   /**
-   * Acceptance criterion 2: both-base bonus must clearly outweigh a 1-production territory.
-   *
-   * <p>Caroline Islands (production=0, airfield + harbour) → value = 10.0 Iwo Jima (production=1,
-   * no base) → value = 3.0
+   * Caroline Islands (prod=0, airfield + harbour) → base contribution = AIRFIELD_BONUS +
+   * NAVAL_BASE_BONUS = 4.0.
    */
   @Test
-  void bothBasesBonusClearlyOutweighsLowProduction() {
+  void carolineIslandsBaseContributionMatchesBothBonuses() {
     final Territory carolineIslands = data.getMap().getTerritoryOrThrow(CAROLINE_ISLANDS);
+
+    assertThat(ProTerritoryValueUtils.computeBaseBonus(carolineIslands))
+        .as("Caroline Islands (prod=0, airfield+harbour) base contribution must equal both bonuses")
+        .isEqualTo(ProTerritoryValueUtils.AIRFIELD_BONUS + ProTerritoryValueUtils.NAVAL_BASE_BONUS);
+
+    assertThat(ProTerritoryValueUtils.findTerritoryAttackValue(proData, americans, carolineIslands))
+        .as("Caroline Islands attack value = 0 (prod) + AIRFIELD_BONUS + NAVAL_BASE_BONUS")
+        .isEqualTo(ProTerritoryValueUtils.AIRFIELD_BONUS + ProTerritoryValueUtils.NAVAL_BASE_BONUS);
+  }
+
+  /** Iwo Jima (prod=1, no base) → base contribution = 0. Attack value = 3.0. */
+  @Test
+  void iwoJimaHasNoBaseContribution() {
     final Territory iwoJima = data.getMap().getTerritoryOrThrow(IWO_JIMA);
 
-    final double carolineValue =
-        ProTerritoryValueUtils.findTerritoryAttackValue(proData, americans, carolineIslands);
-    final double iwoJimaValue =
-        ProTerritoryValueUtils.findTerritoryAttackValue(proData, americans, iwoJima);
+    assertThat(ProTerritoryValueUtils.computeBaseBonus(iwoJima))
+        .as("Iwo Jima (prod=1, no base) must have zero base contribution")
+        .isEqualTo(0.0);
+  }
 
-    assertThat(carolineValue)
-        .as("Caroline Islands (airfield+harbour, prod=0) must outscore Iwo Jima (no base, prod=1)")
-        .isGreaterThan(iwoJimaValue);
-    assertThat(carolineValue)
-        .as("Caroline Islands value must include both base bonuses")
+  /**
+   * Gate boundary (inclusive): Hawaiian Islands has prod=1 and both airfield + harbour. Production
+   * threshold is {@code > 1}, so prod=1 IS within the gate — the bonus must be applied.
+   *
+   * <p>Expected: computeBaseBonus = AIRFIELD_BONUS + NAVAL_BASE_BONUS = 4.0.
+   */
+  @Test
+  void prod1WithBothBasesGetsFullBonus() {
+    final Territory hawaii = data.getMap().getTerritoryOrThrow(HAWAIIAN_ISLANDS);
+
+    assertThat(ProTerritoryValueUtils.computeBaseBonus(hawaii))
+        .as(
+            "Hawaiian Islands (prod=1, airfield+harbour) must receive full bonus — prod=1 is at"
+                + " the gate boundary (threshold is >1, not >=1)")
         .isEqualTo(ProTerritoryValueUtils.AIRFIELD_BONUS + ProTerritoryValueUtils.NAVAL_BASE_BONUS);
   }
 
   /**
-   * Counter-regression: substantially higher production must still dominate even with no base.
+   * Gate boundary (exclusive): Philippines has prod=2 and both airfield + harbour. Production
+   * exceeds the threshold — base bonus must NOT be applied.
    *
-   * <p>Borneo (production=4, no base) → value = 12.0 Caroline Islands (production=0,
-   * airfield+harbour) → value = 10.0 High-production territory without a base must still win.
+   * <p>Expected: computeBaseBonus = 0.0.
+   */
+  @Test
+  void prod2WithBothBasesGetsNoBonus() {
+    final Territory philippines = data.getMap().getTerritoryOrThrow(PHILIPPINES);
+
+    assertThat(ProTerritoryValueUtils.computeBaseBonus(philippines))
+        .as(
+            "Philippines (prod=2, airfield+harbour) must receive zero bonus — production exceeds"
+                + " the gate threshold (>1)")
+        .isEqualTo(0.0);
+  }
+
+  /**
+   * High-IPC mainland sanity: Eastern United States (prod=20, airfield + harbour) receives zero
+   * base contribution. Confirms the gate suppresses the bonus across all mainland territories.
+   */
+  @Test
+  void highIpcMainlandGetsNoBaseBonus() {
+    final Territory easternUs = data.getMap().getTerritoryOrThrow(EASTERN_UNITED_STATES);
+
+    assertThat(ProTerritoryValueUtils.computeBaseBonus(easternUs))
+        .as("Eastern United States (prod=20) must have zero base contribution")
+        .isEqualTo(0.0);
+  }
+
+  /**
+   * Counter-regression: substantially higher production must still dominate over base-only islands.
+   *
+   * <p>Borneo (prod=4, no base) → attack value = 12.0. Caroline Islands (prod=0, both bases) →
+   * attack value = 4.0. Production wins decisively.
    */
   @Test
   void counterRegression_substantialProductionBeatsBaseWithoutProduction() {
@@ -121,17 +172,17 @@ public class ProBaseValueTest {
 
     assertThat(borneoValue)
         .as(
-            "Borneo (prod=4, no base, value=12) must outscore Caroline Islands (prod=0, both"
-                + " bases, value=10) — base bonus is a nudge, not an override")
+            "Borneo (prod=4, no base) must outscore Caroline Islands (prod=0, both bases)"
+                + " — base bonus is a nudge for marginal islands, not a production override")
         .isGreaterThan(carolineValue);
   }
 
   /**
-   * Land value (hold-value) test: base-bearing islands score higher than bare islands via {@code
-   * findTerritoryValues}.
+   * Land value (hold-value) test: Caroline Islands scores higher than Iwo Jima via {@code
+   * findTerritoryValues}, confirming the base bonus is applied to the land-value formula too.
    *
-   * <p>Caroline Islands (prod=0, airfield+harbour) island-floor=0 → land value = 0 + 10 = 10.0 Iwo
-   * Jima (prod=1, no base) island-floor=0.5 → land value = 0.5 Caroline Islands must rank higher.
+   * <p>Caroline Islands (prod=0, airfield+harbour) → land value ≈ 4.0. Iwo Jima (prod=1, no base) →
+   * land value ≈ 0.5 (island floor). Caroline Islands must rank higher.
    */
   @Test
   void landValueBonusAppliedToBaseIslands() {

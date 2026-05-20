@@ -672,11 +672,10 @@ class ProNonCombatMoveAi {
         }
       }
 
-      // Base bonuses: airfields extend fighter/bomber range; naval bases extend fleet range.
-      // Same detection and constants as ProTerritoryValueUtils (landed in #2633).
-      final double baseBonus =
-          (territoryHasAirBase(t) ? ProTerritoryValueUtils.AIRFIELD_BONUS : 0.0)
-              + (territoryHasNavalBase(t) ? ProTerritoryValueUtils.NAVAL_BASE_BONUS : 0.0);
+      // Base bonuses: airfields/naval bases on low-IPC territories (production ≤ 1) get a bonus.
+      // Delegates to ProTerritoryValueUtils.computeBaseBonus — single source of truth for gate
+      // logic and constants shared with findTerritoryAttackValue and findLandValue.
+      final double baseBonus = ProTerritoryValueUtils.computeBaseBonus(t);
 
       // Calculate defense value for prioritization.
       // Note: the old formula included `+ 0.5 * cantMoveUnitValue`, which created a
@@ -2785,22 +2784,5 @@ class ProNonCombatMoveAi {
         ProLogger.trace("    " + printMap4.get(key) + " " + key);
       }
     }
-  }
-
-  /** Returns true if {@code t} contains an airbase unit or a territory-attachment airfield flag. */
-  private static boolean territoryHasAirBase(final Territory t) {
-    return TerritoryAttachment.hasAirBase(t)
-        || t.getUnits().stream().anyMatch(Matches.unitIsAirBase());
-  }
-
-  /**
-   * Returns true if {@code t} contains a naval-base unit (givesMovement, non-airfield) or a
-   * territory-attachment naval-base flag. Excludes airfield units that also carry givesMovement.
-   */
-  private static boolean territoryHasNavalBase(final Territory t) {
-    return TerritoryAttachment.hasNavalBase(t)
-        || t.getUnits().stream()
-            .filter(Matches.unitIsAirBase().negate())
-            .anyMatch(u -> !u.getUnitAttachment().getGivesMovement().isEmpty());
   }
 }
