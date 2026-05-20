@@ -13,6 +13,7 @@ import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.engine.player.PlayerBridge;
 import games.strategy.triplea.ai.pro.ProAi;
+import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.settings.ClientSetting;
 import games.strategy.triplea.xml.TestMapGameData;
 import java.util.ArrayList;
@@ -91,5 +92,66 @@ class ProTerritoryManagerTest {
             "Bulgaria (Friendly_Neutral) must be a defend-option destination when a German unit"
                 + " can reach it from Romania (regression: map-room#2195)")
         .containsKey(bulgaria);
+  }
+
+  /**
+   * Regression test for #2615: a transport that was pre-loaded with cargo in an earlier round must
+   * still appear in amphibAttackOptions so the planner can emit an unloadFromTransport step.
+   *
+   * <p>Without the fix, {@code findAmphibMoveOptions} builds {@code transportMap} entries like
+   * {@code {Japan → {}}} (empty loadFromTerritories for pre-loaded transports), which are then
+   * pruned by {@code transportMap.values().removeIf(Collection::isEmpty)}. Japan never enters
+   * {@code amphibAttackOptions} and {@code amphibChainsValid=0}.
+   *
+   * <p>With the fix, the current sea zone ({@code from}) is added to {@code loadFromTerritories} as
+   * a sentinel, keeping the entry alive. {@link
+   * games.strategy.triplea.ai.pro.util.ProTransportUtils#getUnitsToTransportFromTerritories}
+   * short-circuits for pre-loaded transports and ignores the sentinel value.
+   */
+  @Test
+  void preLoadedTransportInAdjacentSeaZoneIsIncludedInAmphibAttackOptions() {
+    // Germans start at War with British in G40 turn 1 — Scotland is a valid enemy target.
+    // 109 Sea Zone is adjacent to Scotland (British) and is a plausible staging sea zone.
+    final Territory sz109 = gameData.getMap().getTerritoryOrThrow("109 Sea Zone");
+    final Territory scotland = gameData.getMap().getTerritoryOrThrow("Scotland");
+
+    // Precondition: 109 Sea Zone must be adjacent to Scotland on the Global 1940 map.
+    assertThat(gameData.getMap().getNeighbors(sz109))
+        .as("109 Sea Zone must be adjacent to Scotland in Global 1940")
+        .contains(scotland);
+
+    // 109 Sea Zone starts with British ships — clear them so the German transport can operate.
+    final List<Unit> britishShips = sz109.getMatches(Matches.unitIsEnemyOf(germans));
+    gameData.performChange(ChangeFactory.removeUnits(sz109, britishShips));
+
+    // Pre-load a German transport with infantry: place both in 109 Sea Zone and mark the
+    // infantry as transported (simulating a unit loaded in a prior round and not yet unloaded).
+    final UnitType transportType = gameData.getUnitTypeList().getUnitTypeOrThrow("transport");
+    final UnitType infantryType = gameData.getUnitTypeList().getUnitTypeOrThrow("infantry");
+    final Unit germanTransport = transportType.create(1, germans).get(0);
+    final Unit germanInfantry2 = infantryType.create(1, germans).get(0);
+    gameData.performChange(
+        ChangeFactory.addUnits(sz109, List.of(germanTransport, germanInfantry2)));
+    germanInfantry2.setTransportedBy(germanTransport);
+
+    // Re-initialize the Germans ProAi so proData picks up the unit changes above.
+    proAi.getProData().initialize(proAi);
+
+    final ProTerritoryManager manager =
+        new ProTerritoryManager(proAi.getCalc(), proAi.getProData());
+    manager.populateAttackOptions();
+
+    // The pre-loaded transport must contribute Scotland to the attack territory map.
+    // maxAmphibUnits non-empty means findAmphibMoveOptions recognised the pre-loaded
+    // transport as a valid amphib option (regression: map-room#2615).
+    final ProTerritory scotlandOptions = manager.getAttackOptions().getTerritoryMap().get(scotland);
+    assertThat(scotlandOptions)
+        .as(
+            "Scotland must appear in attack options when a pre-loaded German transport is in"
+                + " 109 Sea Zone (Germans at war with British from G40 turn 1)")
+        .isNotNull();
+    assertThat(scotlandOptions.getMaxAmphibUnits())
+        .as("maxAmphibUnits for Scotland must contain the pre-loaded infantry (regression: #2615)")
+        .contains(germanInfantry2);
   }
 }
