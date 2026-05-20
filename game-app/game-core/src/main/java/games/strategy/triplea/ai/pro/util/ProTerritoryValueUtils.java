@@ -29,11 +29,20 @@ import org.triplea.java.collections.CollectionUtils;
 public final class ProTerritoryValueUtils {
   static final int MIN_FACTORY_CHECK_DISTANCE = 9;
 
-  /** Bonus added to territory value when an airfield is present. */
-  public static final double AIRFIELD_BONUS = 5.0;
+  /**
+   * Bonus added to territory value when an airfield is present and production {@code <=} 1.
+   *
+   * <p>Tuned so bases differentiate marginal low-IPC territories (Midway, Caroline Islands) without
+   * adding noise to higher-IPC mainland scoring where raw IPC math dominates.
+   */
+  public static final double AIRFIELD_BONUS = 2.0;
 
-  /** Bonus added to territory value when a naval base is present. */
-  public static final double NAVAL_BASE_BONUS = 5.0;
+  /**
+   * Bonus added to territory value when a naval base is present and production {@code <=} 1.
+   *
+   * @see #AIRFIELD_BONUS
+   */
+  public static final double NAVAL_BASE_BONUS = 2.0;
 
   // G40 represents bases as placed units: airfield (isAirBase=true) and harbour (givesMovement).
   // TerritoryAttachment.hasAirBase/hasNavalBase cover maps that use territory-attribute flags
@@ -53,6 +62,24 @@ public final class ProTerritoryValueUtils {
   }
 
   /**
+   * Returns the combined airfield/naval-base bonus for {@code t}, or 0 if its production exceeds 1.
+   *
+   * <p>The production gate ensures the bonus only differentiates marginal low-IPC territories
+   * (Midway, Caroline Islands) and does not distort scoring for mainland territories where raw IPC
+   * math already provides sufficient discrimination.
+   *
+   * <p>Single source of truth — called from {@link #findTerritoryAttackValue}, {@link
+   * #findLandValue}, and {@code ProNonCombatMoveAi.prioritizeDefendOptions}.
+   */
+  public static double computeBaseBonus(final Territory t) {
+    if (TerritoryAttachment.getProduction(t) > 1) {
+      return 0.0;
+    }
+    return (territoryHasAirBase(t) ? AIRFIELD_BONUS : 0.0)
+        + (territoryHasNavalBase(t) ? NAVAL_BASE_BONUS : 0.0);
+  }
+
+  /**
    * Returns the relative value of attacking the specified territory compared to other territories.
    */
   public static double findTerritoryAttackValue(
@@ -60,12 +87,7 @@ public final class ProTerritoryValueUtils {
     final int isEnemyFactory =
         ProMatches.territoryHasInfraFactoryAndIsEnemyLand(player).test(t) ? 1 : 0;
     double value = 3.0 * TerritoryAttachment.getProduction(t) * (isEnemyFactory + 1);
-    if (territoryHasAirBase(t)) {
-      value += AIRFIELD_BONUS;
-    }
-    if (territoryHasNavalBase(t)) {
-      value += NAVAL_BASE_BONUS;
-    }
+    value += computeBaseBonus(t);
     if (ProUtils.isNeutralLand(t)) {
       final double strength =
           ProBattleUtils.estimateStrength(
@@ -363,16 +385,11 @@ public final class ProTerritoryValueUtils {
       value = Math.max(value, TerritoryAttachment.getProduction(t) * 0.5);
     }
 
-    // Prefer base-bearing territories: airfields extend fighter/bomber range; naval bases
-    // extend fleet range and enable faster repairs. A 5-IPC bonus makes these competitive
-    // with a modest production-territory advantage without overriding a substantially richer
-    // industrial target.
-    if (territoryHasAirBase(t)) {
-      value += AIRFIELD_BONUS;
-    }
-    if (territoryHasNavalBase(t)) {
-      value += NAVAL_BASE_BONUS;
-    }
+    // Prefer base-bearing low-IPC territories (e.g. Midway, Caroline Islands): airfields extend
+    // fighter/bomber range; naval bases extend fleet range and enable repairs. The production gate
+    // (production <= 1) ensures the bonus only differentiates marginal islands without distorting
+    // mainland scoring where raw IPC math already provides sufficient discrimination.
+    value += computeBaseBonus(t);
 
     return value;
   }
