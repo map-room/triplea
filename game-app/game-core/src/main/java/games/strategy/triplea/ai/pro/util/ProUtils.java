@@ -274,6 +274,65 @@ public final class ProUtils {
         .noneMatch(s -> GameStep.isCombatMoveStepName(s.getName()));
   }
 
+  /**
+   * Computes the cascade cost of attacking a True Neutral territory.
+   *
+   * <p>In G40, attacking any True Neutral triggers all other True Neutrals to flip their {@code
+   * captureUnitOnEnteringBy} to the opposing coalition. Those territories' existing neutral units
+   * become capturable by the opponent. This method quantifies that cost so the planner can subtract
+   * it from the attack value of neutral targets.
+   *
+   * <p>Only territories where the opponent cannot yet capture units (i.e. the opponent's players
+   * are not already in {@code captureUnitOnEnteringBy}) are counted — once a neutral has already
+   * flipped, the cascade cannot make it worse.
+   *
+   * @param data current game state
+   * @param player the player considering the attack
+   * @param target the True Neutral territory the player would attack
+   * @return a non-negative cascade cost in the same unit-scale as {@code attackValue} in {@link
+   *     games.strategy.triplea.ai.pro.ProCombatMoveAi}
+   */
+  public static double computeTrueNeutralCascadeCost(
+      final GameState data, final GamePlayer player, final Territory target) {
+    final List<GamePlayer> enemyPlayers = getEnemyPlayers(player);
+    double cost = 0;
+    for (final Territory t : data.getMap().getTerritories()) {
+      if (t.equals(target) || !isNeutralLand(t)) {
+        continue;
+      }
+      // Skip neutrals already captured by / accessible to the opponent — cascade already happened.
+      final List<GamePlayer> captureBy =
+          TerritoryAttachment.get(t)
+              .map(TerritoryAttachment::getCaptureUnitOnEnteringBy)
+              .orElse(List.of());
+      final boolean alreadyCaptureableByEnemy = captureBy.stream().anyMatch(enemyPlayers::contains);
+      if (alreadyCaptureableByEnemy) {
+        continue;
+      }
+      // Neutral units that the opponent would gain.
+      final int neutralUnitCount = t.getMatches(Matches.unitIsOwnedBy(t.getOwner())).size();
+      if (neutralUnitCount == 0) {
+        continue;
+      }
+      // Weight by how many enemy territories border this neutral — activated neutrals adjacent to
+      // the opponent's territory function as immediate forward defenders.
+      final long enemyAdjacentCount =
+          data.getMap().getNeighbors(t).stream()
+              .filter(n -> !n.isWater() && enemyPlayers.stream().anyMatch(n::isOwnedBy))
+              .count();
+      cost += neutralUnitCount * (1 + enemyAdjacentCount) * CASCADE_UNIT_VALUE;
+    }
+    return cost;
+  }
+
+  /**
+   * Scale factor applied per neutral unit in the cascade cost. Tuned so that attacking a typical
+   * low-production True Neutral (production ≤ 2) produces a cascade cost that exceeds its already
+   * 90%-penalised attack value, while leaving room for the planner to attack when the cascade pool
+   * is small (few remaining True Neutrals, or none adjacent to enemy territory).
+   */
+  static final double CASCADE_UNIT_VALUE = 0.1;
+
   public static String summarizeUnits(Collection<Unit> units) {
     IntegerMap<String> counts = new IntegerMap<>();
     for (Unit u : units) {

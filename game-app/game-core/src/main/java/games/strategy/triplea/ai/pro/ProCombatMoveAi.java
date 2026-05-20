@@ -234,6 +234,18 @@ public class ProCombatMoveAi {
               * (1 + 2.0 * isNotNeutralAdjacentToMyCapital)
               * (1 - 0.9 * isNeutral);
 
+      // Subtract cascade cost for True Neutral attacks. When any True Neutral is attacked all
+      // remaining True Neutrals flip to the opposing coalition (captureUnitOnEnteringBy →
+      // opponent),
+      // gifting those neutral infantry as free units. The cascade cost is pre-existing neutral
+      // units
+      // × adjacency-to-enemy weight; it is zero when all other neutrals are already activated.
+      if (isNeutral == 1) {
+        final double cascadeCost = ProUtils.computeTrueNeutralCascadeCost(data, player, t);
+        ProLogger.debug(t.getName() + " neutral cascade cost=" + cascadeCost);
+        attackValue -= cascadeCost;
+      }
+
       // Check if a negative value neutral territory should be attacked
       if (attackValue <= 0 && !patd.isNeedAmphibUnits() && ProUtils.isNeutralLand(t)) {
 
