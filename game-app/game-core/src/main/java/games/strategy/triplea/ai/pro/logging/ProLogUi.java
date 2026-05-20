@@ -31,6 +31,11 @@ public final class ProLogUi {
     externalHandler = handler;
   }
 
+  /** Returns the current external log sink, or {@code null} if none is set. */
+  public static Consumer<String> getExternalHandler() {
+    return externalHandler;
+  }
+
   public static List<AiPlayerDebugOption> buildDebugOptions(final Frame frame) {
     Util.ensureOnEventDispatchThread();
     if (settingsWindow == null) {

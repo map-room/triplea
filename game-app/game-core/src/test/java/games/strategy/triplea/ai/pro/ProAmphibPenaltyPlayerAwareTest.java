@@ -15,6 +15,8 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.engine.player.PlayerBridge;
+import games.strategy.triplea.ai.pro.logging.ProLogCapture;
+import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.remote.IMoveDelegate;
 import games.strategy.triplea.settings.ClientSetting;
 import games.strategy.triplea.xml.TestMapGameData;
@@ -110,12 +112,16 @@ public class ProAmphibPenaltyPlayerAwareTest {
     data.performChange(
         ChangeFactory.removeUnits(germanCoastalTerritory, germanCoastalTerritory.getUnits()));
 
-    // Clear the staging sea zone and ALL adjacent sea zones so the transport is not exposed to
-    // enemy counter-attack (removeTerritoriesWhereTransportsAreExposed cancels the attack if
-    // any enemy naval unit can reach the transport).
-    data.performChange(ChangeFactory.removeUnits(stagingSeaZone, stagingSeaZone.getUnits()));
-    for (final Territory adj : data.getMap().getNeighbors(stagingSeaZone, Territory::isWater)) {
-      data.performChange(ChangeFactory.removeUnits(adj, adj.getUnits()));
+    // Remove all non-American units from every territory (land and sea) so
+    // removeTerritoriesWhereTransportsAreExposed doesn't cancel the attack.
+    // The planner treats all non-allied players as potential enemies (#2625), including neutral
+    // British. Clearing only declared-war enemies is insufficient: British air units on land have
+    // the range to reach the staging sea zone and count as threat units in the exposure check.
+    // Clearing all non-American units everywhere keeps enemyTUVSwing=0 at the staging sea zone
+    // while preserving German territory ownership (the actual attack target).
+    for (final Territory t : data.getMap().getTerritories()) {
+      data.performChange(
+          ChangeFactory.removeUnits(t, t.getMatches(Matches.unitIsOwnedBy(americans).negate())));
     }
 
     // Place a US destroyer (naval support) and a pre-loaded transport in the staging sea zone.
@@ -143,7 +149,14 @@ public class ProAmphibPenaltyPlayerAwareTest {
               return Optional.empty();
             });
 
-    proAi.invokeCombatMoveForSidecar(moveDelegate, data, americans);
+    try (ProLogCapture log = new ProLogCapture()) {
+      proAi.invokeCombatMoveForSidecar(moveDelegate, data, americans);
+
+      // The planner must enter island-power mode (all options are amphib → penalty suppressed).
+      assertThat(log.getLines())
+          .as("planner must detect island-power mode (all attack options are amphib)")
+          .anyMatch(l -> l.contains("island-power mode") && l.contains("true"));
+    }
 
     // Assert: at least one sea→land (amphib unload) move dispatched.
     // Before fix: 0 (penalty halved territory value, isEmptyLand bonus hidden).
@@ -195,7 +208,14 @@ public class ProAmphibPenaltyPlayerAwareTest {
               return Optional.empty();
             });
 
-    proAi.invokeCombatMoveForSidecar(moveDelegate, data, germans);
+    try (ProLogCapture log = new ProLogCapture()) {
+      proAi.invokeCombatMoveForSidecar(moveDelegate, data, germans);
+
+      // Germany has land options → must NOT enter island-power mode.
+      assertThat(log.getLines())
+          .as("German planner must NOT enter island-power mode (has land attack options)")
+          .anyMatch(l -> l.contains("island-power mode") && l.contains("false"));
+    }
 
     // Germany must produce land-to-land attacks against Soviet territory.
     // If isIslandPower were wrongly set to true for Germany (regression), the planner's
