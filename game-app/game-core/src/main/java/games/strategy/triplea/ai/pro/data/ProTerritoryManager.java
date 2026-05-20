@@ -1258,15 +1258,15 @@ public class ProTerritoryManager {
       final Territory unitTerritory,
       final GamePlayer player,
       final boolean isCheckingEnemyAttacks) {
-    if (isCheckingEnemyAttacks) {
-      final BigDecimal range = new BigDecimal(unit.getUnitAttachment().getMovement(player));
-      if (Matches.unitCanBeGivenBonusMovementByFacilitiesInItsTerritory(unitTerritory, player)
-          .test(unit)) {
-        return range.add(BigDecimal.ONE); // assumes bonus of +1 for now
-      }
-      return range;
+    final BigDecimal range =
+        isCheckingEnemyAttacks
+            ? new BigDecimal(unit.getUnitAttachment().getMovement(player))
+            : unit.getMovementLeft();
+    if (Matches.unitCanBeGivenBonusMovementByFacilitiesInItsTerritory(unitTerritory, player)
+        .test(unit)) {
+      return range.add(BigDecimal.ONE); // assumes bonus of +1 for now
     }
-    return unit.getMovementLeft();
+    return range;
   }
 
   public Optional<Territory> findClosestTerritory(
