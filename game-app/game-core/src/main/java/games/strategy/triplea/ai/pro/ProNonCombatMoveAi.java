@@ -658,10 +658,9 @@ class ProNonCombatMoveAi {
         }
       }
 
-      // Determine defending unit value
+      // Determine unit-owner multiplier (same intent as before — discount allied-only or
+      // transport-only water territories).
       final ProTerritory proTerritory = moveMap.get(t);
-      final int cantMoveUnitValue =
-          TuvUtils.getTuv(proTerritory.getCantMoveUnits(), proData.getUnitValueMap());
       double unitOwnerMultiplier = 1;
       if (proTerritory.getCantMoveUnits().stream().noneMatch(Matches.unitIsOwnedBy(player))) {
         if (t.isWater()
@@ -673,12 +672,22 @@ class ProNonCombatMoveAi {
         }
       }
 
-      // Calculate defense value for prioritization
+      // Base bonuses: airfields extend fighter/bomber range; naval bases extend fleet range.
+      // Same detection and constants as ProTerritoryValueUtils (landed in #2633).
+      final double baseBonus =
+          (territoryHasAirBase(t) ? ProTerritoryValueUtils.AIRFIELD_BONUS : 0.0)
+              + (territoryHasNavalBase(t) ? ProTerritoryValueUtils.NAVAL_BASE_BONUS : 0.0);
+
+      // Calculate defense value for prioritization.
+      // Note: the old formula included `+ 0.5 * cantMoveUnitValue`, which created a
+      // positive-feedback loop (more units → higher value → more units sent) that caused
+      // capitals to accumulate permanent garrisons. Intrinsic territory value
+      // (production + factory + bases + neighbors) is sufficient for NCM prioritization.
       final double territoryValue =
           unitOwnerMultiplier
               * (2.0 * productionAndIsEnemyOrAlliedCapital.production
                   + 10.0 * isFactory
-                  + 0.5 * cantMoveUnitValue
+                  + baseBonus
                   + 0.5 * neighborValue)
               * (1 + 10.0 * isMyCapital)
               * (1 + 4.0 * productionAndIsEnemyOrAlliedCapital.isCapital);
@@ -2776,5 +2785,22 @@ class ProNonCombatMoveAi {
         ProLogger.trace("    " + printMap4.get(key) + " " + key);
       }
     }
+  }
+
+  /** Returns true if {@code t} contains an airbase unit or a territory-attachment airfield flag. */
+  private static boolean territoryHasAirBase(final Territory t) {
+    return TerritoryAttachment.hasAirBase(t)
+        || t.getUnits().stream().anyMatch(Matches.unitIsAirBase());
+  }
+
+  /**
+   * Returns true if {@code t} contains a naval-base unit (givesMovement, non-airfield) or a
+   * territory-attachment naval-base flag. Excludes airfield units that also carry givesMovement.
+   */
+  private static boolean territoryHasNavalBase(final Territory t) {
+    return TerritoryAttachment.hasNavalBase(t)
+        || t.getUnits().stream()
+            .filter(Matches.unitIsAirBase().negate())
+            .anyMatch(u -> !u.getUnitAttachment().getGivesMovement().isEmpty());
   }
 }
