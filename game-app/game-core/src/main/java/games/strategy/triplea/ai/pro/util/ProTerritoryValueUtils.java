@@ -35,14 +35,14 @@ public final class ProTerritoryValueUtils {
    * <p>Tuned so bases differentiate marginal low-IPC territories (Midway, Caroline Islands) without
    * adding noise to higher-IPC mainland scoring where raw IPC math dominates.
    */
-  public static final double AIRFIELD_BONUS = 2.0;
+  public static final double AIRFIELD_BONUS = 0.0;
 
   /**
    * Bonus added to territory value when a naval base is present and production {@code <=} 1.
    *
    * @see #AIRFIELD_BONUS
    */
-  public static final double NAVAL_BASE_BONUS = 2.0;
+  public static final double NAVAL_BASE_BONUS = 0.0;
 
   // G40 represents bases as placed units: airfield (isAirBase=true) and harbour (givesMovement).
   // TerritoryAttachment.hasAirBase/hasNavalBase cover maps that use territory-attribute flags
