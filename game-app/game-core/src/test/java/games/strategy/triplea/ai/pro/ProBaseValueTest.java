@@ -8,38 +8,24 @@ import games.strategy.engine.data.Territory;
 import games.strategy.triplea.ai.pro.util.ProTerritoryValueUtils;
 import games.strategy.triplea.xml.TestMapGameData;
 import java.lang.reflect.Field;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Regression tests for #2633 (base detection) and calibration fix in #2637.
+ * Tests for the base-bonus infrastructure in {@link ProTerritoryValueUtils}.
  *
- * <p>#2633 root cause: {@code findTerritoryAttackValue} and {@code findLandValue} ignored airfields
- * and naval bases, causing the planner to deprioritise base-bearing islands entirely.
+ * <p>The {@code AIRFIELD_BONUS} and {@code NAVAL_BASE_BONUS} constants are currently 0.0 — bonuses
+ * are disabled while we observe AI behavior. The infrastructure ({@link
+ * ProTerritoryValueUtils#computeBaseBonus}, the production gate, all three call sites) is kept
+ * intact so the values can be tuned back up when needed.
  *
- * <p>#2637 calibration: bonuses reduced from 5.0 → 2.0 each and gated behind a production threshold
- * ({@code production ≤ 1}). At 5.0 the bonuses added noise to higher-IPC mainland scoring; the gate
- * restricts them to marginal low-IPC territories where base presence is the primary discriminator.
+ * <p>These tests verify:
  *
- * <p>All three formula call sites share a single helper {@link
- * ProTerritoryValueUtils#computeBaseBonus} so gate logic and constants stay in sync.
- *
- * <p>Test anchor: G40 Pacific island cluster + mainland sanity checks.
- *
- * <ul>
- *   <li>Midway (prod=0, airfield): base contribution = 2.0
- *   <li>Caroline Islands (prod=0, airfield + harbour): base contribution = 4.0
- *   <li>Iwo Jima (prod=1, no base): base contribution = 0.0
- *   <li>Hawaiian Islands (prod=1, airfield + harbour): base contribution = 4.0 (gate boundary —
- *       prod=1 IS within threshold)
- *   <li>Philippines (prod=2, airfield + harbour): base contribution = 0.0 (gate boundary — prod=2
- *       EXCEEDS threshold)
- *   <li>Eastern United States (prod=20, airfield + harbour): base contribution = 0.0 (high-IPC
- *       mainland)
- * </ul>
+ * <ol>
+ *   <li>Base detection is correct per territory (airfield/harbour presence, production gate).
+ *   <li>{@code computeBaseBonus} returns a value consistent with the current constants.
+ *   <li>Production still dominates territory scoring when bonuses are zero.
+ * </ol>
  */
 public class ProBaseValueTest {
 
@@ -62,11 +48,7 @@ public class ProBaseValueTest {
     proData = proDataFor(data);
   }
 
-  /**
-   * Midway (prod=0, airfield only) → base contribution = AIRFIELD_BONUS = 2.0.
-   *
-   * <p>Attack value = 3×prod×factory_mult + baseBonus = 0 + 2.0 = 2.0.
-   */
+  /** Midway (prod=0, airfield only) → base contribution = AIRFIELD_BONUS. */
   @Test
   void midwayBaseContributionMatchesAirfieldBonus() {
     final Territory midway = data.getMap().getTerritoryOrThrow(MIDWAY);
@@ -82,7 +64,7 @@ public class ProBaseValueTest {
 
   /**
    * Caroline Islands (prod=0, airfield + harbour) → base contribution = AIRFIELD_BONUS +
-   * NAVAL_BASE_BONUS = 4.0.
+   * NAVAL_BASE_BONUS.
    */
   @Test
   void carolineIslandsBaseContributionMatchesBothBonuses() {
@@ -108,10 +90,8 @@ public class ProBaseValueTest {
   }
 
   /**
-   * Gate boundary (inclusive): Hawaiian Islands has prod=1 and both airfield + harbour. Production
-   * threshold is {@code > 1}, so prod=1 IS within the gate — the bonus must be applied.
-   *
-   * <p>Expected: computeBaseBonus = AIRFIELD_BONUS + NAVAL_BASE_BONUS = 4.0.
+   * Gate boundary (inclusive): prod=1 is within the threshold ({@code > 1} means threshold
+   * exclusive), so the bonus formula runs. With current constants both bonuses are 0.0.
    */
   @Test
   void prod1WithBothBasesGetsFullBonus() {
@@ -154,12 +134,7 @@ public class ProBaseValueTest {
         .isEqualTo(0.0);
   }
 
-  /**
-   * Counter-regression: substantially higher production must still dominate over base-only islands.
-   *
-   * <p>Borneo (prod=4, no base) → attack value = 12.0. Caroline Islands (prod=0, both bases) →
-   * attack value = 4.0. Production wins decisively.
-   */
+  /** Production dominates: Borneo (prod=4, no base) must outscore Caroline Islands (prod=0). */
   @Test
   void counterRegression_substantialProductionBeatsBaseWithoutProduction() {
     final Territory borneo = data.getMap().getTerritoryOrThrow(BORNEO);
@@ -175,34 +150,6 @@ public class ProBaseValueTest {
             "Borneo (prod=4, no base) must outscore Caroline Islands (prod=0, both bases)"
                 + " — base bonus is a nudge for marginal islands, not a production override")
         .isGreaterThan(carolineValue);
-  }
-
-  /**
-   * Land value (hold-value) test: Caroline Islands scores higher than Iwo Jima via {@code
-   * findTerritoryValues}, confirming the base bonus is applied to the land-value formula too.
-   *
-   * <p>Caroline Islands (prod=0, airfield+harbour) → land value ≈ 4.0. Iwo Jima (prod=1, no base) →
-   * land value ≈ 0.5 (island floor). Caroline Islands must rank higher.
-   */
-  @Test
-  void landValueBonusAppliedToBaseIslands() {
-    final Set<Territory> toCheck =
-        Set.of(
-            data.getMap().getTerritoryOrThrow(CAROLINE_ISLANDS),
-            data.getMap().getTerritoryOrThrow(IWO_JIMA));
-
-    final Map<Territory, Double> values =
-        ProTerritoryValueUtils.findTerritoryValues(
-            proData, americans, List.of(), List.of(), toCheck);
-
-    final double carolineValue = values.get(data.getMap().getTerritoryOrThrow(CAROLINE_ISLANDS));
-    final double iwoJimaValue = values.get(data.getMap().getTerritoryOrThrow(IWO_JIMA));
-
-    assertThat(carolineValue)
-        .as(
-            "Caroline Islands (airfield+harbour, prod=0) land value must exceed Iwo Jima (no base,"
-                + " prod=1)")
-        .isGreaterThan(iwoJimaValue);
   }
 
   private static ProData proDataFor(final GameData gameData) throws Exception {
