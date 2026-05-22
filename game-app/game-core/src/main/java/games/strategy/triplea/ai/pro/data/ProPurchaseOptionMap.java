@@ -158,6 +158,14 @@ public class ProPurchaseOptionMap {
     return new ArrayList<>(allOptions);
   }
 
+  /**
+   * Returns the sea transport purchase options, or an empty list when {@link
+   * AmphContext#isEnabled()} — transports are disabled in that mode.
+   */
+  public List<ProPurchaseOption> getEffectiveSeaTransportOptions(final AmphContext ctx) {
+    return ctx.isEnabled() ? List.of() : seaTransportOptions;
+  }
+
   public List<ProPurchaseOption> getLandOptions() {
     final Set<ProPurchaseOption> landOptions = new HashSet<>();
     landOptions.addAll(landFodderOptions);

@@ -415,7 +415,7 @@ class ProPurchaseAi {
       final Map<Territory, ProPurchaseTerritory> purchaseTerritories) {
     if (resourceTracker.isEmpty()
         || purchaseOptions.getSeaDefenseOptions().isEmpty()
-        || purchaseOptions.getSeaTransportOptions().isEmpty()) {
+        || purchaseOptions.getEffectiveSeaTransportOptions(proData.getAmphContext()).isEmpty()) {
       return false;
     }
     Optional<Territory> enemyTerritoryReachableByLand =
@@ -1924,7 +1924,8 @@ class ProPurchaseAi {
 
       // Loop through adjacent purchase territories and purchase transport/amphib units
       final int distance =
-          ProTransportUtils.findMaxMovementForTransports(purchaseOptions.getSeaTransportOptions());
+          ProTransportUtils.findMaxMovementForTransports(
+              purchaseOptions.getEffectiveSeaTransportOptions(proData.getAmphContext()));
       final Set<Territory> territoriesToCheck = new HashSet<>();
       for (final ProPurchaseTerritory purchaseTerritory : selectedPurchaseTerritories) {
         final Territory landTerritory = purchaseTerritory.getTerritory();
@@ -1961,7 +1962,12 @@ class ProPurchaseAi {
         // Determine sea and transport units that can be produced in this territory
         final List<ProPurchaseOption> seaTransportPurchaseOptionsForTerritory =
             ProPurchaseValidationUtils.findPurchaseOptionsForTerritory(
-                proData, player, purchaseOptions.getSeaTransportOptions(), t, landTerritory, isBid);
+                proData,
+                player,
+                purchaseOptions.getEffectiveSeaTransportOptions(proData.getAmphContext()),
+                t,
+                landTerritory,
+                isBid);
         final List<ProPurchaseOption> amphibPurchaseOptionsForTerritory =
             ProPurchaseValidationUtils.findPurchaseOptionsForTerritory(
                 proData, player, purchaseOptions.getLandOptions(), landTerritory, isBid);
