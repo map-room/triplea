@@ -335,6 +335,61 @@ public final class ProMoveUtils {
   }
 
   /**
+   * Calculates amphib-assault unload routes for units staged via {@link
+   * games.strategy.triplea.ai.pro.data.AmphContext} (no physical transport).
+   *
+   * <p>An eligible unit is a land unit whose current territory is a water zone, and whose {@code
+   * AmphContext} marks it as embarked but NOT embarked this turn (so it may assault in CM). Only
+   * 1-hop routes (sea zone → adjacent coast territory) are emitted.
+   *
+   * <p>Land units in water zones are skipped by {@link #calculateMoveRoutes} and are absent from
+   * the amphib-attack-map processed by {@link #calculateAmphibRoutes}. This method is the only
+   * routing path for them.
+   *
+   * @param proData AI state (used for {@code AmphContext} and unit-territory lookup)
+   * @param attackMap territories selected for attack; assault units are found in {@code getUnits()}
+   *     of coastal entries
+   * @return list of 1-hop unload moves, empty when {@code AmphContext} is disabled
+   */
+  public static List<MoveDescription> calculateAmphAssaultRoutes(
+      final ProData proData, final Map<Territory, ProTerritory> attackMap) {
+
+    final var ctx = proData.getAmphContext();
+    if (!ctx.isEnabled()) {
+      return List.of();
+    }
+
+    final var moves = new ArrayList<MoveDescription>();
+    final var map = proData.getData().getMap();
+
+    for (final Territory coast : attackMap.keySet()) {
+      if (coast.isWater()) {
+        continue;
+      }
+      for (final Unit u : attackMap.get(coast).getUnits()) {
+        if (!Matches.unitIsLand().test(u)) {
+          continue;
+        }
+        final Territory start = proData.getUnitTerritory(u);
+        if (start == null || !start.isWater()) {
+          continue;
+        }
+        // Only emit when the unit is embarked and may assault in CM (not embarked this turn).
+        if (!ctx.isEmbarked(u) || ctx.isEmbarkedThisTurn(u)) {
+          continue;
+        }
+        // 1-hop only — staging sea zone must be adjacent to the target coast.
+        if (!map.getNeighbors(start).contains(coast)) {
+          continue;
+        }
+        moves.add(new MoveDescription(List.of(u), new Route(start, coast)));
+        ProLogger.trace("Amphib assault route: " + start.getName() + " -> " + coast.getName());
+      }
+    }
+    return moves;
+  }
+
+  /**
    * Calculates bombardment movement routes.
    *
    * @param attackMap Specifies the territories to be attacked.

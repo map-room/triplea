@@ -108,6 +108,24 @@ public final class ProBattleUtils {
   }
 
   /**
+   * Estimates the strength difference for an amphib landing on a coastal territory.
+   *
+   * <p>Semantically identical to {@link #estimateStrengthDifference} — the named overload makes
+   * call sites self-documenting when the attacking units are embarked land units.
+   *
+   * @param coastTerritory the target coastal land territory
+   * @param landingUnits the embarked land units assaulting the coast
+   * @param defendingUnits the enemy defenders in {@code coastTerritory}
+   * @return see {@link #estimateStrengthDifference}
+   */
+  public static double estimateLandingStrengthDifference(
+      final Territory coastTerritory,
+      final Collection<Unit> landingUnits,
+      final Collection<Unit> defendingUnits) {
+    return estimateStrengthDifference(coastTerritory, landingUnits, defendingUnits);
+  }
+
+  /**
    * Estimates the strength of {@code myUnits} relative to {@code enemyUnits}.
    *
    * @return The larger the result, the stronger {@code myUnits} are relative to {@code enemyUnits}.
