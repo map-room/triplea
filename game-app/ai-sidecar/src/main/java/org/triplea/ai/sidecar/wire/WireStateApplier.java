@@ -11,6 +11,7 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.changefactory.ChangeFactory;
+import games.strategy.triplea.ai.pro.data.AmphContext;
 import games.strategy.triplea.attachments.TechAttachment;
 import games.strategy.triplea.attachments.TerritoryAttachment;
 import games.strategy.triplea.delegate.battle.BattleDelegate;
@@ -67,7 +68,7 @@ public final class WireStateApplier {
    *     resource that does not exist on the canonical map — those indicate a caller bug, not a
    *     recoverable condition.
    */
-  public static void apply(
+  public static AmphContext apply(
       final GameData gameData, final WireState wire, final ConcurrentMap<String, UUID> unitIdMap) {
     final CompositeChange changes = new CompositeChange();
 
@@ -102,6 +103,37 @@ public final class WireStateApplier {
     // but keeping it at the tail means nothing downstream can overwrite it.
     applyRoundAndStep(gameData, wire);
     WireStateVerifier.verifyApply(gameData, wire, unitIdMap);
+    return buildAmphContext(wire, unitIdMap);
+  }
+
+  private static AmphContext buildAmphContext(
+      final WireState wire, final ConcurrentMap<String, UUID> unitIdMap) {
+    if (!wire.amphibiousMovementEnabled()) {
+      return AmphContext.DISABLED;
+    }
+    final Set<UUID> embarked = new HashSet<>();
+    final Set<UUID> embarkedThisTurn = new HashSet<>();
+    for (final WireTerritory wt : wire.territories()) {
+      for (final WireUnit wu : wt.units()) {
+        if (!wu.embarked() && !wu.embarkedThisTurn()) {
+          continue;
+        }
+        final UUID uuid = unitIdMap.get(wu.unitId());
+        if (uuid == null) {
+          LOG.log(
+              Level.WARNING,
+              () -> "embarked unit '" + wu.unitId() + "' not in unitIdMap — skipping");
+          continue;
+        }
+        if (wu.embarked()) {
+          embarked.add(uuid);
+        }
+        if (wu.embarkedThisTurn()) {
+          embarkedThisTurn.add(uuid);
+        }
+      }
+    }
+    return new AmphContext(true, embarked, embarkedThisTurn);
   }
 
   /**

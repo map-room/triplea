@@ -3,6 +3,7 @@ package org.triplea.ai.sidecar.exec;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.triplea.ai.pro.ProAi;
+import games.strategy.triplea.ai.pro.data.AmphContext;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import java.util.HashMap;
 import java.util.List;
@@ -65,7 +66,7 @@ public final class NoncombatMoveExecutor
    */
   NoncombatMovePlan executeOn(final GameData data, final NoncombatMoveRequest request) {
     final ConcurrentMap<String, UUID> unitIdMap = new ConcurrentHashMap<>();
-    WireStateApplier.apply(data, request.state(), unitIdMap);
+    final AmphContext amphCtx = WireStateApplier.apply(data, request.state(), unitIdMap);
 
     final GamePlayer player = data.getPlayerList().getPlayerId(request.state().currentPlayer());
     if (player == null) {
@@ -94,6 +95,9 @@ public final class NoncombatMoveExecutor
     recorder.initialize("move", "Move");
     recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
     proAi.reinitializeProDataForSidecar();
+    // Gate: set context AFTER reinitialize so it survives proData re-initialization.
+    // Phase 2.5 NCM embark logic reads this; toggle-off means AmphContext.DISABLED (no-op).
+    proAi.getProData().setAmphContext(amphCtx);
     proAi.invokeNonCombatMoveForSidecar(recorder, data, player);
 
     // Build reverse map: UUID → wireId
