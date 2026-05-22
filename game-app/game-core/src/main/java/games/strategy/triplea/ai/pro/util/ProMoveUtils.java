@@ -186,6 +186,11 @@ public final class ProMoveUtils {
       for (final Unit transport : amphibAttackMap.keySet()) {
         int movesLeft = transport.getMovementLeft().intValue();
         Territory transportTerritory = proData.getUnitTerritory(transport);
+        if (Matches.unitCanBeGivenBonusMovementByFacilitiesInItsTerritory(
+                transportTerritory, player)
+            .test(transport)) {
+          movesLeft += 1;
+        }
         moves.newSequence();
 
         // Check if units are already loaded or not
