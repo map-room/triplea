@@ -7,6 +7,7 @@ import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.util.BreadthFirstSearch;
 import games.strategy.triplea.ai.pro.ProData;
+import games.strategy.triplea.ai.pro.data.AmphContext;
 import games.strategy.triplea.attachments.TerritoryAttachment;
 import games.strategy.triplea.delegate.Matches;
 import java.util.ArrayList;
@@ -109,6 +110,12 @@ public final class ProTerritoryValueUtils {
       final List<Territory> territoriesToAttack,
       final Set<Territory> territoriesToCheck) {
     final int maxLandMassSize = findMaxLandMassSize(player);
+    final AmphContext amphContext = proData.getAmphContext();
+    // Compute the sea-bridging land-mass size once; used to normalise amphib contributions below.
+    final int seaBridgingMaxLandMassSize =
+        amphContext.isEnabled()
+            ? ProAmphUtils.findMaxLandMassSizeSeaBridging(player)
+            : maxLandMassSize; // won't be used when toggle is off
     final Map<Territory, Double> enemyCapitalsAndFactoriesMap =
         findEnemyCapitalsAndFactoriesValue(
             player, maxLandMassSize, territoriesThatCantBeHeld, territoriesToAttack);
@@ -137,6 +144,8 @@ public final class ProTerritoryValueUtils {
                 t,
                 player,
                 maxLandMassSize,
+                amphContext,
+                seaBridgingMaxLandMassSize,
                 enemyCapitalsAndFactoriesMap,
                 territoriesThatCantBeHeld,
                 territoriesToAttack,
@@ -399,6 +408,8 @@ public final class ProTerritoryValueUtils {
       final Territory t,
       final GamePlayer player,
       final int maxLandMassSize,
+      final AmphContext amphContext,
+      final int seaBridgingMaxLandMassSize,
       final Map<Territory, Double> enemyCapitalsAndFactoriesMap,
       final List<Territory> territoriesThatCantBeHeld,
       final List<Territory> territoriesToAttack,
@@ -484,6 +495,22 @@ public final class ProTerritoryValueUtils {
       }
     }
 
+    // Amphib extension: when the toggle is on, boost staging sea zones by the value of enemy land
+    // reachable via amphib movement (BFS through sea zones, canal-aware).  The raw value is
+    // normalised by seaBridgingMaxLandMassSize so it scales consistently with the land-mass ratios
+    // used elsewhere in the scoring.
+    if (amphContext.isEnabled()) {
+      final double amphLandValue =
+          ProAmphUtils.findAmphReachableLandValue(
+              t,
+              player,
+              enemyCapitalsAndFactoriesMap,
+              territoriesThatCantBeHeld,
+              territoriesToAttack);
+      return capitalOrFactoryValue / 100
+          + nearbyLandValue / 10
+          + amphLandValue / seaBridgingMaxLandMassSize;
+    }
     return capitalOrFactoryValue / 100 + nearbyLandValue / 10;
   }
 
