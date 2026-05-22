@@ -261,6 +261,43 @@ public class ProAmphUtilsTest {
         .isGreaterThan(disabledValues.get(sz6));
   }
 
+  // --- canal-aware BFS ---
+
+  @Test
+  void blockedCanalExcludesPacificTargetFromValueFlood() {
+    // 89 Sea Zone (Caribbean) staging zone.  Ecuador (South American Pacific coast) is adjacent to
+    // 64 Sea Zone and only reachable from 89 SZ via the Panama Canal (89↔64 via Central America).
+    // When Central America = Japanese, the canal is blocked and the BFS cannot expand to 64 SZ.
+    // Ecuador's contribution must therefore be zero regardless of the value assigned to it.
+    //
+    // Isolation technique: measure the DIFFERENCE in score when Ecuador's map-value changes from
+    // HIGH to LOW.  If Ecuador is reached, the difference equals (HIGH - LOW) / 4.  If the canal
+    // is blocked the difference is 0 because Ecuador is never visited.
+
+    final Territory sz89 = data.getMap().getTerritoryOrThrow("89 Sea Zone");
+    final Territory ecuador = data.getMap().getTerritoryOrThrow("Ecuador");
+    final Territory centralAmerica = data.getMap().getTerritoryOrThrow("Central America");
+
+    // Make Ecuador Japanese so it's treated as enemy.
+    data.performChange(ChangeFactory.changeOwner(ecuador, japanese));
+    // Make Central America Japanese — this closes the Panama Canal for Americans.
+    data.performChange(ChangeFactory.changeOwner(centralAmerica, japanese));
+
+    final double scoreHigh =
+        ProAmphUtils.findAmphReachableLandValue(
+            sz89, americans, Map.of(ecuador, 1000.0), List.of(), List.of());
+    final double scoreLow =
+        ProAmphUtils.findAmphReachableLandValue(
+            sz89, americans, Map.of(ecuador, 1.0), List.of(), List.of());
+
+    assertThat(scoreHigh - scoreLow)
+        .as(
+            "Ecuador's map-value change must not affect the score from 89 Sea Zone when the "
+                + "Panama Canal is closed (Central America = Japanese). The BFS must respect the "
+                + "canal predicate and never reach 64 Sea Zone.")
+        .isEqualTo(0.0);
+  }
+
   // ---- helpers ----
 
   private void declareWar(final GamePlayer p1, final GamePlayer p2) {

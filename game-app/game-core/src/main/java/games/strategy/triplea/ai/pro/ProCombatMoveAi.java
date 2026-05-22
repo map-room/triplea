@@ -7,6 +7,7 @@ import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.Properties;
+import games.strategy.triplea.ai.pro.data.AmphContext;
 import games.strategy.triplea.ai.pro.data.ProBattleResult;
 import games.strategy.triplea.ai.pro.data.ProOtherMoveOptions;
 import games.strategy.triplea.ai.pro.data.ProPurchaseOption;
@@ -79,6 +80,25 @@ public class ProCombatMoveAi {
 
     // Find the maximum number of units that can attack each territory and max enemy defenders
     territoryManager.populateAttackOptions();
+
+    // With the amphib toggle on, inject embarked-unit assault targets that the normal transport
+    // pathway cannot discover (units are land units in sea zones, not on physical transports).
+    if (proData.getAmphContext().isEnabled()) {
+      final Map<Territory, List<Unit>> assaultOptions = findAmphAssaultOptions();
+      final Map<Territory, ProTerritory> attackMap =
+          territoryManager.getAttackOptions().getTerritoryMap();
+      final Map<Unit, Set<Territory>> unitMoveMap =
+          territoryManager.getAttackOptions().getUnitMoveMap();
+      for (final Map.Entry<Territory, List<Unit>> entry : assaultOptions.entrySet()) {
+        final Territory coast = entry.getKey();
+        final ProTerritory proT = proData.getProTerritory(attackMap, coast);
+        proT.addMaxUnits(entry.getValue());
+        for (final Unit u : entry.getValue()) {
+          unitMoveMap.computeIfAbsent(u, k -> new HashSet<>()).add(coast);
+        }
+      }
+    }
+
     territoryManager.populateEnemyDefenseOptions();
 
     // Remove territories that aren't worth attacking and prioritize the remaining ones
@@ -161,6 +181,8 @@ public class ProCombatMoveAi {
         proData, ProMoveUtils.calculateMoveRoutes(proData, player, attackMap, true), moveDel);
     ProMoveUtils.doMove(
         proData, ProMoveUtils.calculateAmphibRoutes(proData, player, attackMap, true), moveDel);
+    ProMoveUtils.doMove(
+        proData, ProMoveUtils.calculateAmphAssaultRoutes(proData, attackMap), moveDel);
     ProMoveUtils.doMove(
         proData, ProMoveUtils.calculateBombardMoveRoutes(proData, player, attackMap), moveDel);
     isBombing = true;
@@ -1608,128 +1630,132 @@ public class ProCombatMoveAi {
       }
     }
 
-    // Loop through all my transports and see which can make amphib attack
-    final Map<Unit, Set<Territory>> amphibAttackOptions = new HashMap<>();
-    for (final ProTransport proTransportData : transportMapList) {
+    // --- Transport-based amphib attack (disabled when AmphContext toggle is on) ---
+    if (!proData.getAmphContext().isEnabled()) {
+      // Loop through all my transports and see which can make amphib attack
+      final Map<Unit, Set<Territory>> amphibAttackOptions = new HashMap<>();
+      for (final ProTransport proTransportData : transportMapList) {
 
-      // If already used to attack then ignore
-      if (alreadyAttackedWithTransports.contains(proTransportData.getTransport())) {
-        continue;
-      }
+        // If already used to attack then ignore
+        if (alreadyAttackedWithTransports.contains(proTransportData.getTransport())) {
+          continue;
+        }
 
-      // Find number of attack options
-      final Set<Territory> canAmphibAttackTerritories = new HashSet<>();
-      for (final ProTerritory attackTerritoryData : prioritizedTerritories) {
-        if (proTransportData.getTransportMap().containsKey(attackTerritoryData.getTerritory())) {
-          canAmphibAttackTerritories.add(attackTerritoryData.getTerritory());
+        // Find number of attack options
+        final Set<Territory> canAmphibAttackTerritories = new HashSet<>();
+        for (final ProTerritory attackTerritoryData : prioritizedTerritories) {
+          if (proTransportData.getTransportMap().containsKey(attackTerritoryData.getTerritory())) {
+            canAmphibAttackTerritories.add(attackTerritoryData.getTerritory());
+          }
+        }
+        if (!canAmphibAttackTerritories.isEmpty()) {
+          amphibAttackOptions.put(proTransportData.getTransport(), canAmphibAttackTerritories);
         }
       }
-      if (!canAmphibAttackTerritories.isEmpty()) {
-        amphibAttackOptions.put(proTransportData.getTransport(), canAmphibAttackTerritories);
-      }
-    }
 
-    // Loop through transports with amphib attack options and determine if any land battle needs it
-    for (final Map.Entry<Unit, Set<Territory>> amphibAttackOptionsEntry :
-        amphibAttackOptions.entrySet()) {
-      final Unit transport = amphibAttackOptionsEntry.getKey();
-      // Find current land battle results for territories that unit can amphib attack
-      Territory minWinTerritory = null;
-      double minWinPercentage = proData.getWinPercentage();
-      List<Unit> minAmphibUnitsToAdd = null;
-      Territory minUnloadFromTerritory = null;
-      for (final Territory t : amphibAttackOptionsEntry.getValue()) {
-        final ProTerritory patd = attackMap.get(t);
-        if (!patd.isCurrentlyWins()) {
-          if (patd.getBattleResult() == null) {
-            patd.estimateBattleResult(calc, player);
-          }
-          final ProBattleResult result = patd.getBattleResult();
-          if (result.getWinPercentage() < minWinPercentage
-              || (!result.isHasLandUnitRemaining() && minWinTerritory == null)) {
+      // Loop through transports with amphib attack options and determine if any land battle needs
+      // it
+      for (final Map.Entry<Unit, Set<Territory>> amphibAttackOptionsEntry :
+          amphibAttackOptions.entrySet()) {
+        final Unit transport = amphibAttackOptionsEntry.getKey();
+        // Find current land battle results for territories that unit can amphib attack
+        Territory minWinTerritory = null;
+        double minWinPercentage = proData.getWinPercentage();
+        List<Unit> minAmphibUnitsToAdd = null;
+        Territory minUnloadFromTerritory = null;
+        for (final Territory t : amphibAttackOptionsEntry.getValue()) {
+          final ProTerritory patd = attackMap.get(t);
+          if (!patd.isCurrentlyWins()) {
+            if (patd.getBattleResult() == null) {
+              patd.estimateBattleResult(calc, player);
+            }
+            final ProBattleResult result = patd.getBattleResult();
+            if (result.getWinPercentage() < minWinPercentage
+                || (!result.isHasLandUnitRemaining() && minWinTerritory == null)) {
 
-            // Find units that haven't attacked and can be transported
-            final Set<Unit> alreadyAttackedWithUnits =
-                ProTransportUtils.getMovedUnits(alreadyMovedUnits, attackMap);
-            for (final ProTransport proTransportData : transportMapList) {
-              if (proTransportData.getTransport().equals(transport)) {
+              // Find units that haven't attacked and can be transported
+              final Set<Unit> alreadyAttackedWithUnits =
+                  ProTransportUtils.getMovedUnits(alreadyMovedUnits, attackMap);
+              for (final ProTransport proTransportData : transportMapList) {
+                if (proTransportData.getTransport().equals(transport)) {
 
-                // Find units to load
-                final Set<Territory> territoriesCanLoadFrom =
-                    proTransportData.getTransportMap().get(t);
-                final List<Unit> amphibUnitsToAdd =
-                    ProTransportUtils.getUnitsToTransportFromTerritories(
-                        player, transport, territoriesCanLoadFrom, alreadyAttackedWithUnits);
-                if (amphibUnitsToAdd.isEmpty()) {
-                  continue;
-                }
+                  // Find units to load
+                  final Set<Territory> territoriesCanLoadFrom =
+                      proTransportData.getTransportMap().get(t);
+                  final List<Unit> amphibUnitsToAdd =
+                      ProTransportUtils.getUnitsToTransportFromTerritories(
+                          player, transport, territoriesCanLoadFrom, alreadyAttackedWithUnits);
+                  if (amphibUnitsToAdd.isEmpty()) {
+                    continue;
+                  }
 
-                // Find the best territory to move transport
-                double minStrengthDifference = Double.POSITIVE_INFINITY;
-                minUnloadFromTerritory = null;
-                final Set<Territory> territoriesToMoveTransport =
-                    data.getMap()
-                        .getNeighbors(t, ProMatches.territoryCanMoveSeaUnits(player, false));
-                final Set<Territory> loadFromTerritories = new HashSet<>();
-                for (final Unit u : amphibUnitsToAdd) {
-                  loadFromTerritories.add(proData.getUnitTerritory(u));
-                }
-                for (final Territory destination : territoriesToMoveTransport) {
-                  if (proTransportData.getSeaTransportMap().containsKey(destination)
-                      && proTransportData
-                          .getSeaTransportMap()
-                          .get(destination)
-                          .containsAll(loadFromTerritories)) {
-                    Set<Unit> attackers = Set.of();
-                    if (enemyAttackOptions.getMax(destination) != null) {
-                      attackers = enemyAttackOptions.getMax(destination).getMaxUnits();
-                    }
-                    final List<Unit> defenders =
-                        destination.getMatches(Matches.isUnitAllied(player));
-                    defenders.add(transport);
-                    final double strengthDifference =
-                        ProBattleUtils.estimateStrengthDifference(
-                            destination, attackers, defenders);
-                    if (strengthDifference <= minStrengthDifference) {
-                      minStrengthDifference = strengthDifference;
-                      minUnloadFromTerritory = destination;
+                  // Find the best territory to move transport
+                  double minStrengthDifference = Double.POSITIVE_INFINITY;
+                  minUnloadFromTerritory = null;
+                  final Set<Territory> territoriesToMoveTransport =
+                      data.getMap()
+                          .getNeighbors(t, ProMatches.territoryCanMoveSeaUnits(player, false));
+                  final Set<Territory> loadFromTerritories = new HashSet<>();
+                  for (final Unit u : amphibUnitsToAdd) {
+                    loadFromTerritories.add(proData.getUnitTerritory(u));
+                  }
+                  for (final Territory destination : territoriesToMoveTransport) {
+                    if (proTransportData.getSeaTransportMap().containsKey(destination)
+                        && proTransportData
+                            .getSeaTransportMap()
+                            .get(destination)
+                            .containsAll(loadFromTerritories)) {
+                      Set<Unit> attackers = Set.of();
+                      if (enemyAttackOptions.getMax(destination) != null) {
+                        attackers = enemyAttackOptions.getMax(destination).getMaxUnits();
+                      }
+                      final List<Unit> defenders =
+                          destination.getMatches(Matches.isUnitAllied(player));
+                      defenders.add(transport);
+                      final double strengthDifference =
+                          ProBattleUtils.estimateStrengthDifference(
+                              destination, attackers, defenders);
+                      if (strengthDifference <= minStrengthDifference) {
+                        minStrengthDifference = strengthDifference;
+                        minUnloadFromTerritory = destination;
+                      }
                     }
                   }
+                  minWinTerritory = t;
+                  minWinPercentage = result.getWinPercentage();
+                  minAmphibUnitsToAdd = amphibUnitsToAdd;
+                  break;
                 }
-                minWinTerritory = t;
-                minWinPercentage = result.getWinPercentage();
-                minAmphibUnitsToAdd = amphibUnitsToAdd;
-                break;
               }
             }
           }
         }
+        if (minWinTerritory != null) {
+          if (minUnloadFromTerritory != null) {
+            attackMap
+                .get(minWinTerritory)
+                .getTransportTerritoryMap()
+                .put(transport, minUnloadFromTerritory);
+          }
+          attackMap.get(minWinTerritory).addUnits(minAmphibUnitsToAdd);
+          attackMap.get(minWinTerritory).putAmphibAttackMap(transport, minAmphibUnitsToAdd);
+          attackMap.get(minWinTerritory).setBattleResult(null);
+          for (final Unit unit : minAmphibUnitsToAdd) {
+            sortedUnitAttackOptions.remove(unit);
+          }
+          if (!minWinTerritory.equals(prevAmphibAssignments.get(transport))) {
+            ProLogger.trace(
+                "Adding amphibious attack to "
+                    + minWinTerritory
+                    + ", units="
+                    + minAmphibUnitsToAdd.size()
+                    + ", unloadFrom="
+                    + minUnloadFromTerritory);
+            prevAmphibAssignments.put(transport, minWinTerritory);
+          }
+        }
       }
-      if (minWinTerritory != null) {
-        if (minUnloadFromTerritory != null) {
-          attackMap
-              .get(minWinTerritory)
-              .getTransportTerritoryMap()
-              .put(transport, minUnloadFromTerritory);
-        }
-        attackMap.get(minWinTerritory).addUnits(minAmphibUnitsToAdd);
-        attackMap.get(minWinTerritory).putAmphibAttackMap(transport, minAmphibUnitsToAdd);
-        attackMap.get(minWinTerritory).setBattleResult(null);
-        for (final Unit unit : minAmphibUnitsToAdd) {
-          sortedUnitAttackOptions.remove(unit);
-        }
-        if (!minWinTerritory.equals(prevAmphibAssignments.get(transport))) {
-          ProLogger.trace(
-              "Adding amphibious attack to "
-                  + minWinTerritory
-                  + ", units="
-                  + minAmphibUnitsToAdd.size()
-                  + ", unloadFrom="
-                  + minUnloadFromTerritory);
-          prevAmphibAssignments.put(transport, minWinTerritory);
-        }
-      }
-    }
+    } // end !amphContext.isEnabled()
 
     // Get all units that have already moved
     final Set<Unit> alreadyAttackedWithUnits = new HashSet<>();
@@ -2060,5 +2086,48 @@ public class ProCombatMoveAi {
                 ProMatches.territoryCanMoveAirUnitsAndNoAa(data, player, true));
     final boolean usesMoreThanHalfOfRange = distance > range / 2;
     return isAdjacentToAlliedFactory || !usesMoreThanHalfOfRange;
+  }
+
+  /**
+   * Returns amphib assault candidates for the current player when {@link AmphContext} is enabled.
+   *
+   * <p>A unit qualifies as "staged" when it is: owned by the player, a land unit, marked as
+   * embarked in the current {@code AmphContext}, and NOT marked as embarked this turn. The
+   * "embarked this turn" guard ensures units that just loaded during NCM cannot immediately assault
+   * in the same CM phase.
+   *
+   * <p>Only ADJACENT hostile coasts are returned (1-hop = combat-legal unload range). No multi-hop
+   * CM moves are generated.
+   *
+   * @return map of coastal land territory → list of staged units that can assault it
+   */
+  private Map<Territory, List<Unit>> findAmphAssaultOptions() {
+    final AmphContext ctx = proData.getAmphContext();
+    final Map<Territory, List<Unit>> options = new HashMap<>();
+
+    for (final Territory sz : data.getMap().getTerritories()) {
+      if (!sz.isWater()) {
+        continue;
+      }
+      // Land units in this sea zone that are staged (embarked, not embarked this turn)
+      final List<Unit> staged =
+          sz.getMatches(
+              u ->
+                  u.isOwnedBy(player)
+                      && Matches.unitIsLand().test(u)
+                      && ctx.isEmbarked(u)
+                      && !ctx.isEmbarkedThisTurn(u));
+      if (staged.isEmpty()) {
+        continue;
+      }
+      // Collect adjacent hostile coasts (1 hop only)
+      for (final Territory adj : data.getMap().getNeighbors(sz)) {
+        if (!adj.isWater()
+            && ProMatches.territoryIsEnemyOrCantBeHeld(player, List.of()).test(adj)) {
+          options.computeIfAbsent(adj, k -> new ArrayList<>()).addAll(staged);
+        }
+      }
+    }
+    return options;
   }
 }
