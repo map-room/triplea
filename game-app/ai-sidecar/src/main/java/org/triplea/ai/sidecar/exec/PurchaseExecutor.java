@@ -12,6 +12,7 @@ import games.strategy.engine.data.UnitType;
 import games.strategy.engine.delegate.IDelegate;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.ai.pro.ProAi;
+import games.strategy.triplea.ai.pro.data.AmphContext;
 import games.strategy.triplea.ai.pro.data.ProPlaceTerritory;
 import games.strategy.triplea.ai.pro.data.ProPurchaseTerritory;
 import games.strategy.triplea.ai.pro.data.ProSessionSnapshot;
@@ -108,7 +109,7 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
    */
   PurchasePlan executeOn(final GameData data, final PurchaseRequest request) {
     final ConcurrentMap<String, UUID> unitIdMap = new ConcurrentHashMap<>();
-    WireStateApplier.apply(data, request.state(), unitIdMap);
+    final AmphContext amphCtx = WireStateApplier.apply(data, request.state(), unitIdMap);
 
     final GamePlayer player = data.getPlayerList().getPlayerId(request.state().currentPlayer());
     if (player == null) {
@@ -241,6 +242,9 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     combatRecorder.initialize("move", "Move");
     combatRecorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
     proAi.reinitializeProDataForSidecar();
+    // Restore context after reinitialize — the combat-move projection reads the same
+    // amphib state as the purchase that preceded it. Toggle-off = AmphContext.DISABLED (no-op).
+    proAi.getProData().setAmphContext(amphCtx);
     proAi.invokeCombatMoveForSidecar(combatRecorder, data, player);
 
     final List<WireMoveDescription> nonBombingMoves =

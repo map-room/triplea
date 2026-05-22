@@ -7,6 +7,7 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.triplea.Properties;
+import games.strategy.triplea.ai.pro.data.AmphContext;
 import games.strategy.triplea.ai.pro.data.ProPurchaseOption;
 import games.strategy.triplea.ai.pro.data.ProPurchaseOptionMap;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
@@ -43,12 +44,23 @@ public final class ProData {
   private final Set<Unit> unitsToBeConsumed = new HashSet<>();
   private double minCostPerHitPoint = Double.MAX_VALUE;
 
+  /**
+   * Amphib-movement context delivered from the wire by the sidecar executor. Never null; defaults
+   * to {@link AmphContext#DISABLED} until an executor installs a live context via {@link
+   * #setAmphContext(AmphContext)}.
+   */
+  @Getter private AmphContext amphContext = AmphContext.DISABLED;
+
   /** Seeded RNG for deterministic AI decisions. Seeded via {@link #setSeed(long)}. */
   @Getter private Random rng = new Random();
 
   private AbstractProAi proAi;
   private GameData data;
   private GamePlayer player;
+
+  public void setAmphContext(final AmphContext ctx) {
+    this.amphContext = ctx != null ? ctx : AmphContext.DISABLED;
+  }
 
   /** Seeds the RNG used by AI subsystems for deterministic behaviour. */
   public void setSeed(final long seed) {
