@@ -10,25 +10,44 @@ public record WireState(
     int round,
     String phase,
     String currentPlayer,
-    List<WireRelationship> relationships) {
+    List<WireRelationship> relationships,
+    boolean amphibiousMovementEnabled) {
 
   /**
-   * Backwards-compat constructor: TS clients shipped before the relationships field exists may omit
-   * it. Treat absent field as empty list (not null) so downstream walks are safe.
+   * Jackson deserializer. Uses a static factory so we can accept {@code @Nullable Boolean} for
+   * {@code amphibiousMovementEnabled} and {@code relationships} (absent implies false / empty-list)
+   * while keeping the canonical record constructor strictly typed.
    */
   @JsonCreator
-  public WireState(
+  public static WireState of(
       @JsonProperty("territories") final List<WireTerritory> territories,
       @JsonProperty("players") final List<WirePlayer> players,
       @JsonProperty("round") final int round,
       @JsonProperty("phase") final String phase,
       @JsonProperty("currentPlayer") final String currentPlayer,
-      @JsonProperty("relationships") final List<WireRelationship> relationships) {
-    this.territories = territories;
-    this.players = players;
-    this.round = round;
-    this.phase = phase;
-    this.currentPlayer = currentPlayer;
-    this.relationships = relationships == null ? List.of() : relationships;
+      @JsonProperty("relationships") final List<WireRelationship> relationships,
+      @JsonProperty("amphibiousMovementEnabled") final Boolean amphibiousMovementEnabled) {
+    return new WireState(
+        territories,
+        players,
+        round,
+        phase,
+        currentPlayer,
+        relationships == null ? List.of() : relationships,
+        amphibiousMovementEnabled != null && amphibiousMovementEnabled);
+  }
+
+  /**
+   * Backward-compat constructor for callers that pre-date {@code amphibiousMovementEnabled}.
+   * Defaults the toggle to {@code false}.
+   */
+  public WireState(
+      final List<WireTerritory> territories,
+      final List<WirePlayer> players,
+      final int round,
+      final String phase,
+      final String currentPlayer,
+      final List<WireRelationship> relationships) {
+    this(territories, players, round, phase, currentPlayer, relationships, false);
   }
 }

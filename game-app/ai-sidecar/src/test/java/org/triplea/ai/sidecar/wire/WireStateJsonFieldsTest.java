@@ -36,4 +36,51 @@ class WireStateJsonFieldsTest {
     WireUnit u = mapper.readValue(json, WireUnit.class);
     assertEquals(3, u.bombingDamage());
   }
+
+  @Test
+  void wireUnitEmbarkedDefaultsFalse() throws Exception {
+    String json = "{\"unitId\":\"u1\",\"unitType\":\"infantry\"}";
+    WireUnit u = mapper.readValue(json, WireUnit.class);
+    assertFalse(u.embarked());
+  }
+
+  @Test
+  void wireUnitEmbarkedHonoured() throws Exception {
+    String json = "{\"unitId\":\"u1\",\"unitType\":\"infantry\",\"embarked\":true}";
+    WireUnit u = mapper.readValue(json, WireUnit.class);
+    assertTrue(u.embarked());
+  }
+
+  @Test
+  void wireUnitEmbarkedThisTurnDefaultsFalse() throws Exception {
+    String json = "{\"unitId\":\"u1\",\"unitType\":\"infantry\"}";
+    WireUnit u = mapper.readValue(json, WireUnit.class);
+    assertFalse(u.embarkedThisTurn());
+  }
+
+  @Test
+  void wireUnitEmbarkedThisTurnHonoured() throws Exception {
+    String json = "{\"unitId\":\"u1\",\"unitType\":\"infantry\",\"embarkedThisTurn\":true}";
+    WireUnit u = mapper.readValue(json, WireUnit.class);
+    assertTrue(u.embarkedThisTurn());
+  }
+
+  @Test
+  void wireStateAmphibiousMovementEnabledDefaultsFalse() throws Exception {
+    String json =
+        "{\"territories\":[],\"players\":[],\"round\":1,\"phase\":\"combat-move\","
+            + "\"currentPlayer\":\"Germans\",\"relationships\":[]}";
+    WireState s = mapper.readValue(json, WireState.class);
+    assertFalse(s.amphibiousMovementEnabled());
+  }
+
+  @Test
+  void wireStateAmphibiousMovementEnabledHonoured() throws Exception {
+    String json =
+        "{\"territories\":[],\"players\":[],\"round\":1,\"phase\":\"combat-move\","
+            + "\"currentPlayer\":\"Germans\",\"relationships\":[],"
+            + "\"amphibiousMovementEnabled\":true}";
+    WireState s = mapper.readValue(json, WireState.class);
+    assertTrue(s.amphibiousMovementEnabled());
+  }
 }
