@@ -20,5 +20,6 @@
     "a" : "Germans",
     "b" : "Russians",
     "kind" : "neutral"
-  } ]
+  } ],
+  "amphibiousMovementEnabled" : false
 }
