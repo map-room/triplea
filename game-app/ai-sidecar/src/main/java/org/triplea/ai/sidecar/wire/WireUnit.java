@@ -23,7 +23,9 @@ public record WireUnit(
     @Nullable Integer maxScrambleCount,
     @Nullable List<String> unloaded,
     @Nullable String unloadedTo,
-    boolean wasLoadedAfterCombat) {
+    boolean wasLoadedAfterCombat,
+    boolean embarked,
+    boolean embarkedThisTurn) {
   @JsonCreator
   public static WireUnit of(
       @JsonProperty("unitId") final String unitId,
@@ -43,7 +45,9 @@ public record WireUnit(
       @JsonProperty("maxScrambleCount") final Integer maxScrambleCount,
       @JsonProperty("unloaded") final List<String> unloaded,
       @JsonProperty("unloadedTo") final String unloadedTo,
-      @JsonProperty("wasLoadedAfterCombat") final Boolean wasLoadedAfterCombat) {
+      @JsonProperty("wasLoadedAfterCombat") final Boolean wasLoadedAfterCombat,
+      @JsonProperty("embarked") final Boolean embarked,
+      @JsonProperty("embarkedThisTurn") final Boolean embarkedThisTurn) {
     return new WireUnit(
         unitId,
         unitType,
@@ -62,7 +66,55 @@ public record WireUnit(
         maxScrambleCount,
         unloaded,
         unloadedTo,
-        wasLoadedAfterCombat != null && wasLoadedAfterCombat);
+        wasLoadedAfterCombat != null && wasLoadedAfterCombat,
+        embarked != null && embarked,
+        embarkedThisTurn != null && embarkedThisTurn);
+  }
+
+  /**
+   * Backward-compat factory for callers that pre-date {@code embarked} / {@code embarkedThisTurn}.
+   * Defaults both to {@code false}.
+   */
+  public static WireUnit of(
+      final String unitId,
+      final String unitType,
+      final Integer hitsTaken,
+      final Integer movesUsed,
+      final Integer bombingDamage,
+      final String owner,
+      final String transportedBy,
+      final Boolean submerged,
+      final Boolean wasInCombat,
+      final Boolean wasLoadedThisTurn,
+      final Boolean wasUnloadedInCombatPhase,
+      final Integer bonusMovement,
+      final Boolean wasAmphibious,
+      final Boolean wasScrambled,
+      final Integer maxScrambleCount,
+      final List<String> unloaded,
+      final String unloadedTo,
+      final Boolean wasLoadedAfterCombat) {
+    return WireUnit.of(
+        unitId,
+        unitType,
+        hitsTaken,
+        movesUsed,
+        bombingDamage,
+        owner,
+        transportedBy,
+        submerged,
+        wasInCombat,
+        wasLoadedThisTurn,
+        wasUnloadedInCombatPhase,
+        bonusMovement,
+        wasAmphibious,
+        wasScrambled,
+        maxScrambleCount,
+        unloaded,
+        unloadedTo,
+        wasLoadedAfterCombat,
+        null,
+        null);
   }
 
   /**
@@ -101,6 +153,8 @@ public record WireUnit(
         null,
         null,
         null,
+        false,
+        false,
         false);
   }
 
@@ -109,7 +163,7 @@ public record WireUnit(
       final String unitId, final String unitType, final int hitsTaken, final int movesUsed) {
     this(
         unitId, unitType, hitsTaken, movesUsed, 0, null, null, false, false, false, false, 0, false,
-        false, null, null, null, false);
+        false, null, null, null, false, false, false);
   }
 
   /** Backward-compat constructor for tests that specify bombingDamage but not owner. */
@@ -137,6 +191,8 @@ public record WireUnit(
         null,
         null,
         null,
+        false,
+        false,
         false);
   }
 
@@ -166,6 +222,8 @@ public record WireUnit(
         null,
         null,
         null,
+        false,
+        false,
         false);
   }
 }
