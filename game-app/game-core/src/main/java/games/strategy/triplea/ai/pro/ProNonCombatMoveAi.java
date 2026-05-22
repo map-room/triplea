@@ -13,6 +13,7 @@ import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.util.BreadthFirstSearch;
 import games.strategy.triplea.Properties;
+import games.strategy.triplea.ai.pro.data.AmphContext;
 import games.strategy.triplea.ai.pro.data.ProBattleResult;
 import games.strategy.triplea.ai.pro.data.ProOtherMoveOptions;
 import games.strategy.triplea.ai.pro.data.ProPlaceTerritory;
@@ -22,6 +23,7 @@ import games.strategy.triplea.ai.pro.data.ProTerritory;
 import games.strategy.triplea.ai.pro.data.ProTerritoryManager;
 import games.strategy.triplea.ai.pro.data.ProTransport;
 import games.strategy.triplea.ai.pro.logging.ProLogger;
+import games.strategy.triplea.ai.pro.util.ProAmphUtils;
 import games.strategy.triplea.ai.pro.util.ProBattleUtils;
 import games.strategy.triplea.ai.pro.util.ProMatches;
 import games.strategy.triplea.ai.pro.util.ProMoveUtils;
@@ -217,6 +219,9 @@ class ProNonCombatMoveAi {
 
     // Calculate move routes and perform moves
     doMove(isCombatMove, moveMap, moveDel, data, player);
+
+    // Embark unmoved land units toward high-value amphib staging zones (Phase 2.5).
+    ProMoveUtils.doMove(proData, calculateAmphEmbarkMoves(), moveDel);
 
     // Log results
     ProLogger.info("Logging results");
@@ -2691,6 +2696,90 @@ class ProNonCombatMoveAi {
 
   private Stream<Unit> combinedStream(Collection<Unit> units1, Collection<Unit> units2) {
     return Stream.concat(units1.stream(), units2.stream());
+  }
+
+  /**
+   * Generates embark moves for Phase 2.5 (amphib-no-transports NCM).
+   *
+   * <p>For each player-owned land unit that has not yet moved and is not already embarked, finds
+   * the highest-value reachable sea zone (BFS up to the unit's movement allowance) and emits an
+   * embark move. Contested sea zones (any enemy sea unit present) are skipped. Gated on {@code
+   * AmphContext.isEnabled()}.
+   */
+  private List<MoveDescription> calculateAmphEmbarkMoves() {
+    final AmphContext ctx = proData.getAmphContext();
+    if (!ctx.isEnabled()) {
+      return List.of();
+    }
+
+    // Build enemy territory value map for staging evaluation
+    final Map<Territory, Double> enemyValueMap = new HashMap<>();
+    for (final Territory t : data.getMap().getTerritories()) {
+      if (!t.isWater() && Matches.isTerritoryEnemyAndNotUnownedWater(player).test(t)) {
+        final int prod = TerritoryAttachment.getProduction(t);
+        if (prod > 0) {
+          enemyValueMap.put(t, (double) prod);
+        }
+      }
+    }
+
+    final List<MoveDescription> moves = new ArrayList<>();
+
+    for (final Territory landT : data.getMap().getTerritories()) {
+      if (landT.isWater()) continue;
+
+      final List<Unit> eligibleUnits =
+          landT.getMatches(
+              u ->
+                  u.isOwnedBy(player)
+                      && Matches.unitIsLand().test(u)
+                      && !ctx.isEmbarked(u)
+                      && !u.hasMoved());
+      if (eligibleUnits.isEmpty()) continue;
+
+      // Find best staging destination within each unit's movement range
+      // Group by movement so units with the same allowance share a BFS result
+      final Map<Integer, Map<Territory, Route>> routeCache = new HashMap<>();
+      for (final Unit u : eligibleUnits) {
+        final int maxHops = u.getMovementLeft().intValue();
+        if (maxHops <= 0) continue;
+
+        final Map<Territory, Route> reachable =
+            routeCache.computeIfAbsent(
+                maxHops, hops -> ProAmphUtils.findEmbarkReachableRoutes(landT, player, hops));
+        if (reachable.isEmpty()) continue;
+
+        Territory bestDest = null;
+        Route bestRoute = null;
+        double bestScore = 0;
+        for (final Map.Entry<Territory, Route> e : reachable.entrySet()) {
+          final double score =
+              ProAmphUtils.findAmphReachableLandValue(
+                  e.getKey(), player, enemyValueMap, List.of(), List.of());
+          if (score > bestScore) {
+            bestScore = score;
+            bestDest = e.getKey();
+            bestRoute = e.getValue();
+          }
+        }
+
+        if (bestRoute != null && bestScore > 0) {
+          moves.add(new MoveDescription(List.of(u), bestRoute));
+          ProLogger.debug(
+              "Amphib embark: "
+                  + u.toStringNoOwner()
+                  + " "
+                  + landT.getName()
+                  + " -> "
+                  + bestDest.getName()
+                  + " (score="
+                  + bestScore
+                  + ")");
+        }
+      }
+    }
+
+    return moves;
   }
 
   private void logAttackMoves(final List<ProTerritory> prioritizedTerritories) {

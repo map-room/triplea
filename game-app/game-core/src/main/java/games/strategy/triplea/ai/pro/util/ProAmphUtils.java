@@ -1,19 +1,27 @@
 package games.strategy.triplea.ai.pro.util;
 
 import games.strategy.engine.data.GamePlayer;
+import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.util.BreadthFirstSearch;
 import games.strategy.triplea.attachments.TerritoryAttachment;
+import games.strategy.triplea.delegate.Matches;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import lombok.experimental.UtilityClass;
 
 /**
- * Sea-bridging helpers for amphib-enabled value scoring (Phase 2.3).
+ * Sea-bridging helpers for amphib-enabled value scoring (Phase 2.3) and embark route planning
+ * (Phase 2.5).
  *
- * <p>Both methods are gated by the caller ({@link ProTerritoryValueUtils}) on {@code
+ * <p>Value-scoring methods are gated by the caller ({@link ProTerritoryValueUtils}) on {@code
  * AmphContext.isEnabled()} — callers must not invoke these methods when the amphib toggle is off.
  */
 @UtilityClass
@@ -145,5 +153,60 @@ public final class ProAmphUtils {
             });
 
     return totalValue[0];
+  }
+
+  /**
+   * Returns all sea zones reachable from {@code landT} within {@code maxHops} moves, mapped to the
+   * route from {@code landT} to each destination.
+   *
+   * <p>The first hop is the embark step (land → adjacent sea zone); subsequent hops are sea-zone
+   * transits. Contested sea zones (any enemy sea unit present) are excluded. Canal-aware.
+   *
+   * @param landT starting land territory
+   * @param player the moving player
+   * @param maxHops maximum total hops (embark + transit); must be ≥ 1
+   * @return map of reachable sea-zone territory → route from {@code landT}; insertion-ordered by
+   *     BFS discovery (nearest first)
+   */
+  public static Map<Territory, Route> findEmbarkReachableRoutes(
+      final Territory landT, final GamePlayer player, final int maxHops) {
+
+    final Map<Territory, Route> routes = new LinkedHashMap<>();
+    final Map<Territory, Integer> hopsTo = new HashMap<>();
+    // Queue entries: (sea zone reached so far, full path list from landT)
+    final Queue<Map.Entry<Territory, List<Territory>>> queue = new ArrayDeque<>();
+
+    // Seed: adjacent sea zones — each costs 1 hop (the embark step)
+    for (final Territory sz : player.getData().getMap().getNeighbors(landT)) {
+      if (!sz.isWater()) continue;
+      if (sz.anyUnitsMatch(Matches.enemyUnit(player).and(Matches.unitIsSea()))) continue;
+      final List<Territory> path = new ArrayList<>(List.of(landT, sz));
+      routes.put(sz, new Route(path));
+      hopsTo.put(sz, 1);
+      queue.add(Map.entry(sz, path));
+    }
+
+    while (!queue.isEmpty()) {
+      final Map.Entry<Territory, List<Territory>> entry = queue.poll();
+      final Territory current = entry.getKey();
+      final List<Territory> currentPath = entry.getValue();
+      final int hops = hopsTo.get(current);
+      if (hops >= maxHops) continue;
+
+      for (final Territory next : player.getData().getMap().getNeighbors(current)) {
+        if (!next.isWater()) continue;
+        if (routes.containsKey(next)) continue;
+        if (next.anyUnitsMatch(Matches.enemyUnit(player).and(Matches.unitIsSea()))) continue;
+        if (!ProMatches.noCanalsBetweenTerritories(player).test(current, next)) continue;
+
+        final List<Territory> newPath = new ArrayList<>(currentPath);
+        newPath.add(next);
+        routes.put(next, new Route(newPath));
+        hopsTo.put(next, hops + 1);
+        queue.add(Map.entry(next, newPath));
+      }
+    }
+
+    return routes;
   }
 }
