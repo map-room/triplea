@@ -244,11 +244,16 @@ class ProNonCombatMoveAi {
     ProMoveUtils.doMove(
         proData, ProMoveUtils.calculateMoveRoutes(proData, player, moveMap, isCombatMove), moveDel);
 
-    // Calculate amphib move routes and perform moves
-    ProMoveUtils.doMove(
-        proData,
-        ProMoveUtils.calculateAmphibRoutes(proData, player, moveMap, isCombatMove),
-        moveDel);
+    // Skip old transport-based amphib routes when amphib-no-transports mode is active.
+    // In that mode no transport units exist so the route calculator is a no-op anyway, but
+    // skipping it avoids the overhead of iterating an empty map and clarifies intent.
+    // Phase 2.5 (calculateAmphEmbarkMoves) handles NCM amphib movement instead.
+    if (!proData.getAmphContext().isEnabled()) {
+      ProMoveUtils.doMove(
+          proData,
+          ProMoveUtils.calculateAmphibRoutes(proData, player, moveMap, isCombatMove),
+          moveDel);
+    }
   }
 
   private void findUnitsThatCantMove(

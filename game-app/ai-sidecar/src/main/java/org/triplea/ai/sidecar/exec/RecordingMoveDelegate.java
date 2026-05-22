@@ -18,6 +18,12 @@ import java.util.Optional;
  * validation are captured; invalid moves return the error {@link Optional} so that ProAi can
  * observe the rejection and avoid re-submitting the same move.
  *
+ * <p><b>Amphib free-embark exception:</b> when {@link
+ * games.strategy.triplea.ai.pro.data.AmphContext#isEnabled()} is {@code true}, Phase 2.5
+ * free-embark moves (land unit → sea zone with no physical transport) bypass {@code
+ * super.performMove()} entirely. Java's MoveValidator has no concept of free embark and would
+ * reject them; the TS engine enforces its own rules instead.
+ *
  * <p>Callers must set up the bridge before use:
  *
  * <ol>
@@ -73,10 +79,23 @@ public final class RecordingMoveDelegate extends MoveDelegate {
   @Override
   public Optional<String> performMove(final MoveDescription move) {
     if (!dryRun) {
-      final Optional<String> error = super.performMove(move);
-      if (error.isPresent()) {
-        // Move failed MoveValidator — do NOT record, propagate error to ProAi.
-        return error;
+      // When amphib-no-transports mode is active, Phase 2.5 free-embark moves
+      // (land unit → sea zone, no physical transport) would be rejected by Java's
+      // MoveValidator with "Not enough transports".  The TS engine enforces its own
+      // free-embark rules, so we capture these moves directly without running the
+      // Java-side validation.  This is safe because Phase 2.5 embark moves are the
+      // last NCM action; skipping the Java game-state mutation does not affect any
+      // subsequent AI calculation in the same turn.
+      final boolean isAmphFreeEmbark =
+          proAi.getProData().getAmphContext().isEnabled()
+              && move.getRoute().isLoad()
+              && move.getUnitsToSeaTransports().isEmpty();
+      if (!isAmphFreeEmbark) {
+        final Optional<String> error = super.performMove(move);
+        if (error.isPresent()) {
+          // Move failed MoveValidator — do NOT record, propagate error to ProAi.
+          return error;
+        }
       }
     }
     final Territory end = move.getRoute().getEnd();
