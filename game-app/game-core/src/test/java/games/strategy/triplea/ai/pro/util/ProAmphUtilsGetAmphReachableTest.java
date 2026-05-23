@@ -369,6 +369,52 @@ public class ProAmphUtilsGetAmphReachableTest {
         .isNotEmpty();
   }
 
+  /**
+   * §7 test #6 (design §5.2-2, "verify, don't assume"): an embarked AA gun may disembark onto a
+   * coast captured this turn by another unit's CM assault.
+   *
+   * <p>Setup simulates post-CM state: Korea is initially Japanese-owned, then captured via {@link
+   * ChangeFactory#changeOwner} (mirroring what the engine does when a CM assault succeeds). The NCM
+   * disembark-eligibility check in {@link ProAmphUtils#getAmphReachableTerritories} uses {@link
+   * games.strategy.triplea.delegate.Matches#isTerritoryFriendly}, which reads the territory's
+   * current owner. This test confirms that post-CM ownership change surfaces correctly to the NCM
+   * primitive — no stale cached state hides the just-captured coast.
+   *
+   * <p>The TS engine's CM→NCM phase ordering makes this natural in production; this test provides
+   * evidence rather than assumption (design instruction: "confirm with a dedicated test, don't
+   * assume").
+   */
+  @Test
+  void aaGunDisembarksOntoJustCapturedCoast_issue2712b() {
+    // Korea starts as Japanese-owned (default G40; setUp does not change it).
+    // Simulate another unit's CM assault capturing Korea this turn.
+    final Territory korea = data.getMap().getTerritoryOrThrow(KOREA);
+    final Territory sz6 = data.getMap().getTerritoryOrThrow(SEA_ZONE_6);
+    data.performChange(ChangeFactory.changeOwner(korea, americans));
+
+    // Place an AA gun in 6 Sea Zone, embarked from a prior turn (eligible for NCM disembark).
+    final Unit aaGun = GameDataTestUtil.aaGun(data).create(1, americans).get(0);
+    data.performChange(ChangeFactory.addUnits(sz6, List.of(aaGun)));
+    // embarked=true, embarkedThisTurn=false → eligible for NCM disembark
+    final AmphContext ctx = new AmphContext(true, Set.of(aaGun.getId()), Set.of());
+
+    final Map<Territory, Route> result =
+        ProAmphUtils.getAmphReachableTerritories(aaGun, sz6, false, ctx, americans);
+
+    assertThat(result)
+        .as(
+            "Korea (just captured via CM) must appear as a friendly disembark target in the same "
+                + "turn's NCM — post-CM ownership change must surface to the NCM primitive (§5.2-2)")
+        .containsKey(korea);
+    final Route disembarkRoute = result.get(korea);
+    assertThat(disembarkRoute.getStart())
+        .as("Disembark route must start at the staging SZ (6 Sea Zone)")
+        .isEqualTo(sz6);
+    assertThat(disembarkRoute.getEnd())
+        .as("Disembark route must end at the just-captured coast (Korea)")
+        .isEqualTo(korea);
+  }
+
   // ─── route structure ─────────────────────────────────────────────────────
 
   @Test
