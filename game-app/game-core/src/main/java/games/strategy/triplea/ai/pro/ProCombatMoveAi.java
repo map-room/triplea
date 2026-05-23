@@ -2101,6 +2101,17 @@ public class ProCombatMoveAi {
    *
    * @return map of coastal land territory → list of staged units that can assault it
    */
+  /**
+   * Identifies amphib assault options for the CM pass (design §6.3).
+   *
+   * <p>Candidate units: embarked, {@code !embarkedThisTurn}, and with {@code attack > 0}. AA guns
+   * and other attack-0 units are excluded — they cannot contribute to the land battle and should
+   * not be assaulted onto a hostile coast (design §5.2-2 / #2712). They remain fully eligible for
+   * NCM embark/disembark.
+   *
+   * <p>Destinations: adjacent (1-hop) hostile coasts only, matching the engine rule ({@code
+   * getEmbarkCombatDestinations}).
+   */
   private Map<Territory, List<Unit>> findAmphAssaultOptions() {
     final AmphContext ctx = proData.getAmphContext();
     final Map<Territory, List<Unit>> options = new HashMap<>();
@@ -2109,18 +2120,21 @@ public class ProCombatMoveAi {
       if (!sz.isWater()) {
         continue;
       }
-      // Land units in this sea zone that are staged (embarked, not embarked this turn)
+      // Staged units: embarked from a prior turn, attack > 0 (excludes AA guns per §5.2-2).
+      // AA guns and other attack-0 units are excluded from CM assault candidates — they cannot
+      // contribute to the land battle and should not be stranded on a hostile coast.
       final List<Unit> staged =
           sz.getMatches(
               u ->
                   u.isOwnedBy(player)
                       && Matches.unitIsLand().test(u)
                       && ctx.isEmbarked(u)
-                      && !ctx.isEmbarkedThisTurn(u));
+                      && !ctx.isEmbarkedThisTurn(u)
+                      && Matches.unitCanAttack(player).test(u));
       if (staged.isEmpty()) {
         continue;
       }
-      // Collect adjacent hostile coasts (1 hop only)
+      // Collect adjacent hostile coasts (1 hop only, mirrors engine getEmbarkCombatDestinations).
       for (final Territory adj : data.getMap().getNeighbors(sz)) {
         if (!adj.isWater()
             && ProMatches.territoryIsEnemyOrCantBeHeld(player, List.of()).test(adj)) {

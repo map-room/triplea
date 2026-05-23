@@ -2704,12 +2704,33 @@ class ProNonCombatMoveAi {
   }
 
   /**
-   * Generates embark moves for Phase 2.5 (amphib-no-transports NCM).
+   * Generates amphib moves for Phase 2.5 (amphib-no-transports NCM) using the unified
+   * embarked-movement model (design §6.2).
    *
-   * <p>For each player-owned land unit that has not yet moved and is not already embarked, finds
-   * the highest-value reachable sea zone (BFS up to the unit's movement allowance) and emits an
-   * embark move. Contested sea zones (any enemy sea unit present) are skipped. Gated on {@code
-   * AmphContext.isEnabled()}.
+   * <p>Resolves:
+   *
+   * <ul>
+   *   <li><b>#2716</b> — uses {@code ProAmphUtils.NAVAL_MOVE} (2) instead of the unit's land
+   *       movement as the sea-hop budget.
+   *   <li><b>#2717</b> — iterates over sea zones as well as land territories so already-embarked
+   *       units (prior-turn embark) are not silently excluded.
+   *   <li><b>§5.2-1 survival gate</b> — sea-zone destinations with {@code survivalProbability <
+   *       DISEMBARK_SURVIVAL_THRESHOLD} are rejected; only safe staging zones and friendly-coast
+   *       disembark targets are scored and dispatched.
+   * </ul>
+   *
+   * <p>Candidate units: player-owned land units that have not moved, either on coastal land
+   * (non-embarked) or already in a sea zone (embarked from a prior turn, not fresh). Gated on
+   * {@link AmphContext#isEnabled()}.
+   *
+   * <p>Scoring:
+   *
+   * <ul>
+   *   <li><b>Sea-zone destination</b>: gated by {@code survivalProbability ≥ 0.70}; scored by
+   *       {@link ProAmphUtils#findAmphReachableLandValue} (assault-staging value).
+   *   <li><b>Friendly-coast disembark destination</b>: always safe; scored by production value
+   *       (reinforcement value of the landing zone).
+   * </ul>
    */
   private List<MoveDescription> calculateAmphEmbarkMoves() {
     final AmphContext ctx = proData.getAmphContext();
@@ -2717,7 +2738,7 @@ class ProNonCombatMoveAi {
       return List.of();
     }
 
-    // Build enemy territory value map for staging evaluation
+    // Enemy territory value map used by findAmphReachableLandValue for staging scoring.
     final Map<Territory, Double> enemyValueMap = new HashMap<>();
     for (final Territory t : data.getMap().getTerritories()) {
       if (!t.isWater() && Matches.isTerritoryEnemyAndNotUnownedWater(player).test(t)) {
@@ -2730,40 +2751,59 @@ class ProNonCombatMoveAi {
 
     final List<MoveDescription> moves = new ArrayList<>();
 
-    for (final Territory landT : data.getMap().getTerritories()) {
-      if (landT.isWater()) continue;
+    // Iterate over ALL territories (land + sea) to catch both:
+    //   - non-embarked units on coastal land (branch A of getAmphReachableTerritories)
+    //   - already-embarked units in sea zones from a prior turn (branch B)  — fixes #2717
+    for (final Territory from : data.getMap().getTerritories()) {
+      final boolean fromIsSz = from.isWater();
 
+      // Units eligible for this pass:
+      //   - land territory: non-embarked (about to embark)
+      //   - sea zone: embarked (already staged, !isEmbarked would have filtered them out pre-fix)
       final List<Unit> eligibleUnits =
-          landT.getMatches(
+          from.getMatches(
               u ->
                   u.isOwnedBy(player)
                       && Matches.unitIsLand().test(u)
-                      && !ctx.isEmbarked(u)
-                      && !u.hasMoved());
+                      && !u.hasMoved()
+                      && (fromIsSz == ctx.isEmbarked(u)));
       if (eligibleUnits.isEmpty()) continue;
 
-      // Find best staging destination within each unit's movement range
-      // Group by movement so units with the same allowance share a BFS result
-      final Map<Integer, Map<Territory, Route>> routeCache = new HashMap<>();
       for (final Unit u : eligibleUnits) {
-        final int maxHops = u.getMovementLeft().intValue();
-        if (maxHops <= 0) continue;
-
+        // Unified reachability primitive (design §6.1): applies NAVAL_MOVE budget,
+        // embarkedThisTurn guard, canal check, and contested-SZ exclusion internally.
         final Map<Territory, Route> reachable =
-            routeCache.computeIfAbsent(
-                maxHops, hops -> ProAmphUtils.findEmbarkReachableRoutes(landT, player, hops));
+            ProAmphUtils.getAmphReachableTerritories(u, from, false, ctx, player);
         if (reachable.isEmpty()) continue;
 
         Territory bestDest = null;
         Route bestRoute = null;
         double bestScore = 0;
+
         for (final Map.Entry<Territory, Route> e : reachable.entrySet()) {
-          final double score =
-              ProAmphUtils.findAmphReachableLandValue(
-                  e.getKey(), player, enemyValueMap, List.of(), List.of());
+          final Territory dest = e.getKey();
+          final double score;
+
+          if (dest.isWater()) {
+            // Sea-zone destination: apply survival-probability gate (§5.2-1 / §6.6).
+            // Units whose expected survival < 70% in that zone are not sent there.
+            final double p = ProAmphUtils.survivalProbability(List.of(u), dest, player);
+            if (p < ProAmphUtils.DISEMBARK_SURVIVAL_THRESHOLD) {
+              continue; // unsafe — skip
+            }
+            score =
+                ProAmphUtils.findAmphReachableLandValue(
+                    dest, player, enemyValueMap, List.of(), List.of());
+          } else {
+            // Friendly-coast disembark destination: always safe, score by production value
+            // (reinforcement / defensive placement). AA / attack-0 units and all others
+            // are eligible for NCM disembark per §5.2-2.
+            score = TerritoryAttachment.getProduction(dest);
+          }
+
           if (score > bestScore) {
             bestScore = score;
-            bestDest = e.getKey();
+            bestDest = dest;
             bestRoute = e.getValue();
           }
         }
@@ -2774,7 +2814,7 @@ class ProNonCombatMoveAi {
               "Amphib embark: "
                   + u.toStringNoOwner()
                   + " "
-                  + landT.getName()
+                  + from.getName()
                   + " -> "
                   + bestDest.getName()
                   + " (score="
