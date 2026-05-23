@@ -39,7 +39,6 @@ import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 public class ProCombatMoveUnifiedAmphTest {
 
   private static final String SEA_ZONE_6 = "6 Sea Zone";
-  private static final String JAPAN = "Japan";
 
   private GameData data;
   private GamePlayer americans;
@@ -79,10 +78,9 @@ public class ProCombatMoveUnifiedAmphTest {
   @Test
   void aaGunExcludedFromCombatAssaultCandidates_issue2712d() {
     final Territory sz6 = data.getMap().getTerritoryOrThrow(SEA_ZONE_6);
-    final Territory japan = data.getMap().getTerritoryOrThrow(JAPAN);
 
     // AA gun in 6 SZ — embarked from a prior turn, NOT embarkedThisTurn.
-    // Japan is adjacent to 6 SZ and is hostile (Japanese-owned) → valid 1-hop assault target.
+    // Japan and Korea are adjacent to 6 SZ and hostile (Japanese-owned) — valid assault targets.
     final Unit aaGun = GameDataTestUtil.aaGun(data).create(1, americans).get(0);
     data.performChange(ChangeFactory.addUnits(sz6, List.of(aaGun)));
 
@@ -119,9 +117,8 @@ public class ProCombatMoveUnifiedAmphTest {
   @Test
   void infantryAssaultStillWorksAfterAaExclusion() {
     final Territory sz6 = data.getMap().getTerritoryOrThrow(SEA_ZONE_6);
-    final Territory japan = data.getMap().getTerritoryOrThrow(JAPAN);
 
-    // Infantry staged in 6 SZ (embarked, not fresh) alongside the AA gun scenario.
+    // Infantry staged in 6 SZ (embarked, not fresh). Japan/Korea adjacent → hostile coasts.
     final Unit infantry = GameDataTestUtil.infantry(data).create(1, americans).get(0);
     data.performChange(ChangeFactory.addUnits(sz6, List.of(infantry)));
 

@@ -42,7 +42,6 @@ public class ProAmphUtilsGetAmphReachableTest {
   private static final String KOREA = "Korea";
   private static final String SEA_ZONE_6 = "6 Sea Zone";
   private static final String SEA_ZONE_5 = "5 Sea Zone";
-  private static final String SEA_ZONE_7 = "7 Sea Zone";
   private static final String JAPAN = "Japan";
 
   private GameData data;
