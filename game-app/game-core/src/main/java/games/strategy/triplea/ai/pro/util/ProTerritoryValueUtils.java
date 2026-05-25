@@ -321,6 +321,15 @@ public final class ProTerritoryValueUtils {
       final Map<Territory, Double> enemyCapitalsAndFactoriesMap,
       final List<Territory> territoriesThatCantBeHeld,
       final List<Territory> territoriesToAttack) {
+    // True Neutrals are never (or almost never) attacked due to the cascade rule —
+    // attacking any True Neutral flips every remaining True Neutral to the opposing
+    // coalition, which is virtually always a net loss. Score them at zero in the
+    // territoryValueMap so they don't drive sea-zone staging value (and through it
+    // `needAmphibUnitValue`), which previously pulled US/UK ground forces toward the
+    // Caribbean to invade South American neutrals that no one ever attacks. #2745
+    if (ProUtils.isNeutralLand(t)) {
+      return 0.0;
+    }
     final GameData data = proData.getData();
     final BiPredicate<Territory, Territory> routeCond =
         (t1, t2) ->
@@ -372,8 +381,10 @@ public final class ProTerritoryValueUtils {
       if (distance > 0) {
         double value = TerritoryAttachment.getProduction(nearbyEnemyTerritory);
         if (ProUtils.isNeutralLand(nearbyEnemyTerritory)) {
-          // find neutral value
-          value = findTerritoryAttackValue(proData, player, nearbyEnemyTerritory) / 3;
+          // True Neutrals contribute almost nothing to nearby-territory value because
+          // the cascade rule makes them un-attackable in practice. The previous /3
+          // discount was too generous and let SA neutrals inflate Caribbean staging. #2745
+          value = findTerritoryAttackValue(proData, player, nearbyEnemyTerritory) / 30;
         } else if (ProMatches.territoryIsAlliedLandAndHasNoEnemyNeighbors(player)
             .test(nearbyEnemyTerritory)) {
           value *= 0.1; // reduce value for can't hold amphib allied territories
@@ -475,7 +486,12 @@ public final class ProTerritoryValueUtils {
             .test(nearbyLandTerritory)) {
           double value = TerritoryAttachment.getProduction(nearbyLandTerritory);
           if (ProUtils.isNeutralLand(nearbyLandTerritory)) {
-            value = findTerritoryAttackValue(proData, player, nearbyLandTerritory);
+            // True Neutrals contribute almost nothing to sea-zone staging value because
+            // the cascade rule makes them un-attackable in practice. Previously this
+            // summed full attack-value (3 × production), making Caribbean sea zones
+            // hugely attractive to transports because of nearby South American
+            // neutrals — pulling US/UK ground forces toward staging that never lands. #2745
+            value = findTerritoryAttackValue(proData, player, nearbyLandTerritory) / 30;
           }
           nearbyLandValue += value;
         }
