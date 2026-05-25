@@ -182,9 +182,22 @@ public class ProCombatMoveAi {
     // alternative this round — suppress the amphib penalty so the planner values these
     // attacks on the same footing as equivalent land attacks. This naturally covers island
     // powers (US, UK, Japan in G40) without hard-coding player names or map geography.
-    final boolean isIslandPower =
-        !attackOptions.isEmpty()
-            && attackOptions.stream().allMatch(ProTerritory::isNeedAmphibUnits);
+    //
+    // Robustness (#2736): the "no land alternative" semantic is specifically *no enemy-owned
+    // land attack option exists*. Friendly/allied territory routes in attackOptions, and
+    // enemy-owned sea zones reachable by submarines/destroyers, are not real overland
+    // substitutes for an amphib invasion. Filtering to enemy-owned land attacks keeps the
+    // island-power mode engaging for Pacific powers even when sea-on-sea attacks coexist.
+    final boolean hasEnemyLandAlternative =
+        attackOptions.stream()
+            .anyMatch(
+                patd ->
+                    !patd.isNeedAmphibUnits()
+                        && !patd.getTerritory().isWater()
+                        && Matches.isTerritoryEnemy(player).test(patd.getTerritory()));
+    final boolean hasAnyAmphibOption =
+        attackOptions.stream().anyMatch(ProTerritory::isNeedAmphibUnits);
+    final boolean isIslandPower = hasAnyAmphibOption && !hasEnemyLandAlternative;
     ProLogger.debug("Player has no land alternative (island-power mode): " + isIslandPower);
 
     // Calculate value of attacking territory
@@ -222,12 +235,19 @@ public class ProCombatMoveAi {
       if (isFfa == 1 && tuvSwing > 0) {
         tuvSwing *= 0.5;
       }
+      // Strategic empty-island bonus (#2736): amphib raids on undefended zero-IPC islands
+      // (Wake, Midway, Line Islands) still have real value — they deny enemy basing,
+      // extend our air/naval reach, and convert later. Without this additive term the
+      // multiplicative product collapses to 0 because it gates on raw production.
+      final int isAmphibStrategicIsland =
+          (isAmphib == 1 && isEmptyLand == 1 && productionAndIsCapital.production == 0) ? 1 : 0;
       final double territoryValue =
           (1 + isLand + isCanHold * (1 + 2.0 * isFfa * isLand))
-              * (1 + isEmptyLand)
-              * (1 + isFactory)
-              * (isIslandPower ? 1.0 : (1 - 0.5 * isAmphib))
-              * productionAndIsCapital.production;
+                  * (1 + isEmptyLand)
+                  * (1 + isFactory)
+                  * (isIslandPower ? 1.0 : (1 - 0.5 * isAmphib))
+                  * productionAndIsCapital.production
+              + 2.0 * isAmphibStrategicIsland;
       double attackValue =
           (tuvSwing + territoryValue)
               * (1 + 4.0 * productionAndIsCapital.isCapital)

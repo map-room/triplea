@@ -321,19 +321,31 @@ public final class ProTerritoryValueUtils {
       final Map<Territory, Double> enemyCapitalsAndFactoriesMap,
       final List<Territory> territoriesThatCantBeHeld,
       final List<Territory> territoriesToAttack) {
+    final GameData data = proData.getData();
+    final BiPredicate<Territory, Territory> routeCond =
+        (t1, t2) ->
+            ProMatches.territoryCanPotentiallyMoveLandUnits(player).test(t2)
+                && ProMatches.noCanalsBetweenTerritories(player).test(t1, t2);
+    final int landMassSize = 1 + data.getMap().getNeighbors(t, 6, routeCond).size();
+
+    // Can't-hold short-circuit: mainland chunks we can't hold are scored zero (no point
+    // pricing how productive an enemy mainland is if we can't keep it). For island
+    // territories (landMassSize == 1) we still emit the raid-value floor — capturing
+    // a can't-hold island flips its IPC and can deny enemy basing even if we lose it
+    // back next turn. Without this branch the island production floor at line 391
+    // below is bypassed for any island the AI marks can't-hold (e.g., Guam round 1
+    // against a stacked Japanese garrison), zeroing every Pacific amphib target. #2736
     if (territoriesThatCantBeHeld.contains(t)) {
+      if (landMassSize == 1) {
+        return TerritoryAttachment.getProduction(t) * 0.5 + computeBaseBonus(t);
+      }
       return 0.0;
     }
 
     // Determine value based on enemy factory land distance
     final List<Double> values = new ArrayList<>();
-    final GameData data = proData.getData();
     final Collection<Territory> nearbyEnemyCapitalsAndFactories =
         findNearbyEnemyCapitalsAndFactories(t, enemyCapitalsAndFactoriesMap.keySet());
-    final BiPredicate<Territory, Territory> routeCond =
-        (t1, t2) ->
-            ProMatches.territoryCanPotentiallyMoveLandUnits(player).test(t2)
-                && ProMatches.noCanalsBetweenTerritories(player).test(t1, t2);
     for (final Territory enemyCapitalOrFactory : nearbyEnemyCapitalsAndFactories) {
       final int distance = data.getMap().getDistance(t, enemyCapitalOrFactory, routeCond);
       if (distance > 0) {
@@ -371,7 +383,6 @@ public final class ProTerritoryValueUtils {
         }
       }
     }
-    final int landMassSize = 1 + data.getMap().getNeighbors(t, 6, routeCond).size();
     double value = nearbyEnemyValue * landMassSize / maxLandMassSize + capitalOrFactoryValue;
     if (ProMatches.territoryHasInfraFactoryAndIsLand().test(t)) {
       value *= 1.1; // prefer territories with factories
