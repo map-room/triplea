@@ -403,7 +403,15 @@ public final class ProTerritoryValueUtils {
     // the proximity math regardless of their production, because all distance calculations
     // use land-only routing. Apply a production-based floor so islands aren't silently zeroed
     // in the hold-value map and discarded before amphibious planning considers them.
-    if (landMassSize == 1) {
+    //
+    // Scoped to *attack candidates* only (enemy-owned or can't-be-held) — friendly islands
+    // already have their own defense scoring path and shouldn't appear in the amphib
+    // destination set via this floor. Pre-scoping the floor was inflating West Indies (UK,
+    // production=1) to 0.5, which then dominated US East Coast amphib unload destinations
+    // when no enemy target was within range. #2747
+    final boolean isAttackCandidate =
+        ProMatches.territoryIsEnemyOrCantBeHeld(player, territoriesThatCantBeHeld).test(t);
+    if (landMassSize == 1 && isAttackCandidate) {
       value = Math.max(value, TerritoryAttachment.getProduction(t) * 0.5);
     }
 
