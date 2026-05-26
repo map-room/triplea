@@ -7,6 +7,7 @@ import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.util.BreadthFirstSearch;
 import games.strategy.triplea.ai.pro.ProData;
+import games.strategy.triplea.ai.pro.logging.ProValueHeatmapDumper;
 import games.strategy.triplea.attachments.TerritoryAttachment;
 import games.strategy.triplea.delegate.Matches;
 import java.util.ArrayList;
@@ -145,6 +146,7 @@ public final class ProTerritoryValueUtils {
       }
     }
 
+    ProValueHeatmapDumper.dumpIfEnabled(proData, player, "combined", territoryValueMap);
     return territoryValueMap;
   }
 
@@ -194,6 +196,9 @@ public final class ProTerritoryValueUtils {
       }
     }
 
+    // findSeaTerritoryValues doesn't receive ProData; use the GameData-shaped dumper overload.
+    ProValueHeatmapDumper.dumpIfEnabledFromGameData(
+        player.getData(), player, "sea-only", territoryValueMap);
     return territoryValueMap;
   }
 
