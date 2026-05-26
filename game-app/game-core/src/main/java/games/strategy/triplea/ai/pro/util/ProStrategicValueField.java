@@ -93,7 +93,27 @@ public final class ProStrategicValueField {
       final BreadthFirstSearch bfs = new BreadthFirstSearch(List.of(anchor), edgeCond);
       bfs.traverse(
           (territory, distance) -> {
-            final double decayed = strength * Math.pow(gamma, distance);
+            // Convert BFS edge distance to game-turn distance per spec §4 "movement-step
+            // distance". Transports move 2 sea zones per turn AND unload as a free
+            // end-of-move action, so a 2-edge or 3-edge amphib path completes in 1 turn:
+            //   BFS 1 → 1 turn (basic move)
+            //   BFS 2 → 1 turn (amphib through 1 SZ)
+            //   BFS 3 → 1 turn (amphib through 2 SZs, transport spends 2/2 then unloads)
+            //   BFS 4 → 2 turns (3 SZ traversals)
+            //   BFS 5 → 2 turns (4 SZ traversals: 2+2)
+            //   BFS 6 → 3 turns (5 SZ traversals: 2+2+1)
+            // Floor (not ceil) because partial turns don't exist in game mechanics —
+            // once you're within transport reach you commit in 1 turn. Minimum of 1 so
+            // non-anchor territories never short-circuit to full strength.
+            //
+            // For pure-land paths this over-credits infantry-paced advance (BFS 4 = 2
+            // turns by formula vs 4 turns for infantry, 2 for armour). The SVF is
+            // US-only post-gate (spec §2), and US always crosses water to reach
+            // Eurasian targets, so naval-dominated routes dominate the math — the
+            // approximation is biased correctly for the deployed use case. A future
+            // phase may refine per-edge with Dijkstra accumulator.
+            final int effectiveTurns = Math.max(1, distance / 2);
+            final double decayed = strength * Math.pow(gamma, effectiveTurns);
             final Double existing = field.get(territory);
             if (existing == null || decayed > existing) {
               field.put(territory, decayed);
