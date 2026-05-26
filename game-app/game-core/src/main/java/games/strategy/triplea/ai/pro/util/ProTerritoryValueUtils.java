@@ -160,8 +160,15 @@ public final class ProTerritoryValueUtils {
     return territoryValueMap;
   }
 
-  /** Returns the value of each sea territory in {@link ProData#getData()}. */
+  /**
+   * Returns the value of each sea territory in {@link ProData#getData()}.
+   *
+   * <p>PR-B (map-room#2755): added the {@code proData} parameter to enable the SVF blend. The sole
+   * caller is {@code ProNonCombatMoveAi.doNonCombatMove}, which has {@code proData} in scope; no
+   * external consumers exist.
+   */
   public static Map<Territory, Double> findSeaTerritoryValues(
+      final ProData proData,
       final GamePlayer player,
       final List<Territory> territoriesThatCantBeHeld,
       final List<Territory> territoriesToCheck) {
@@ -199,16 +206,29 @@ public final class ProTerritoryValueUtils {
                 targetTerritory.getUnitCollection().countMatches(Matches.unitIsEnemyOf(player)));
 
         // Set final values
-        final double value = 100 * nearbySeaProductionValue + nearbyEnemySeaUnitValue;
+        double value = 100 * nearbySeaProductionValue + nearbyEnemySeaUnitValue;
+        // SVF blend (map-room#2755 PR-B). proData.getStrategicValueFieldFor returns 0 at
+        // wStrat==0 so this branch is byte-identical to pre-blend at default. §10 Finding 2
+        // noted the sea-only baseline values are often 0 in production runs — the SVF blend
+        // is what makes sea zones near targeted-theater coasts attractive in the first place.
+        value += proData.getWStrat() * proData.getStrategicValueFieldFor(t);
+        if (proData.getStrategicValueField() != null) {
+          value += ProStrategicValueField.launchBonus(t, proData.getStrategicValueField(), proData);
+        }
         territoryValueMap.put(t, value);
       } else if (t.isWater()) {
-        territoryValueMap.put(t, 0.0);
+        // Even unreachable sea zones get the SVF blend (returns 0 at default; non-zero if a
+        // strategic anchor reaches them through the combined movement graph).
+        double value = 0.0;
+        value += proData.getWStrat() * proData.getStrategicValueFieldFor(t);
+        if (proData.getStrategicValueField() != null) {
+          value += ProStrategicValueField.launchBonus(t, proData.getStrategicValueField(), proData);
+        }
+        territoryValueMap.put(t, value);
       }
     }
 
-    // findSeaTerritoryValues doesn't receive ProData; use the GameData-shaped dumper overload.
-    ProValueHeatmapDumper.dumpIfEnabledFromGameData(
-        player.getData(), player, "sea-only", territoryValueMap);
+    ProValueHeatmapDumper.dumpIfEnabled(proData, player, "sea-only", territoryValueMap);
     return territoryValueMap;
   }
 
@@ -436,6 +456,12 @@ public final class ProTerritoryValueUtils {
     // mainland scoring where raw IPC math already provides sufficient discrimination.
     value += computeBaseBonus(t);
 
+    // SVF blend (map-room#2755 PR-B). proData.getStrategicValueFieldFor returns 0 when wStrat==0
+    // (the zero-impact default), so the multiplication is byte-identical to pre-blend output at
+    // default tuning. With wStrat>0, the lazy compute populates S(n) on first read and this term
+    // pulls the value upward toward KGF/KJF objectives. Plan §4 Phase 1D.
+    value += proData.getWStrat() * proData.getStrategicValueFieldFor(t);
+
     return value;
   }
 
@@ -534,7 +560,15 @@ public final class ProTerritoryValueUtils {
       }
     }
 
-    return capitalOrFactoryValue / 100 + nearbyLandValue / 10;
+    double value = capitalOrFactoryValue / 100 + nearbyLandValue / 10;
+    // SVF blend (map-room#2755 PR-B). Sea-zone blend mirrors land-side: at wStrat==0 these terms
+    // are 0 and value is byte-identical to pre-blend. The launch bonus is sea-only — it pools
+    // the fleet at embarkation points neighboring high-S coastal targets. Plan §4 Phase 1D.
+    value += proData.getWStrat() * proData.getStrategicValueFieldFor(t);
+    if (proData.getStrategicValueField() != null) {
+      value += ProStrategicValueField.launchBonus(t, proData.getStrategicValueField(), proData);
+    }
+    return value;
   }
 
   /**

@@ -148,7 +148,7 @@ class ProNonCombatMoveAi {
             new HashSet<>(territoryManager.getDefendTerritories()));
     final Map<Territory, Double> seaTerritoryValueMap =
         ProTerritoryValueUtils.findSeaTerritoryValues(
-            player, territoriesThatCantBeHeld, territoryManager.getDefendTerritories());
+            proData, player, territoriesThatCantBeHeld, territoryManager.getDefendTerritories());
     Map<Territory, ProTerritory> moveMap = territoryManager.getDefendOptions().getTerritoryMap();
 
     // Use loop to ensure capital is protected after moves

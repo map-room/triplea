@@ -162,4 +162,27 @@ public final class ProData {
   public ProTerritory getProTerritory(Map<Territory, ProTerritory> moveMap, Territory t) {
     return moveMap.computeIfAbsent(t, k -> new ProTerritory(t, this));
   }
+
+  /**
+   * SVF PR-B blend accessor (map-room#2755). Returns {@code S(n)} for a territory, or {@code 0.0}
+   * if the strategic field is unset (i.e. {@code wStrat == 0} and no strategic dump is enabled).
+   * Lazy-computes the full-board field on first read when {@code wStrat > 0}; the lazy-compute hook
+   * in {@code findTerritoryValues} fires first in practice, so this method is the safety net for
+   * callers (e.g. {@code findSeaTerritoryValues}) that don't pass through {@code
+   * findTerritoryValues} first.
+   *
+   * <p>Returning 0 when unset is the zero-impact guarantee: {@code value += wStrat * S(t)} with
+   * either factor at 0 leaves the baseline value-map byte-identical.
+   */
+  public double getStrategicValueFieldFor(final Territory t) {
+    if (strategicValueField == null) {
+      if (wStrat <= 0) {
+        return 0.0;
+      }
+      strategicValueField =
+          games.strategy.triplea.ai.pro.util.ProStrategicValueField.compute(this, player);
+    }
+    final Double v = strategicValueField.get(t);
+    return v == null ? 0.0 : v;
+  }
 }

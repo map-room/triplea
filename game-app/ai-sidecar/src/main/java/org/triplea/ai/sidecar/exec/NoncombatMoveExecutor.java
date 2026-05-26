@@ -88,9 +88,9 @@ public final class NoncombatMoveExecutor
     proAi.getProData().setSeed(request.seed());
     proAi.seedBattleCalc(request.seed());
 
-    // Strategic Value Field (map-room#2755 PR-A): apply env/sysprop tuning knobs into ProData
-    // before any phase code reads them. See ProSvfKnobs javadoc for the recognized vars.
-    ProSvfKnobs.applyTo(proAi.getProData());
+    // Strategic Value Field (map-room#2755 PR-B): wire-canonical theater priority, env-only for
+    // numeric tuning knobs. See ProSvfKnobs.applyFromRequest javadoc for the precedence rules.
+    ProSvfKnobs.applyFromRequest(proAi.getProData(), request.state());
 
     // reinitializeProDataForSidecar() re-binds proData.getData() to the fresh GameData before
     // planning — same defensive pattern as PurchaseExecutor.
