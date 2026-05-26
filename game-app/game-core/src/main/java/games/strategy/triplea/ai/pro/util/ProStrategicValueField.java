@@ -94,25 +94,23 @@ public final class ProStrategicValueField {
       bfs.traverse(
           (territory, distance) -> {
             // Convert BFS edge distance to game-turn distance per spec §4 "movement-step
-            // distance". Transports move 2 sea zones per turn AND unload as a free
-            // end-of-move action, so a 2-edge or 3-edge amphib path completes in 1 turn:
-            //   BFS 1 → 1 turn (basic move)
-            //   BFS 2 → 1 turn (amphib through 1 SZ)
-            //   BFS 3 → 1 turn (amphib through 2 SZs, transport spends 2/2 then unloads)
-            //   BFS 4 → 2 turns (3 SZ traversals)
-            //   BFS 5 → 2 turns (4 SZ traversals: 2+2)
-            //   BFS 6 → 3 turns (5 SZ traversals: 2+2+1)
-            // Floor (not ceil) because partial turns don't exist in game mechanics —
-            // once you're within transport reach you commit in 1 turn. Minimum of 1 so
-            // non-anchor territories never short-circuit to full strength.
+            // distance". Transport movement is 2 sea zones per turn, so divide by 2 to
+            // approximate turns. Kept as a FLOAT (not integer floor): although a single
+            // game turn is discrete, the SVF is a continuous value field used to compare
+            // territory attractiveness — a 0.5-turn-closer territory IS strictly
+            // preferable even when both round to the same integer "1 turn". Integer
+            // truncation (early attempt at this fix) collapsed 2-3 BFS edges into the
+            // same bucket and produced a visually-uniform heatmap with only ~12 distinct
+            // values across the entire board; the float version gives every BFS edge a
+            // distinct decay factor and substantially sharper AI preferences.
             //
             // For pure-land paths this over-credits infantry-paced advance (BFS 4 = 2
             // turns by formula vs 4 turns for infantry, 2 for armour). The SVF is
-            // US-only post-gate (spec §2), and US always crosses water to reach
-            // Eurasian targets, so naval-dominated routes dominate the math — the
-            // approximation is biased correctly for the deployed use case. A future
-            // phase may refine per-edge with Dijkstra accumulator.
-            final int effectiveTurns = Math.max(1, distance / 2);
+            // US-only post-gate (spec §2), and US always crosses water to reach Eurasian
+            // targets, so naval-dominated routes dominate the math — the approximation
+            // is biased correctly for the deployed use case. A future phase may refine
+            // per-edge with a Dijkstra accumulator.
+            final double effectiveTurns = distance / 2.0;
             final double decayed = strength * Math.pow(gamma, effectiveTurns);
             final Double existing = field.get(territory);
             if (existing == null || decayed > existing) {
