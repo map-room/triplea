@@ -23,10 +23,16 @@ import javax.annotation.Nullable;
  *
  * <p>When enabled, dumps the {@code Map<Territory, Double>} produced by {@link
  * games.strategy.triplea.ai.pro.util.ProTerritoryValueUtils#findTerritoryValues} (and its sea-only
- * sibling) to a JSON file under {@code $HOME/.maproom/ai-debug/}. The dump is a debugging aid — the
- * Map Room client overlay reads it and renders a heatmap. Disabled by default; enable by setting
- * env var {@code AI_DUMP_VALUES=1} or system property {@code ai.dump.values=1} (the property is for
- * tests so they can flip the gate without spawning a child JVM).
+ * sibling) to a JSON file. The dump is a debugging aid — the Map Room client overlay reads it and
+ * renders a heatmap.
+ *
+ * <p>Disabled by default; enable by setting env var {@code AI_DUMP_VALUES=1} or system property
+ * {@code ai.dump.values=1} (the property is for tests so they can flip the gate without spawning a
+ * child JVM).
+ *
+ * <p>Output directory precedence: env {@code AI_DUMP_PATH} (canonical for docker-compose
+ * bind-mounts) → system property {@code ai.dump.path} (test sibling) → {@code
+ * $HOME/.maproom/ai-debug} (fallback for local non-docker runs).
  *
  * <p>JSON shape:
  *
@@ -46,10 +52,16 @@ import javax.annotation.Nullable;
  * <p>This class is intentionally self-contained: no Jackson, no DI, no sidecar deps. Future phases
  * will extend the schema (S(n) cache, blended vs baseline split) — keep the JSON loose so the
  * client overlay can ignore unknown fields.
+ *
+ * <p>Phase-0.1 follow-up: filenames do not include the boardgame.io matchId. The sidecar already
+ * tracks it via {@code AiTraceLogger.currentMatchId()} thread-local, but that helper lives in the
+ * {@code ai-sidecar} module which {@code game-core} can't depend on. Reaching it cleanly needs a
+ * sibling thread-local in {@code game-core} (e.g., {@code AbstractProAi.currentMatchId()}) that the
+ * sidecar writes alongside its own — deferred per the Phase-0 scope discipline.
  */
 public final class ProValueHeatmapDumper {
 
-  /** Output subdirectory under {@code $HOME}. */
+  /** Fallback subdirectory under {@code $HOME} when no explicit output path is set. */
   static final String OUTPUT_SUBDIR = ".maproom/ai-debug";
 
   private static final AtomicLong SEQ = new AtomicLong(0);
@@ -110,11 +122,24 @@ public final class ProValueHeatmapDumper {
     }
   }
 
-  /** Resolves the output dir. Override via system property {@code ai.dump.values.dir} for tests. */
+  /**
+   * Resolves the output dir. Precedence:
+   *
+   * <ol>
+   *   <li>env {@code AI_DUMP_PATH} (canonical override — used for docker-compose bind-mounts)
+   *   <li>system property {@code ai.dump.path} (test-friendly sibling, mirrors the {@code
+   *       ai.dump.values} gate)
+   *   <li>{@code $HOME/.maproom/ai-debug} (default for local non-docker runs)
+   * </ol>
+   */
   static Path resolveOutputDir() {
-    final String override = System.getProperty("ai.dump.values.dir");
-    if (override != null && !override.isEmpty()) {
-      return Paths.get(override);
+    final String envPath = System.getenv("AI_DUMP_PATH");
+    if (envPath != null && !envPath.isEmpty()) {
+      return Paths.get(envPath);
+    }
+    final String propPath = System.getProperty("ai.dump.path");
+    if (propPath != null && !propPath.isEmpty()) {
+      return Paths.get(propPath);
     }
     final String home = System.getProperty("user.home");
     if (home == null || home.isEmpty()) {

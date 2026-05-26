@@ -27,14 +27,14 @@ class ProValueHeatmapDumperTest {
 
   @BeforeEach
   void setUp() {
-    System.setProperty("ai.dump.values.dir", tempDir.toString());
+    System.setProperty("ai.dump.path", tempDir.toString());
     ProValueHeatmapDumper.resetSeqForTests();
   }
 
   @AfterEach
   void tearDown() {
     System.clearProperty("ai.dump.values");
-    System.clearProperty("ai.dump.values.dir");
+    System.clearProperty("ai.dump.path");
   }
 
   @Test
@@ -125,6 +125,48 @@ class ProValueHeatmapDumperTest {
     assertThat(files).hasSize(1);
     final String name = files.get(0).getFileName().toString();
     assertThat(name).contains("British_Pacific").doesNotContain("/");
+  }
+
+  @Test
+  void systemPropertyPathIsHonored() {
+    // Default precedence: ai.dump.path sysprop > $HOME/.maproom/ai-debug.
+    // setUp() already set ai.dump.path to tempDir; verify the dumper resolved it.
+    System.setProperty("ai.dump.values", "1");
+    final GameData data = stubGameData(1);
+    final GamePlayer player = stubPlayer("Americans");
+    final Map<Territory, Double> values = Map.of(stubTerritory("Foo", false), 1.0);
+
+    ProValueHeatmapDumper.dumpIfEnabledFromGameData(data, player, "combined", values);
+
+    assertThat(listDumpedFiles()).hasSize(1);
+  }
+
+  @Test
+  void fallsBackToHomeDirWhenNoOverrideSet(@TempDir final Path fakeHome) {
+    // Clear the sysprop set by setUp() to exercise the user.home fallback path.
+    System.clearProperty("ai.dump.path");
+    System.setProperty("user.home", fakeHome.toString());
+    System.setProperty("ai.dump.values", "1");
+    try {
+      final GameData data = stubGameData(1);
+      final GamePlayer player = stubPlayer("Americans");
+      final Map<Territory, Double> values = Map.of(stubTerritory("Foo", false), 1.0);
+
+      ProValueHeatmapDumper.dumpIfEnabledFromGameData(data, player, "combined", values);
+
+      final Path expectedDir = fakeHome.resolve(ProValueHeatmapDumper.OUTPUT_SUBDIR);
+      assertThat(expectedDir).exists();
+      try (Stream<Path> s = Files.list(expectedDir)) {
+        assertThat(s.toList()).hasSize(1);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    } finally {
+      // Restore HOME so other tests in the JVM aren't affected. user.home is normally
+      // immutable for the process lifetime; setting it for one test is OK but we want
+      // to be polite about cleanup.
+      System.clearProperty("user.home");
+    }
   }
 
   @Test
