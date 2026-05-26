@@ -75,6 +75,17 @@ public final class ProValueHeatmapDumper {
   }
 
   /**
+   * Returns {@code true} when strategic-field dumping is enabled. Separate gate from {@link
+   * #isEnabled()} so a tuning run can emit S(n) without also producing the larger baseline
+   * value-map dumps (and vice versa). Env: {@code AI_DUMP_STRATEGIC=1}; sysprop: {@code
+   * ai.dump.strategic=1}.
+   */
+  public static boolean isStrategicEnabled() {
+    return "1".equals(System.getenv("AI_DUMP_STRATEGIC"))
+        || "1".equals(System.getProperty("ai.dump.strategic"));
+  }
+
+  /**
    * Writes the value map to disk if enabled; no-op otherwise. Never throws — instrumentation must
    * not break a running game. Failures are logged via {@link ProLogger#warn} and swallowed.
    *
@@ -88,6 +99,55 @@ public final class ProValueHeatmapDumper {
       final String entrypoint,
       final Map<Territory, Double> territoryValueMap) {
     dumpIfEnabledFromGameData(proData.getData(), player, entrypoint, territoryValueMap);
+    dumpStrategicFieldIfEnabled(proData, player, entrypoint);
+  }
+
+  /**
+   * Emits a sibling {@code *-strategic.json} file containing the cached strategic value field from
+   * {@code proData}, when {@link #isStrategicEnabled()} is on AND the field has been computed. The
+   * strategic dump uses the same {@link #dumpIfEnabledFromGameData} writer so the JSON shape and
+   * filename convention are identical to the value-map dumps — the suffix {@code -strategic} on the
+   * {@code entrypoint} field is the only differentiator.
+   *
+   * <p>Safe to call when {@code wStrat=0}: the strategic field will be {@code null} (lazy compute
+   * skipped) and this method returns without writing.
+   */
+  static void dumpStrategicFieldIfEnabled(
+      final ProData proData, final GamePlayer player, final String entrypoint) {
+    if (!isStrategicEnabled()) {
+      return;
+    }
+    final Map<Territory, Double> field = proData.getStrategicValueField();
+    if (field == null || field.isEmpty()) {
+      return;
+    }
+    final String strategicEntrypoint = entrypoint + "-strategic";
+    dumpStrategicInternal(proData.getData(), player, strategicEntrypoint, field);
+  }
+
+  /** Writes the strategic dump unconditionally — gate check happens in the caller. */
+  private static void dumpStrategicInternal(
+      final GameData data,
+      final GamePlayer player,
+      final String entrypoint,
+      final Map<Territory, Double> field) {
+    try {
+      final Path outDir = resolveOutputDir();
+      Files.createDirectories(outDir);
+      final int round = data.getSequence().getRound();
+      final long timestampMs = Instant.now().toEpochMilli();
+      final long seq = SEQ.incrementAndGet();
+      final String filename =
+          String.format(
+              "%d-%s-%s-%d-%05d.json",
+              round, sanitize(player.getName()), entrypoint, timestampMs, seq);
+      final Path outFile = outDir.resolve(filename);
+      try (Writer w = Files.newBufferedWriter(outFile, StandardCharsets.UTF_8)) {
+        writeJson(w, round, player.getName(), entrypoint, timestampMs, seq, field);
+      }
+    } catch (final IOException | RuntimeException e) {
+      ProLogger.warn("ProValueHeatmapDumper (strategic) failed: " + e.getMessage());
+    }
   }
 
   /**

@@ -8,7 +8,9 @@ import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.GameSequence;
 import games.strategy.engine.data.Territory;
+import games.strategy.triplea.ai.pro.ProData;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,6 +36,7 @@ class ProValueHeatmapDumperTest {
   @AfterEach
   void tearDown() {
     System.clearProperty("ai.dump.values");
+    System.clearProperty("ai.dump.strategic");
     System.clearProperty("ai.dump.path");
   }
 
@@ -145,6 +148,7 @@ class ProValueHeatmapDumperTest {
   void fallsBackToHomeDirWhenNoOverrideSet(@TempDir final Path fakeHome) {
     // Clear the sysprop set by setUp() to exercise the user.home fallback path.
     System.clearProperty("ai.dump.path");
+    final String originalHome = System.getProperty("user.home");
     System.setProperty("user.home", fakeHome.toString());
     System.setProperty("ai.dump.values", "1");
     try {
@@ -162,10 +166,15 @@ class ProValueHeatmapDumperTest {
         throw new RuntimeException(e);
       }
     } finally {
-      // Restore HOME so other tests in the JVM aren't affected. user.home is normally
-      // immutable for the process lifetime; setting it for one test is OK but we want
-      // to be polite about cleanup.
-      System.clearProperty("user.home");
+      // Restore the ORIGINAL user.home — clearing it (the previous impl) leaks a null
+      // into the JVM that breaks subsequent ClientSetting static init in OTHER test
+      // classes that run in the same JVM (caught when ProStrategicValueFieldTest started
+      // failing intermittently with NoClassDefFoundError on ClientSetting).
+      if (originalHome != null) {
+        System.setProperty("user.home", originalHome);
+      } else {
+        System.clearProperty("user.home");
+      }
     }
   }
 
@@ -192,7 +201,108 @@ class ProValueHeatmapDumperTest {
     assertThat(zeroCount).isEqualTo(3);
   }
 
+  // ---------------------------------------------------------------------------
+  // Strategic-field sibling dump (PR-A — map-room#2755)
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void strategicGate_disabledByDefault_noSiblingFileWritten() {
+    System.setProperty("ai.dump.values", "1"); // value gate on
+    // ai.dump.strategic intentionally NOT set
+    final ProData proData =
+        stubProDataWithStrategicField(1, Map.of(stubTerritory("Foo", false), 5.0));
+    final GamePlayer player = stubPlayer("Americans");
+    final Map<Territory, Double> values = Map.of(stubTerritory("Foo", false), 1.0);
+
+    ProValueHeatmapDumper.dumpIfEnabled(proData, player, "combined", values);
+
+    // Only the value-map dump is written, no -strategic sibling.
+    final List<Path> files = listDumpedFiles();
+    assertThat(files).hasSize(1);
+    assertThat(files.get(0).getFileName().toString()).doesNotContain("strategic");
+  }
+
+  @Test
+  void strategicGate_enabled_andFieldPopulated_writesSiblingFile() throws IOException {
+    System.setProperty("ai.dump.values", "1");
+    System.setProperty("ai.dump.strategic", "1");
+    final Map<Territory, Double> strategicField =
+        orderedMap(stubTerritory("Berlin", false), 75.0, stubTerritory("East US", false), 10.5);
+    final ProData proData = stubProDataWithStrategicField(3, strategicField);
+    final GamePlayer player = stubPlayer("Americans");
+    final Map<Territory, Double> values = Map.of(stubTerritory("Foo", false), 1.0);
+
+    ProValueHeatmapDumper.dumpIfEnabled(proData, player, "combined", values);
+
+    final List<Path> files = listDumpedFiles();
+    assertThat(files).hasSize(2);
+    final Path siblingFile =
+        files.stream()
+            .filter(p -> p.getFileName().toString().contains("strategic"))
+            .findFirst()
+            .orElseThrow();
+    final String content = Files.readString(siblingFile, StandardCharsets.UTF_8);
+    assertThat(content)
+        .contains("\"entrypoint\":\"combined-strategic\"")
+        .contains("\"round\":3")
+        .contains("\"name\":\"Berlin\"")
+        .contains("\"value\":75.0")
+        .contains("\"name\":\"East US\"")
+        .contains("\"value\":10.5");
+  }
+
+  @Test
+  void strategicGate_enabled_butFieldNull_writesNoSibling() {
+    System.setProperty("ai.dump.values", "1");
+    System.setProperty("ai.dump.strategic", "1");
+    final ProData proData = stubProDataWithStrategicField(1, null);
+    final GamePlayer player = stubPlayer("Americans");
+    final Map<Territory, Double> values = Map.of(stubTerritory("Foo", false), 1.0);
+
+    ProValueHeatmapDumper.dumpIfEnabled(proData, player, "combined", values);
+
+    assertThat(listDumpedFiles())
+        .as("strategic field null (wStrat=0 path) → no sibling")
+        .hasSize(1)
+        .allMatch(p -> !p.getFileName().toString().contains("strategic"));
+  }
+
+  @Test
+  void strategicGate_independent_fromValueGate_canEmitWithoutValueDump() {
+    // AI_DUMP_VALUES off, AI_DUMP_STRATEGIC on — only the strategic sibling should write.
+    System.setProperty("ai.dump.strategic", "1");
+    final ProData proData =
+        stubProDataWithStrategicField(2, Map.of(stubTerritory("Foo", false), 5.0));
+    final GamePlayer player = stubPlayer("Americans");
+    final Map<Territory, Double> values = Map.of(stubTerritory("Foo", false), 1.0);
+
+    ProValueHeatmapDumper.dumpIfEnabled(proData, player, "combined", values);
+
+    final List<Path> files = listDumpedFiles();
+    assertThat(files).hasSize(1);
+    assertThat(files.get(0).getFileName().toString()).contains("strategic");
+  }
+
   // --- helpers ---
+
+  /**
+   * Builds a real {@link ProData} with reflection-injected mocked GameData. ProData is final so
+   * Mockito can't mock it directly; this mirrors the helper pattern in {@code
+   * ProFriendlyIslandFloorTest} and {@code ProStrategicValueFieldTest}.
+   */
+  private static ProData stubProDataWithStrategicField(
+      final int round, final Map<Territory, Double> strategicField) {
+    try {
+      final ProData proData = new ProData();
+      final Field dataField = ProData.class.getDeclaredField("data");
+      dataField.setAccessible(true);
+      dataField.set(proData, stubGameData(round));
+      proData.setStrategicValueField(strategicField);
+      return proData;
+    } catch (final ReflectiveOperationException e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   private List<Path> listDumpedFiles() {
     try (Stream<Path> s = Files.list(tempDir)) {

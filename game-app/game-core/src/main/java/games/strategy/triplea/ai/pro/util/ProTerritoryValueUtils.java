@@ -109,6 +109,13 @@ public final class ProTerritoryValueUtils {
       final List<Territory> territoriesThatCantBeHeld,
       final List<Territory> territoriesToAttack,
       final Set<Territory> territoriesToCheck) {
+    // Strategic Value Field (map-room#2755 PR-A): lazy-compute S(n) on the first
+    // findTerritoryValues call of this request when wStrat > 0. Skipped entirely when wStrat==0
+    // (the zero-impact default), so PR-A is a true no-op for non-tuning runs. PR-B's blend
+    // reads proData.getStrategicValueField() and applies wStrat * S(t) inside the value loops.
+    if (proData.getWStrat() > 0 && proData.getStrategicValueField() == null) {
+      proData.setStrategicValueField(ProStrategicValueField.compute(proData, player));
+    }
     final int maxLandMassSize = findMaxLandMassSize(player);
     final Map<Territory, Double> enemyCapitalsAndFactoriesMap =
         findEnemyCapitalsAndFactoriesValue(
