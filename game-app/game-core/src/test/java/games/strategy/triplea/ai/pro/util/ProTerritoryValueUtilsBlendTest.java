@@ -208,6 +208,73 @@ class ProTerritoryValueUtilsBlendTest {
         .isEqualTo(baseline);
   }
 
+  // ---------------------------------------------------------------------------
+  // findWaterValue Panama-overweight fix (separate from SVF; caught during PR-B
+  // live-run investigation — see map-room#2755 comment thread)
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void panamaCanal_seaZone64_doesNotOverInflate_fromFriendlyAdjacency() throws Exception {
+    // Before fix: findWaterValue's second `nearbyLandValue +=` ran ungated, accumulating
+    // the strategic findLandValue of EVERY nearby land territory regardless of ownership.
+    // SZ 64 (Panama) was the worst offender — 4 distance-1 land neighbors (Central
+    // America US-allied, Colombia/Ecuador/SE Mexico True Neutrals) plus many more within
+    // 3 sea hops, all contributing. Result: baseline B(SZ 64) ≈ 44 (10× a typical sea
+    // zone), pulling US transports to Panama instead of Atlantic under KGF.
+    //
+    // After fix: only enemy/can't-be-held land contributes its strategic land-value.
+    // SZ 64 baseline should drop substantially. Pin via a soft upper bound — if a
+    // future ProAi tweak re-inflates it, this test catches the regression.
+    final ProData usProData = proDataForPlayer(data, "Americans");
+    declareAxisWarAndAllies(usProData);
+    usProData.setWStrat(0.0); // exclude SVF blend; we want pure baseline
+
+    final Territory sz64 = data.getMap().getTerritoryOrThrow("64 Sea Zone");
+    final double sz64Value =
+        ProTerritoryValueUtils.findTerritoryValues(
+                usProData, americans, List.of(), List.of(), Set.of(sz64))
+            .get(sz64);
+
+    assertThat(sz64Value)
+        .as(
+            "B(SZ 64) at wStrat=0 must reflect enemy-coast contribution only (Panama "
+                + "was inflated by friendly+neutral adjacency before the fix)")
+        .isLessThan(25.0);
+  }
+
+  /**
+   * Synthesizes a post-war-declaration relationship state matching the
+   * ProStrategicValueFieldAcceptanceTest fixture so SZ 64's evaluation runs against the realistic
+   * enemy set (axis = enemies, other Allies = allied).
+   */
+  private void declareAxisWarAndAllies(final ProData proData) {
+    final GamePlayer germans = data.getPlayerList().getPlayerId("Germans");
+    final GamePlayer italians = data.getPlayerList().getPlayerId("Italians");
+    final GamePlayer japanese = data.getPlayerList().getPlayerId("Japanese");
+    final GamePlayer british = data.getPlayerList().getPlayerId("British");
+    final GamePlayer russians = data.getPlayerList().getPlayerId("Russians");
+    final GamePlayer chinese = data.getPlayerList().getPlayerId("Chinese");
+    final GamePlayer anzac = data.getPlayerList().getPlayerId("ANZAC");
+    final GamePlayer french = data.getPlayerList().getPlayerId("French");
+    setRelationship(americans, germans, "War");
+    setRelationship(americans, italians, "War");
+    setRelationship(americans, japanese, "War");
+    setRelationship(americans, british, "Allied");
+    setRelationship(americans, russians, "Allied");
+    setRelationship(americans, chinese, "Allied");
+    setRelationship(americans, anzac, "Allied");
+    setRelationship(americans, french, "Allied");
+  }
+
+  private void setRelationship(final GamePlayer a, final GamePlayer b, final String relName) {
+    data.performChange(
+        games.strategy.engine.data.changefactory.ChangeFactory.relationshipChange(
+            a,
+            b,
+            data.getRelationshipTracker().getRelationshipType(a, b),
+            data.getRelationshipTypeList().getRelationshipType(relName)));
+  }
+
   @Test
   void getStrategicValueFieldFor_returnsZero_whenWStratZero_evenForKnownAnchor() {
     proData.setWStrat(0.0);

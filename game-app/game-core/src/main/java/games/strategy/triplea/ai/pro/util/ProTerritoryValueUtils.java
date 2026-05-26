@@ -531,19 +531,10 @@ public final class ProTerritoryValueUtils {
       }
       final int distance = optionalRoute.get().numberOfSteps();
       if (distance > 0 && distance <= 3) {
-        if (ProMatches.territoryIsEnemyOrCantBeHeld(player, territoriesThatCantBeHeld)
-            .test(nearbyLandTerritory)) {
-          double value = TerritoryAttachment.getProduction(nearbyLandTerritory);
-          if (ProUtils.isNeutralLand(nearbyLandTerritory)) {
-            // True Neutrals contribute almost nothing to sea-zone staging value because
-            // the cascade rule makes them un-attackable in practice. Previously this
-            // summed full attack-value (3 × production), making Caribbean sea zones
-            // hugely attractive to transports because of nearby South American
-            // neutrals — pulling US/UK ground forces toward staging that never lands. #2745
-            value = findTerritoryAttackValue(proData, player, nearbyLandTerritory) / 30;
-          }
-          nearbyLandValue += value;
-        }
+        // Cache the recursive findLandValue for this nearby land territory regardless of
+        // ownership — the outer findTerritoryValues loop will reuse it. This is the perf
+        // optimization that was here originally; only the *addition* to nearbyLandValue
+        // needs the ownership gate.
         if (!territoryValueMap.containsKey(nearbyLandTerritory)) {
           final double value =
               findLandValue(
@@ -556,7 +547,28 @@ public final class ProTerritoryValueUtils {
                   territoriesToAttack);
           territoryValueMap.put(nearbyLandTerritory, value);
         }
-        nearbyLandValue += territoryValueMap.get(nearbyLandTerritory);
+        if (ProMatches.territoryIsEnemyOrCantBeHeld(player, territoriesThatCantBeHeld)
+            .test(nearbyLandTerritory)) {
+          double value = TerritoryAttachment.getProduction(nearbyLandTerritory);
+          if (ProUtils.isNeutralLand(nearbyLandTerritory)) {
+            // True Neutrals contribute almost nothing to sea-zone staging value because
+            // the cascade rule makes them un-attackable in practice. Previously this
+            // summed full attack-value (3 × production), making Caribbean sea zones
+            // hugely attractive to transports because of nearby South American
+            // neutrals — pulling US/UK ground forces toward staging that never lands. #2745
+            value = findTerritoryAttackValue(proData, player, nearbyLandTerritory) / 30;
+          }
+          nearbyLandValue += value;
+          // Recursive land-value contribution: the strategic value of the nearby land
+          // itself. Previously this line ran for EVERY nearby land territory regardless
+          // of ownership, which inflated sea-zone value for chokepoints near friendly
+          // coastlines (the Panama Canal at SZ 64 was the worst offender — it
+          // accumulated land-value from Central America + Colombia + Ecuador + SE Mexico,
+          // none of which were attackable enemy land). Now gated to enemy/can't-be-held
+          // land only, matching the production-based contribution above and the spirit
+          // of #2745. Caught during SVF PR-B live-run analysis — see map-room#2755.
+          nearbyLandValue += territoryValueMap.get(nearbyLandTerritory);
+        }
       }
     }
 
