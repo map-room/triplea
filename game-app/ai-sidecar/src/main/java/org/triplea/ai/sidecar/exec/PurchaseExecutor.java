@@ -141,6 +141,11 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     proAi.getProData().setSeed(request.seed());
     proAi.seedBattleCalc(request.seed());
 
+    // Strategic Value Field (map-room#2755 PR-A): apply env/sysprop tuning knobs into ProData
+    // before any phase code reads them. wStrat=0 default keeps this zero-impact unless tuning
+    // env vars are explicitly set. PR-B replaces this with a wire-protocol-driven path.
+    ProSvfKnobs.applyTo(proAi.getProData());
+
     final RecordingPurchaseDelegate recorder = new RecordingPurchaseDelegate();
     recorder.initialize("purchase", "Purchase");
     recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
