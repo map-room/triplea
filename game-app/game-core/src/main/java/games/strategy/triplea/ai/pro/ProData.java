@@ -175,6 +175,17 @@ public final class ProData {
    * either factor at 0 leaves the baseline value-map byte-identical.
    */
   public double getStrategicValueFieldFor(final Territory t) {
+    // Spec §2: SVF blend is US-only in Phase 1. Non-US players see 0 regardless of wStrat so
+    // the lobby radio + env knobs only affect Americans behavior. Without this gate, axis
+    // players (Germans, Japanese) saw Allied capitals as anchors and developed strategic
+    // pulls of their own — e.g. Germans pulling armour from Southern France to Holland Belgium
+    // because Belgium is 2 hops from London (75 × 0.85² = 54). That cross-player effect was
+    // a spec-§2 violation caught in chase's live AI-vs-AI run. Plan §10 Q5 (extension to UK
+    // and ANZAC) is a future phase — when it lands, this gate becomes a per-player config
+    // check instead of a hardcoded "Americans" string.
+    if (player == null || !"Americans".equals(player.getName())) {
+      return 0.0;
+    }
     if (strategicValueField == null) {
       if (wStrat <= 0) {
         return 0.0;

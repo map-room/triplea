@@ -157,6 +157,58 @@ class ProTerritoryValueUtilsBlendTest {
   }
 
   @Test
+  void nonUSPlayer_getStrategicValueFieldFor_alwaysReturnsZero_evenAtHighWStrat() throws Exception {
+    // Spec §2: SVF blend is US-only in Phase 1. This pins that non-US players never see a
+    // non-zero S(t) regardless of wStrat/gCap tuning — otherwise the env knobs (or lobby
+    // radio) would change axis behavior, which was the live-run bug caught after PR-B's
+    // initial ship (Germans pulling armour from Southern France to Holland Belgium because
+    // Belgium is 2 hops from London).
+    final ProData germansProData = proDataForPlayer(data, "Germans");
+    germansProData.setWStrat(10.0); // aggressive
+    germansProData.setGCap(200.0); // exaggerated
+
+    final Territory germany = data.getMap().getTerritoryOrThrow("Germany");
+    final Territory holland = data.getMap().getTerritoryOrThrow("Holland Belgium");
+    final Territory uk = data.getMap().getTerritoryOrThrow("United Kingdom");
+
+    assertThat(germansProData.getStrategicValueFieldFor(germany)).isEqualTo(0.0);
+    assertThat(germansProData.getStrategicValueFieldFor(holland)).isEqualTo(0.0);
+    assertThat(germansProData.getStrategicValueFieldFor(uk)).isEqualTo(0.0);
+    assertThat(germansProData.getStrategicValueField())
+        .as("non-US ProData must not even trigger the lazy compute — no wasted BFS sweeps")
+        .isNull();
+  }
+
+  @Test
+  void germansFindTerritoryValues_byteIdenticalToBaseline_atAnyWStrat() throws Exception {
+    // Spec §2 regression guard from the other angle: even with maximum-tuning env knobs,
+    // running findTerritoryValues for Germans must produce byte-identical output to the
+    // wStrat=0 baseline. This catches any future regression that re-introduces the
+    // axis-affected-by-SVF bug.
+    final ProData germansProData = proDataForPlayer(data, "Germans");
+    final GamePlayer germans = data.getPlayerList().getPlayerId("Germans");
+    final Set<Territory> all = new HashSet<>(data.getMap().getTerritories());
+
+    germansProData.setWStrat(0.0);
+    germansProData.setStrategicValueField(null);
+    final Map<Territory, Double> baseline =
+        ProTerritoryValueUtils.findTerritoryValues(
+            germansProData, germans, List.of(), List.of(), all);
+
+    germansProData.setWStrat(10.0);
+    germansProData.setGCap(200.0);
+    germansProData.setStrategicValueField(null);
+    final Map<Territory, Double> tuned =
+        ProTerritoryValueUtils.findTerritoryValues(
+            germansProData, germans, List.of(), List.of(), all);
+
+    assertThat(tuned)
+        .as(
+            "Germans value map must be byte-identical under any wStrat — axis behavior is invariant")
+        .isEqualTo(baseline);
+  }
+
+  @Test
   void getStrategicValueFieldFor_returnsZero_whenWStratZero_evenForKnownAnchor() {
     proData.setWStrat(0.0);
 
@@ -174,15 +226,18 @@ class ProTerritoryValueUtilsBlendTest {
   // ---------------------------------------------------------------------------
 
   private ProData proDataFor(final GameData gameData) throws Exception {
+    return proDataForPlayer(gameData, "Americans");
+  }
+
+  private static ProData proDataForPlayer(final GameData gameData, final String playerName)
+      throws Exception {
     final ProData p = new ProData();
     final Field dataField = ProData.class.getDeclaredField("data");
     dataField.setAccessible(true);
     dataField.set(p, gameData);
-    // ProData.getStrategicValueFieldFor calls compute(this, player) which uses the player
-    // field on ProData — set it via reflection too so the lazy-compute path doesn't NPE.
     final Field playerField = ProData.class.getDeclaredField("player");
     playerField.setAccessible(true);
-    playerField.set(p, americans);
+    playerField.set(p, gameData.getPlayerList().getPlayerId(playerName));
     return p;
   }
 
