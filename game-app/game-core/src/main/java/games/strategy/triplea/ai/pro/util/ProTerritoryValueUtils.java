@@ -110,10 +110,13 @@ public final class ProTerritoryValueUtils {
       final List<Territory> territoriesToAttack,
       final Set<Territory> territoriesToCheck) {
     // Strategic Value Field (map-room#2755 PR-A): lazy-compute S(n) on the first
-    // findTerritoryValues call of this request when wStrat > 0. Skipped entirely when wStrat==0
-    // (the zero-impact default), so PR-A is a true no-op for non-tuning runs. PR-B's blend
-    // reads proData.getStrategicValueField() and applies wStrat * S(t) inside the value loops.
-    if (proData.getWStrat() > 0 && proData.getStrategicValueField() == null) {
+    // findTerritoryValues call of this request when either (a) wStrat > 0 (PR-B's blend will
+    // need it) or (b) the strategic dump is explicitly enabled (the user is asking to *see*
+    // S(n), they shouldn't have to also remember to set AI_SVF_W_STRAT). Skipped entirely on
+    // both wStrat==0 AND dump-off so the default path is a true no-op. PR-B's blend reads
+    // proData.getStrategicValueField() and applies wStrat * S(t) inside the value loops.
+    if (proData.getStrategicValueField() == null
+        && (proData.getWStrat() > 0 || ProValueHeatmapDumper.isStrategicEnabled())) {
       proData.setStrategicValueField(ProStrategicValueField.compute(proData, player));
     }
     final int maxLandMassSize = findMaxLandMassSize(player);

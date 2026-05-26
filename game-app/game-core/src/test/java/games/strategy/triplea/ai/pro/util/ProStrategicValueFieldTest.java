@@ -242,6 +242,50 @@ class ProStrategicValueFieldTest {
   }
 
   @Test
+  void lazyCompute_alsoFires_whenStrategicDumpEnabled_evenWithWStratZero() {
+    // Hotfix gate (post-PR-A review): a user setting AI_DUMP_STRATEGIC=1 is asking to *see*
+    // S(n); they shouldn't have to also know about AI_SVF_W_STRAT. With the dump enabled,
+    // the lazy compute must fire even when wStrat=0 so the dumper has something to write.
+    System.setProperty("ai.dump.strategic", "1");
+    try {
+      proData.setWStrat(0.0);
+      assertThat(proData.getStrategicValueField()).isNull();
+
+      ProTerritoryValueUtils.findTerritoryValues(
+          proData,
+          americans,
+          java.util.List.of(),
+          java.util.List.of(),
+          Set.of(data.getMap().getTerritoryOrThrow("Germany")));
+
+      assertThat(proData.getStrategicValueField())
+          .as("Lazy compute must fire when AI_DUMP_STRATEGIC=1 even at wStrat=0")
+          .isNotNull()
+          .isNotEmpty();
+    } finally {
+      System.clearProperty("ai.dump.strategic");
+    }
+  }
+
+  @Test
+  void lazyCompute_doesNotFire_whenBothGatesAreOff() {
+    // Zero-impact default: wStrat=0 AND AI_DUMP_STRATEGIC unset → no compute, no allocation,
+    // strategicValueField stays null.
+    proData.setWStrat(0.0);
+
+    ProTerritoryValueUtils.findTerritoryValues(
+        proData,
+        americans,
+        java.util.List.of(),
+        java.util.List.of(),
+        Set.of(data.getMap().getTerritoryOrThrow("Germany")));
+
+    assertThat(proData.getStrategicValueField())
+        .as("Lazy compute must NOT fire when wStrat=0 AND strategic dump off")
+        .isNull();
+  }
+
+  @Test
   void buildObjectives_includesLiveEnemyCapitals_and_isNonEmpty() {
     proData.setAiTheaterPriority(AiTheaterPriority.KGF);
 
