@@ -57,11 +57,28 @@ public final class ProTransportStaging {
       final GamePlayer player,
       final Map<Unit, Set<Territory>> transportMoveMap,
       final Map<Territory, ProTerritory> moveMap) {
+    // PR-F diagnostic: one summary line per call so we can see exactly which gate is firing
+    // (or whether the gate passes but no transports get staged because all are committed).
+    // Always emits when player is US, regardless of activation state — so a missing wStrat
+    // shows up in logs as "active=false" rather than no log at all.
+    final boolean isUs = player != null && "Americans".equals(player.getName());
     if (!isStagingActive(proData, player)) {
+      if (isUs) {
+        ProLogger.info(
+            "[SVF-STAGING] short-circuit reason=inactive wStrat="
+                + proData.getWStrat()
+                + " player="
+                + (player == null ? "null" : player.getName()));
+      }
       return 0;
     }
     final Map<Territory, Double> svf = proData.getStrategicValueField();
     if (svf == null || svf.isEmpty()) {
+      ProLogger.info(
+          "[SVF-STAGING] short-circuit reason=no-svf svfNull="
+              + (svf == null)
+              + " svfEmpty="
+              + (svf != null && svf.isEmpty()));
       return 0;
     }
 
@@ -70,19 +87,26 @@ public final class ProTransportStaging {
     final Set<Unit> alreadyAssigned = collectAssignedTransports(moveMap);
     alreadyAssigned.addAll(proData.getTransportsToHold());
 
+    int totalTransports = transportMoveMap.size();
+    int skippedAssigned = 0;
+    int skippedNullSource = 0;
+    int skippedNoImprovement = 0;
     int staged = 0;
     for (final Map.Entry<Unit, Set<Territory>> entry : transportMoveMap.entrySet()) {
       final Unit transport = entry.getKey();
       if (alreadyAssigned.contains(transport)) {
+        skippedAssigned++;
         continue;
       }
       final Territory currentSz = proData.getUnitTerritory(transport);
       if (currentSz == null) {
+        skippedNullSource++;
         continue;
       }
       final Territory bestSz =
           pickBestStagingZone(currentSz, entry.getValue(), svf, map, player, data, transport);
       if (bestSz == null || bestSz.equals(currentSz)) {
+        skippedNoImprovement++;
         continue;
       }
       // Stage the transport at bestSz by adding it as a temp unit on the destination's
@@ -100,9 +124,17 @@ public final class ProTransportStaging {
               + " score="
               + scoreSeaZone(bestSz, svf, map, player));
     }
-    if (staged > 0) {
-      ProLogger.info("SVF staging assigned " + staged + " transport(s) to high-value sea zones");
-    }
+    ProLogger.info(
+        "[SVF-STAGING] summary totalTransports="
+            + totalTransports
+            + " alreadyAssigned="
+            + skippedAssigned
+            + " nullSource="
+            + skippedNullSource
+            + " noImprovement="
+            + skippedNoImprovement
+            + " staged="
+            + staged);
     return staged;
   }
 
