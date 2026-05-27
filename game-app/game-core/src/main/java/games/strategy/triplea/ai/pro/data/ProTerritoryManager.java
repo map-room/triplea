@@ -1063,6 +1063,12 @@ public class ProTerritoryManager {
         // Get remaining moves
         int movesLeft =
             getUnitRange(transport, transportTerritory, player, isCheckingEnemyAttacks).intValue();
+        // Phase 3C diagnostic (PR-G): trace per-iteration reachability for transports
+        // whose start matches the diag predicate (defaults to US transports at SZ 101 to
+        // keep noise down). One line per `from` evaluated, showing why load/route/unload
+        // produced what it did.
+        final boolean traceThisTransport =
+            isTransportTraceEnabled(transport, transportTerritory, player, isCombatMove);
         MoveValidator moveValidator = new MoveValidator(data, !isCombatMove);
         while (movesLeft >= 0) {
           final Set<Territory> nextTerritories = new HashSet<>();
@@ -1079,18 +1085,12 @@ public class ProTerritoryManager {
             // present
             boolean haveUnitsToTransport = false;
             final Set<Territory> loadFromTerritories = new HashSet<>();
-            if (!transport.getTransporting(transportTerritory).isEmpty()) {
+            final boolean fromHasEnemySea = Matches.territoryHasEnemySeaUnits(player).test(from);
+            final boolean preloaded = !transport.getTransporting(transportTerritory).isEmpty();
+            if (preloaded) {
               haveUnitsToTransport = true;
-              // Pre-loaded transport: cargo is already aboard from a prior round.
-              // Use 'from' (the current sea zone) as the load territory so that
-              // addTerritories(unloadTerritories, loadFromTerritories) produces a non-empty
-              // value set, preventing the entry from being pruned by
-              // transportMap.values().removeIf(Collection::isEmpty). The sea zone is also
-              // added to seaTransportMap so the downstream sea-staging check can match it.
-              // getUnitsToTransportFromTerritories ignores loadFromTerritories for pre-loaded
-              // transports (it returns transport.getTransporting() early) so this is safe.
               loadFromTerritories.add(from);
-            } else if (Matches.territoryHasEnemySeaUnits(player).negate().test(from)) {
+            } else if (!fromHasEnemySea) {
               int capacity = transport.getUnitAttachment().getTransportCapacity();
               Predicate<Unit> canFitOnTransport =
                   canBeTransported.and(u -> u.getUnitAttachment().getTransportCost() <= capacity);
@@ -1104,6 +1104,17 @@ public class ProTerritoryManager {
 
             // If there are any units to be transported
             if (!haveUnitsToTransport) {
+              if (traceThisTransport) {
+                ProLogger.info(
+                    "[SVF-XPORT-TRACE] from="
+                        + from.getName()
+                        + " movesLeft="
+                        + movesLeft
+                        + " loadResult=SKIP preloaded="
+                        + preloaded
+                        + " fromHasEnemySea="
+                        + fromHasEnemySea);
+              }
               continue;
             }
             // Find all water territories I can move to
@@ -1125,6 +1136,31 @@ public class ProTerritoryManager {
               unloadTerritories.addAll(map.getNeighbors(to, unloadAmphibTerritoryMatch));
             }
 
+            if (traceThisTransport) {
+              final List<String> seaPreview = previewNames(seaMoveTerritories, 8);
+              final List<String> unloadPreview = previewNames(unloadTerritories, 8);
+              final List<String> loadPreview = previewNames(loadFromTerritories, 5);
+              ProLogger.info(
+                  "[SVF-XPORT-TRACE] from="
+                      + from.getName()
+                      + " movesLeft="
+                      + movesLeft
+                      + " preloaded="
+                      + preloaded
+                      + " loadCount="
+                      + loadFromTerritories.size()
+                      + " load="
+                      + loadPreview
+                      + " seaCount="
+                      + seaMoveTerritories.size()
+                      + " sea="
+                      + seaPreview
+                      + " unloadCount="
+                      + unloadTerritories.size()
+                      + " unload="
+                      + unloadPreview);
+            }
+
             // Add to transport map
             proTransportData.addTerritories(unloadTerritories, loadFromTerritories);
             proTransportData.addSeaTerritories(seaMoveTerritories, loadFromTerritories);
@@ -1140,6 +1176,16 @@ public class ProTerritoryManager {
     // amphib options
     for (final ProTransport proTransportData : transportMapList) {
       final Map<Territory, Set<Territory>> transportMap = proTransportData.getTransportMap();
+      // PR-G post-pruning trace: snapshot the transportMap before subtraction so we can see
+      // exactly which destinations got wiped by the land-route removal.
+      final Map<Territory, Set<Territory>> beforePrune =
+          isTransportTraceEnabled(
+                  proTransportData.getTransport(),
+                  proData.getUnitTerritory(proTransportData.getTransport()),
+                  player,
+                  isCombatMove)
+              ? snapshot(transportMap)
+              : null;
       for (final Territory t : transportMap.keySet()) {
         final Set<Territory> landMoveTerritories = landRoutesMap.get(t);
         if (landMoveTerritories != null) {
@@ -1147,6 +1193,9 @@ public class ProTerritoryManager {
         }
       }
       transportMap.values().removeIf(Collection::isEmpty);
+      if (beforePrune != null) {
+        logTransportPruneDiff(proTransportData.getTransport(), beforePrune, transportMap);
+      }
     }
 
     // Phase 3C diagnostic (map-room#2755 PR-F): when AI_TRANSPORT_DIAG=1 (or sysprop
@@ -1329,6 +1378,106 @@ public class ProTerritoryManager {
    * Caribbean / Pacific. Output format is one line per transport, one extra line per destination
    * beyond the first 10, plus a summary header per player call.
    */
+  /**
+   * Per-iteration trace gate. Returns true when the user has opted into the trace AND the
+   * transport's starting territory matches the trace filter (defaults to "any US transport at SZ
+   * 101" to keep noise focused on the Morocco-debug scenario). Override with {@code
+   * AI_TRANSPORT_TRACE=all} for every transport, or {@code AI_TRANSPORT_TRACE_AT=SZ_NAME} to scope
+   * to a different sea zone.
+   */
+  private static boolean isTransportTraceEnabled(
+      final Unit transport,
+      final Territory transportTerritory,
+      final GamePlayer player,
+      final boolean isCombatMove) {
+    if (!isCombatMove) {
+      return false;
+    }
+    final String mode =
+        firstNonEmpty(
+            System.getenv("AI_TRANSPORT_TRACE"), System.getProperty("ai.transport.trace"));
+    if (mode == null) {
+      return false;
+    }
+    if (!shouldDiagFor(player)) {
+      return false;
+    }
+    if ("all".equalsIgnoreCase(mode)) {
+      return true;
+    }
+    final String atName =
+        firstNonEmpty(
+            System.getenv("AI_TRANSPORT_TRACE_AT"), System.getProperty("ai.transport.trace.at"));
+    final String filterAt = atName != null ? atName : "101 Sea Zone";
+    return transportTerritory != null && filterAt.equals(transportTerritory.getName());
+  }
+
+  private static String firstNonEmpty(final String a, final String b) {
+    if (a != null && !a.isEmpty()) {
+      return a;
+    }
+    if (b != null && !b.isEmpty()) {
+      return b;
+    }
+    return null;
+  }
+
+  private static List<String> previewNames(final Set<Territory> territories, final int limit) {
+    final List<String> names = new ArrayList<>();
+    for (final Territory t : territories) {
+      if (names.size() >= limit) {
+        names.add("...(+" + (territories.size() - limit) + ")");
+        break;
+      }
+      names.add(t.getName());
+    }
+    return names;
+  }
+
+  private static Map<Territory, Set<Territory>> snapshot(
+      final Map<Territory, Set<Territory>> source) {
+    final Map<Territory, Set<Territory>> copy = new HashMap<>();
+    for (final Map.Entry<Territory, Set<Territory>> e : source.entrySet()) {
+      copy.put(e.getKey(), new HashSet<>(e.getValue()));
+    }
+    return copy;
+  }
+
+  /**
+   * Logs the diff between the pre- and post-pruning transportMap: which destinations were present
+   * before the land-route subtraction but are gone (or had their load set wiped) after. This is the
+   * "did Morocco appear and get pruned?" question.
+   */
+  private static void logTransportPruneDiff(
+      final Unit transport,
+      final Map<Territory, Set<Territory>> beforePrune,
+      final Map<Territory, Set<Territory>> afterPrune) {
+    final List<String> dropped = new ArrayList<>();
+    final List<String> shrank = new ArrayList<>();
+    for (final Map.Entry<Territory, Set<Territory>> e : beforePrune.entrySet()) {
+      final Territory dest = e.getKey();
+      final int before = e.getValue().size();
+      final Set<Territory> after = afterPrune.get(dest);
+      final int afterSize = after == null ? 0 : after.size();
+      if (afterSize == 0 && before > 0) {
+        dropped.add(dest.getName() + "(was=" + before + ")");
+      } else if (afterSize < before) {
+        shrank.add(dest.getName() + "(" + before + "→" + afterSize + ")");
+      }
+    }
+    ProLogger.info(
+        "[SVF-XPORT-PRUNE] transport id="
+            + transport.getId()
+            + " beforeCount="
+            + beforePrune.size()
+            + " afterCount="
+            + afterPrune.size()
+            + " dropped="
+            + dropped
+            + " shrank="
+            + shrank);
+  }
+
   private static void logTransportDiag(
       final ProData proData, final GamePlayer player, final List<ProTransport> transportMapList) {
     ProLogger.info(
