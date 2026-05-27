@@ -8,6 +8,7 @@ import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.triplea.Properties;
 import games.strategy.triplea.ai.pro.data.AiTheaterPriority;
+import games.strategy.triplea.ai.pro.data.AiTheaterScopeMode;
 import games.strategy.triplea.ai.pro.data.ProPurchaseOption;
 import games.strategy.triplea.ai.pro.data.ProPurchaseOptionMap;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
@@ -84,6 +85,13 @@ public final class ProData {
    * request (sidecar is stateless per call).
    */
   @Setter private Set<Unit> transportsToHold = new HashSet<>();
+
+  /**
+   * Off-theater scope filter mode. Phase 3C / PR-E. Default {@link AiTheaterScopeMode#OFF} keeps
+   * PR-E zero-impact until the user opts in via the wire / env knob. See {@code
+   * ProTheaterScopeFilter} for the policy each mode encodes.
+   */
+  @Setter private AiTheaterScopeMode aiTheaterScopeMode = AiTheaterScopeMode.OFF;
 
   /**
    * Lazy-cached strategic value field. Computed on first {@code findTerritoryValues}-style call

@@ -30,6 +30,7 @@ import games.strategy.triplea.ai.pro.util.ProOddsCalculator;
 import games.strategy.triplea.ai.pro.util.ProPurchaseUtils;
 import games.strategy.triplea.ai.pro.util.ProSortMoveOptionsUtils;
 import games.strategy.triplea.ai.pro.util.ProTerritoryValueUtils;
+import games.strategy.triplea.ai.pro.util.ProTheaterScopeFilter;
 import games.strategy.triplea.ai.pro.util.ProTransportUtils;
 import games.strategy.triplea.ai.pro.util.ProUtils;
 import games.strategy.triplea.attachments.TerritoryAttachment;
@@ -697,6 +698,23 @@ class ProNonCombatMoveAi {
     // Sort attack territories by value
     final List<ProTerritory> prioritizedTerritories = new ArrayList<>(moveMap.values());
     prioritizedTerritories.sort(Comparator.comparingDouble(ProTerritory::getValue).reversed());
+
+    // Phase 3C / PR-E (map-room#2755): under KGF/KJF scope mode, drop off-theater destinations
+    // from NCM consideration so the planner doesn't drift force toward the unfavored theater.
+    // Owned/allied territories are preserved (Phase 3A floor still defends them in place); only
+    // off-theater enemy/neutral destinations are filtered. ADAPTIVE mode keeps tripwire-engaged
+    // targets in scope so NCM can still stage a counter to a Japan landing.
+    if (ProTheaterScopeFilter.isFilterActive(proData)) {
+      prioritizedTerritories.removeIf(
+          patd -> {
+            final Territory t = patd.getTerritory();
+            // Never drop our own / allied territories — those are defense-in-place destinations.
+            if (t.isOwnedBy(player) || Matches.isTerritoryAllied(player).test(t)) {
+              return false;
+            }
+            return ProTheaterScopeFilter.shouldSkipAttackTarget(proData, t);
+          });
+    }
 
     // Remove territories that I'm not going to try to defend
     for (final Iterator<ProTerritory> it = prioritizedTerritories.iterator(); it.hasNext(); ) {
