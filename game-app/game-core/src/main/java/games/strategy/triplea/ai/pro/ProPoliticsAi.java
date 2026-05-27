@@ -2,6 +2,7 @@ package games.strategy.triplea.ai.pro;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
+import games.strategy.engine.data.RelationshipTracker;
 import games.strategy.engine.data.RelationshipType;
 import games.strategy.triplea.ai.AiPoliticalUtils;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
@@ -138,6 +139,17 @@ class ProPoliticsAi {
         if (random <= warChance) {
           results.add(action);
           ProLogger.debug("---Declared war on " + enemyMap.get(action));
+          // Coalition follow-up: once a war is rolled, also declare on any other enemy
+          // actions whose targets are allied with the primary target. attackPercentage is
+          // per-player and the single-roll break above means coalition-mates would otherwise
+          // never get declared on after the war globalizes (map-room/map-room#2761).
+          final List<PoliticalActionAttachment> followUps =
+              findCoalitionFollowUps(action, enemyMap, data.getRelationshipTracker());
+          for (final PoliticalActionAttachment followUp : followUps) {
+            results.add(followUp);
+            ProLogger.debug(
+                "---Coalition follow-up: also declared war on " + enemyMap.get(followUp));
+          }
           break;
         }
       }
@@ -198,5 +210,43 @@ class ProPoliticsAi {
       ProLogger.debug("Performing action: " + action);
       politicsDelegate.attemptAction(action);
     }
+  }
+
+  /**
+   * Returns enemy war actions (from {@code enemyMap}, excluding {@code primaryAction}) whose
+   * targets are allied with at least one target of {@code primaryAction} per the in-game {@link
+   * RelationshipTracker}. Used to follow up a successful war declaration with declarations on the
+   * primary target's coalition.
+   */
+  static List<PoliticalActionAttachment> findCoalitionFollowUps(
+      final PoliticalActionAttachment primaryAction,
+      final Map<PoliticalActionAttachment, List<GamePlayer>> enemyMap,
+      final RelationshipTracker relationshipTracker) {
+    final List<GamePlayer> primaryTargets = enemyMap.get(primaryAction);
+    final List<PoliticalActionAttachment> followUps = new ArrayList<>();
+    for (final Map.Entry<PoliticalActionAttachment, List<GamePlayer>> entry : enemyMap.entrySet()) {
+      final PoliticalActionAttachment otherAction = entry.getKey();
+      if (otherAction.equals(primaryAction)) {
+        continue;
+      }
+      if (sharesAlliance(primaryTargets, entry.getValue(), relationshipTracker)) {
+        followUps.add(otherAction);
+      }
+    }
+    return followUps;
+  }
+
+  private static boolean sharesAlliance(
+      final List<GamePlayer> a,
+      final List<GamePlayer> b,
+      final RelationshipTracker relationshipTracker) {
+    for (final GamePlayer p1 : a) {
+      for (final GamePlayer p2 : b) {
+        if (relationshipTracker.isAllied(p1, p2)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }
