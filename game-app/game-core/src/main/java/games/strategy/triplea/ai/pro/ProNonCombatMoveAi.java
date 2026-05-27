@@ -224,8 +224,7 @@ class ProNonCombatMoveAi {
     // sea zone. Closes the gap where SZ 101 transports drift south to Caribbean via
     // amphib-defense pull instead of heading toward Europe. US-only, dormant unless wStrat > 0
     // so PR-F is zero-impact at SVF defaults.
-    ProTransportStaging.stageIdleTransports(
-        proData, player, territoryManager.getDefendOptions().getTransportList(), moveMap);
+    ProTransportStaging.stageIdleTransports(proData, player, moveMap);
 
     // Calculate move routes and perform moves
     doMove(isCombatMove, moveMap, moveDel, data, player);

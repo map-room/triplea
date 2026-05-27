@@ -8,7 +8,6 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.ai.pro.ProData;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
-import games.strategy.triplea.ai.pro.data.ProTransport;
 import games.strategy.triplea.ai.pro.logging.ProLogger;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.move.validation.MoveValidator;
@@ -54,10 +53,7 @@ public final class ProTransportStaging {
    * request).
    */
   public static int stageIdleTransports(
-      final ProData proData,
-      final GamePlayer player,
-      final List<ProTransport> transportList,
-      final Map<Territory, ProTerritory> moveMap) {
+      final ProData proData, final GamePlayer player, final Map<Territory, ProTerritory> moveMap) {
     // PR-F diagnostic: one summary line per call so we can see exactly which gate is firing
     // (or whether the gate passes but no transports get staged because all are committed).
     final boolean isUs = player != null && "Americans".equals(player.getName());
@@ -86,27 +82,26 @@ public final class ProTransportStaging {
     final Set<Unit> alreadyAssigned = collectAssignedTransports(moveMap);
     alreadyAssigned.addAll(proData.getTransportsToHold());
 
-    int totalTransports = transportList.size();
-    int skippedAssigned = 0;
+    // Find idle US transports directly via myUnitTerritories. Earlier versions read from
+    // territoryManager.getDefendOptions().getTransportList() / .getTransportMoveMap(), but
+    // moveUnitsToDefendTerritories drains those lists when transports get committed to a
+    // defend destination (ProNonCombatMoveAi.java:1361-1372). By staging time the lists are
+    // empty even for transports that ended up idle in moveMap. Iterating myUnitTerritories
+    // catches all transports regardless of intermediate cleanup state.
+    final List<Unit> idleTransports = findIdleUsTransports(proData, player, alreadyAssigned);
+
+    int totalTransports = idleTransports.size();
     int skippedNullSource = 0;
     int skippedNoImprovement = 0;
     int staged = 0;
-    for (final ProTransport pt : transportList) {
-      final Unit transport = pt.getTransport();
-      if (alreadyAssigned.contains(transport)) {
-        skippedAssigned++;
-        continue;
-      }
+    for (final Unit transport : idleTransports) {
       final Territory currentSz = proData.getUnitTerritory(transport);
       if (currentSz == null) {
         skippedNullSource++;
         continue;
       }
-      // ProTransport.seaTransportMap keys are sea zones reachable by this transport. The
-      // values are the load-from territories — we don't need them here since staging is a
-      // sea-only move. Empty seaTransportMap (e.g. for a fully-blocked transport) falls
-      // through as no-improvement.
-      final Set<Territory> reachableSeaZones = pt.getSeaTransportMap().keySet();
+      final Set<Territory> reachableSeaZones =
+          computeReachableSeaZones(currentSz, transport, player, data);
       final Territory bestSz =
           pickBestStagingZone(currentSz, reachableSeaZones, svf, map, player, data, transport);
       if (bestSz == null || bestSz.equals(currentSz)) {
@@ -129,10 +124,8 @@ public final class ProTransportStaging {
               + scoreSeaZone(bestSz, svf, map, player));
     }
     ProLogger.info(
-        "[SVF-STAGING] summary totalTransports="
+        "[SVF-STAGING] summary idleTransports="
             + totalTransports
-            + " alreadyAssigned="
-            + skippedAssigned
             + " nullSource="
             + skippedNullSource
             + " noImprovement="
@@ -140,6 +133,60 @@ public final class ProTransportStaging {
             + " staged="
             + staged);
     return staged;
+  }
+
+  /**
+   * Walks {@code myUnitTerritories} collecting US transports that are still idle — i.e. own a
+   * transport unit type and aren't already in {@code alreadyAssigned}. Skips loaded transports
+   * (their cargo handling lives elsewhere). Skips transports with no movement left.
+   */
+  private static List<Unit> findIdleUsTransports(
+      final ProData proData, final GamePlayer player, final Set<Unit> alreadyAssigned) {
+    final List<Unit> result = new java.util.ArrayList<>();
+    for (final Territory t : proData.getMyUnitTerritories()) {
+      if (!t.isWater()) {
+        continue;
+      }
+      for (final Unit u : t.getUnits()) {
+        if (!u.getOwner().equals(player)) {
+          continue;
+        }
+        if (u.getUnitAttachment().getTransportCapacity() <= 0) {
+          continue;
+        }
+        if (alreadyAssigned.contains(u)) {
+          continue;
+        }
+        if (u.getMovementLeft().signum() <= 0) {
+          continue;
+        }
+        // Skip preloaded transports — their disposition is handled by amphib paths.
+        if (!u.getTransporting(t).isEmpty()) {
+          continue;
+        }
+        result.add(u);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Computes reachable sea zones from {@code currentSz} for {@code transport} using its remaining
+   * movement. Uses {@code ProMatches.territoryCanMoveSeaUnitsThrough} (the same predicate the AI
+   * uses for transport reachability). PR-J/map-room#2764 already widened this for at-war US.
+   */
+  private static Set<Territory> computeReachableSeaZones(
+      final Territory currentSz,
+      final Unit transport,
+      final GamePlayer player,
+      final GameData data) {
+    final int range = transport.getMovementLeft().intValueExact();
+    if (range <= 0) {
+      return Set.of();
+    }
+    final java.util.function.Predicate<Territory> canMove =
+        ProMatches.territoryCanMoveSeaUnitsThrough(player, false);
+    return data.getMap().getNeighbors(currentSz, range, canMove);
   }
 
   /**
