@@ -11,6 +11,7 @@ import games.strategy.triplea.settings.ClientSetting;
 import games.strategy.triplea.xml.TestMapGameData;
 import java.lang.reflect.Field;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -96,7 +97,7 @@ class ProTransportStagingTest {
     // wStrat=0 by default. Even with transport-move-map containing transports + reachable
     // sea zones, no staging should happen.
     final int staged =
-        ProTransportStaging.stageIdleTransports(proData, americans, Map.of(), new HashMap<>());
+        ProTransportStaging.stageIdleTransports(proData, americans, List.of(), new HashMap<>());
     assertThat(staged).as("Inactive staging returns 0 immediately").isZero();
   }
 
@@ -105,7 +106,7 @@ class ProTransportStagingTest {
     proData.setWStrat(4.0);
     proData.setStrategicValueField(null);
     final int staged =
-        ProTransportStaging.stageIdleTransports(proData, americans, Map.of(), new HashMap<>());
+        ProTransportStaging.stageIdleTransports(proData, americans, List.of(), new HashMap<>());
     assertThat(staged).as("Staging requires a populated SVF; null short-circuits").isZero();
   }
 
