@@ -127,6 +127,16 @@ class ProNonCombatMoveAi {
     // not pre-consumed by the main defensive assignment (#2195).
     claimFriendlyNeutralTerritories();
 
+    // map-room#2755 PR-F: offense-intent transport staging. Pre-commit idle US transports
+    // toward eastward sea zones BEFORE moveUnitsToDefendTerritories runs — that pass drains
+    // transportList and assigns every remaining transport to a defensive destination
+    // (typically Caribbean drift via amphib-defense). Running staging earlier means
+    // east-staged transports are already committed to their target SZ by the time defense
+    // logic looks at them, and the defense logic just picks up what's left.
+    // Lazy-computes SVF if findTerritoryValues hasn't run yet (it hasn't — line 145+).
+    ProTransportStaging.stageIdleTransports(
+        proData, player, territoryManager.getDefendOptions().getTerritoryMap());
+
     // Determine which territories to defend and how many units each one needs
     final Territory myCapital = proData.getMyCapital();
     int enemyDistanceToMyCapital = Integer.MAX_VALUE;
@@ -217,14 +227,6 @@ class ProNonCombatMoveAi {
                 + territoryManager.getDefendOptions().getUnitMoveMap().get(u));
       }
     }
-
-    // map-room#2755 PR-F: offense-intent transport staging. After defense + best-territory +
-    // infra placement, pick up any unloaded US transport that hasn't been assigned a
-    // destination and stage it eastward toward the highest-S(adjacent enemy land) reachable
-    // sea zone. Closes the gap where SZ 101 transports drift south to Caribbean via
-    // amphib-defense pull instead of heading toward Europe. US-only, dormant unless wStrat > 0
-    // so PR-F is zero-impact at SVF defaults.
-    ProTransportStaging.stageIdleTransports(proData, player, moveMap);
 
     // Calculate move routes and perform moves
     doMove(isCombatMove, moveMap, moveDel, data, player);

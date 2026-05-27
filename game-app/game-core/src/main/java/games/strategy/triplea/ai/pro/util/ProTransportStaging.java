@@ -67,13 +67,17 @@ public final class ProTransportStaging {
       }
       return 0;
     }
-    final Map<Territory, Double> svf = proData.getStrategicValueField();
+    // SVF lazy-compute: staging may run before findTerritoryValues (which populates the field
+    // via ProTerritoryValueUtils). When that happens, compute on demand. Cost is O(|anchors| *
+    // |territories|) which is ~5*120 ms = single-digit ms per call; one-shot, then cached.
+    Map<Territory, Double> svf = proData.getStrategicValueField();
+    if (svf == null || svf.isEmpty()) {
+      svf = ProStrategicValueField.compute(proData, player);
+      proData.setStrategicValueField(svf);
+    }
     if (svf == null || svf.isEmpty()) {
       ProLogger.info(
-          "[SVF-STAGING] short-circuit reason=no-svf svfNull="
-              + (svf == null)
-              + " svfEmpty="
-              + (svf != null && svf.isEmpty()));
+          "[SVF-STAGING] short-circuit reason=no-svf-after-compute svfNull=" + (svf == null));
       return 0;
     }
 
