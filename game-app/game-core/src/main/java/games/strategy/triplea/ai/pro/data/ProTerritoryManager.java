@@ -1123,6 +1123,13 @@ public class ProTerritoryManager {
             if (movesLeft > 0) {
               final Predicate<Territory> canMove =
                   isCheckingEnemyAttacks ? canMoveSea : canMoveSeaThrough;
+              // PR-H gate diagnostic: log per-candidate-zone evaluation of canMoveSea and
+              // canMoveSeaThrough so we can see *which* sub-predicate is rejecting which
+              // Atlantic transit zones. Only the first iter (movesLeft at its initial
+              // value) emits — that's the broadest probe and avoids per-iter spam.
+              if (traceThisTransport && movesLeft == 3 && isGateProbeEnabled()) {
+                logGateProbe(map, from, movesLeft, player, canMoveSea, canMoveSeaThrough);
+              }
               for (final Territory to : map.getNeighbors(from, movesLeft, canMove)) {
                 if (map.getRouteForUnit(from, to, canMoveSeaThrough, transport, player)
                     .isPresent()) {
@@ -1410,6 +1417,63 @@ public class ProTerritoryManager {
             System.getenv("AI_TRANSPORT_TRACE_AT"), System.getProperty("ai.transport.trace.at"));
     final String filterAt = atName != null ? atName : "101 Sea Zone";
     return transportTerritory != null && filterAt.equals(transportTerritory.getName());
+  }
+
+  private static boolean isGateProbeEnabled() {
+    return firstNonEmpty(
+            System.getenv("AI_TRANSPORT_GATE"), System.getProperty("ai.transport.gate"))
+        != null;
+  }
+
+  /**
+   * Per-candidate gate probe. For every water territory within {@code movesLeft} hops of {@code
+   * from} (raw map adjacency, no predicate filter), evaluate the two predicates the reachability
+   * calc actually uses and log whether each gate accepted. Output one line per probed zone — grep
+   * with {@code grep '\[SVF-XPORT-GATE\]'}. The probed set is bounded by {@code movesLeft} so
+   * radius-3 BFS surfaces at most ~30 zones in practice.
+   */
+  private static void logGateProbe(
+      final GameMap map,
+      final Territory from,
+      final int movesLeft,
+      final GamePlayer player,
+      final Predicate<Territory> canMoveSea,
+      final Predicate<Territory> canMoveSeaThrough) {
+    // Raw radius-N adjacency — no predicate so we see ALL water neighbors, including those that
+    // are filtered out by the gates. This is the population over which the gates operate.
+    final Set<Territory> probeSet = map.getNeighbors(from, movesLeft);
+    int waterCount = 0;
+    for (final Territory z : probeSet) {
+      if (!z.isWater()) {
+        continue;
+      }
+      waterCount++;
+      final boolean canSea = canMoveSea.test(z);
+      final boolean canSeaThrough = canMoveSeaThrough.test(z);
+      final String owner = z.getOwner() == null ? "no-owner" : z.getOwner().getName();
+      final int enemyUnits =
+          (int) z.getUnits().stream().filter(u -> !u.getOwner().isAllied(player)).count();
+      ProLogger.info(
+          "[SVF-XPORT-GATE] from="
+              + from.getName()
+              + " zone="
+              + z.getName()
+              + " owner="
+              + owner
+              + " enemyUnits="
+              + enemyUnits
+              + " canMoveSea="
+              + canSea
+              + " canMoveSeaThrough="
+              + canSeaThrough);
+    }
+    ProLogger.info(
+        "[SVF-XPORT-GATE] summary from="
+            + from.getName()
+            + " probeRadius="
+            + movesLeft
+            + " waterCandidates="
+            + waterCount);
   }
 
   private static String firstNonEmpty(final String a, final String b) {
