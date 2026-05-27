@@ -83,6 +83,14 @@ public final class WireStateApplier {
       gameData.performChange(changes);
     }
 
+    // Some techs activate a UnitSupportAttachment via a TriggerAttachment that the stateless
+    // sidecar never fires (map-room#2768). After tech flags are live in GameData, apply the
+    // support-list changes directly — mirroring what TriggerAttachment.triggerSupportChange()
+    // would do. Multiple players with the same tech must be batched into a single change per
+    // support attachment so that each player's activation reads the cumulative current-players
+    // list.
+    applyTechSupportActivations(gameData, wire);
+
     // Hydrate RelationshipTracker directly — must happen before the politics step (Task 8) runs
     // on this same GameData so that invokePoliticsForSidecar sees the current relationship graph.
     // Direct setter is used (not ChangeFactory.relationshipChange) to ensure in-memory visibility
@@ -666,4 +674,79 @@ public final class WireStateApplier {
           Map.entry("mechanizedInfantry", "mechanizedInfantry"),
           Map.entry("aaRadar", "aaRadar"),
           Map.entry("shipyards", "shipyards"));
+
+  // TechAttachment property name -> UnitSupportAttachment name.
+  // Each entry here is a tech whose activation fires a TriggerAttachment that adds the player
+  // to a UnitSupportAttachment.players list. The sidecar never fires triggers, so we apply
+  // the effect directly. Source: ww2global40_2nd_edition.xml
+  // §triggerAttachment_*_Improved_Mech_Inf.
+  private static final Map<String, String> TECH_TO_SUPPORT_ATTACHMENT =
+      Map.of("mechanizedInfantry", "supportAttachmentMechanizedTechnology");
+
+  /**
+   * For each UnitSupportAttachment that any player's tech list activates, adds all such players to
+   * the attachment's {@code players} field in one atomic change. Multiple players with the same
+   * tech must be batched together: individual calls would each read the pre-applied players list
+   * and overwrite each other. Running this after the main {@link GameData#performChange} ensures
+   * the tech flags are live and the current players list is up to date.
+   */
+  private static void applyTechSupportActivations(final GameData gameData, final WireState wire) {
+    final Map<String, List<GamePlayer>> supportToPlayers = new HashMap<>();
+    for (final WirePlayer wp : wire.players()) {
+      if (wp.tech() == null || wp.tech().isEmpty()) {
+        continue;
+      }
+      final GamePlayer player = gameData.getPlayerList().getPlayerId(wp.playerId());
+      if (player == null) {
+        continue;
+      }
+      for (final String techName : wp.tech()) {
+        final String property = TECH_PROPERTY_NAMES.get(techName);
+        if (property == null) {
+          continue;
+        }
+        final String supportName = TECH_TO_SUPPORT_ATTACHMENT.get(property);
+        if (supportName != null) {
+          supportToPlayers.computeIfAbsent(supportName, k -> new ArrayList<>()).add(player);
+        }
+      }
+    }
+    if (supportToPlayers.isEmpty()) {
+      return;
+    }
+    final CompositeChange supportChanges = new CompositeChange();
+    for (final Map.Entry<String, List<GamePlayer>> entry : supportToPlayers.entrySet()) {
+      final String supportName = entry.getKey();
+      final List<GamePlayer> newPlayers = entry.getValue();
+      boolean found = false;
+      for (final UnitType ut : gameData.getUnitTypeList()) {
+        final games.strategy.engine.data.IAttachment raw = ut.getAttachment(supportName);
+        if (!(raw instanceof games.strategy.triplea.attachments.UnitSupportAttachment usa)) {
+          continue;
+        }
+        final List<GamePlayer> combined = new ArrayList<>(usa.getPlayers());
+        for (final GamePlayer p : newPlayers) {
+          if (!combined.contains(p)) {
+            combined.add(p);
+          }
+        }
+        if (combined.size() != usa.getPlayers().size()) {
+          supportChanges.add(ChangeFactory.attachmentPropertyChange(usa, combined, "players"));
+        }
+        found = true;
+        break;
+      }
+      if (!found) {
+        LOG.log(
+            Level.WARNING,
+            () ->
+                "Tech support activation: support attachment '"
+                    + supportName
+                    + "' not found in game data — skipping");
+      }
+    }
+    if (!supportChanges.isEmpty()) {
+      gameData.performChange(supportChanges);
+    }
+  }
 }
