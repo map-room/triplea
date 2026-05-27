@@ -14,6 +14,7 @@ import games.strategy.triplea.ai.pro.data.ProTerritory;
 import games.strategy.triplea.ai.pro.data.ProTerritoryManager;
 import games.strategy.triplea.ai.pro.data.ProTransport;
 import games.strategy.triplea.ai.pro.logging.ProLogger;
+import games.strategy.triplea.ai.pro.util.ProAmphibCommitGate;
 import games.strategy.triplea.ai.pro.util.ProBattleUtils;
 import games.strategy.triplea.ai.pro.util.ProMatches;
 import games.strategy.triplea.ai.pro.util.ProMoveUtils;
@@ -1726,6 +1727,26 @@ public class ProCombatMoveAi {
         }
       }
       if (minWinTerritory != null) {
+        // Phase 3B amphib commit gate (map-room#2755): value * pWin < tCommit OR pWin < hard
+        // sanity floor → defer. Caller adds the transport to proData.getTransportsToHold()
+        // so NCM keeps it at its sea zone next turn instead of dispersing. Defaults of 0.0
+        // for both thresholds keep this a no-op until Phase 4A tuning raises them; US-only
+        // per spec §2 (other players bypass).
+        final ProBattleResult committingResult = attackMap.get(minWinTerritory).getBattleResult();
+        final double targetValue = attackMap.get(minWinTerritory).getValue();
+        if (!ProAmphibCommitGate.shouldCommit(
+            proData, minWinTerritory, targetValue, committingResult)) {
+          proData.getTransportsToHold().add(transport);
+          ProLogger.trace(
+              "Amphib commit gate deferred: target="
+                  + minWinTerritory
+                  + " value="
+                  + targetValue
+                  + " pWin="
+                  + (committingResult == null ? "?" : committingResult.getWinPercentage())
+                  + " transport held");
+          continue;
+        }
         if (minUnloadFromTerritory != null) {
           attackMap
               .get(minWinTerritory)

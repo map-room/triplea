@@ -993,6 +993,12 @@ class ProNonCombatMoveAi {
 
       // Loop through all my transports and see which territories they can defend from current list
       final List<Unit> alreadyMovedTransports = new ArrayList<>();
+      // Phase 3B (map-room#2755): the amphib commit gate marked these transports as "hold
+      // position next turn" so they can mass with reinforcements instead of dribbling their load
+      // into a losing assault. Seed the already-moved set with them so both the
+      // naval-defense and amphib-move loops below treat them as off-limits — the transport
+      // stays at its current sea zone. Empty set by default = no behavior change.
+      alreadyMovedTransports.addAll(proData.getTransportsToHold());
       if (!Properties.getTransportCasualtiesRestricted(data.getProperties())) {
         final Map<Unit, Set<Territory>> transportDefendOptions = new HashMap<>();
         for (final Unit unit : transportMoveMap.keySet()) {
