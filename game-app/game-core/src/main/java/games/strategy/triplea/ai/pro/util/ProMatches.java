@@ -10,7 +10,9 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.properties.GameProperties;
+import games.strategy.triplea.Constants;
 import games.strategy.triplea.Properties;
+import games.strategy.triplea.attachments.RulesAttachment;
 import games.strategy.triplea.delegate.AbstractMoveDelegate;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.TerritoryEffectHelper;
@@ -196,6 +198,29 @@ public final class ProMatches {
           if (player.getData().getMap().getNeighbors(t).stream()
               .anyMatch(adj -> !adj.isWater() && adj.isOwnedBy(japanese))) {
             return false;
+          }
+        }
+      }
+      // Japan Pacific-reach restriction (Global 1940): Japan's RulesAttachment starts with
+      // movementRestrictionType=disallowed listing 8 sea zones near the US mainland.
+      // triggerAttachment_Japanese_Unrestricted_Movement clears movementRestrictionType once Japan
+      // is at war with the US — but the sidecar never fires triggers. Bypass the stale restriction
+      // list explicitly so Japan AI can plan Pacific offensives (Pearl Harbor, West Coast, etc.).
+      // Mirrors engine movement-validator.ts JAPAN_US_RESTRICTED_SEA_ZONES lifted by areAtWar.
+      if (t.isWater() && "Japanese".equals(player.getName())) {
+        final GamePlayer american = player.getData().getPlayerList().getPlayerId("Americans");
+        if (american != null && player.isAtWar(american)) {
+          final RulesAttachment ra = RulesAttachment.get(player, Constants.RULES_ATTACHMENT_NAME);
+          if (ra != null && ra.isMovementRestrictionTypeDisallowed()) {
+            final String[] restricted = ra.getMovementRestrictionTerritories();
+            if (restricted != null) {
+              for (final String restrictedName : restricted) {
+                if (t.getName().equals(restrictedName)) {
+                  // At war with the US: this zone was restricted only during neutrality. Allow it.
+                  return true;
+                }
+              }
+            }
           }
         }
       }
