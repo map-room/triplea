@@ -2,6 +2,7 @@ package org.triplea.ai.sidecar.exec;
 
 import games.strategy.triplea.ai.pro.ProData;
 import games.strategy.triplea.ai.pro.data.AiTheaterPriority;
+import games.strategy.triplea.ai.pro.data.AiTheaterScopeMode;
 import javax.annotation.Nullable;
 import org.triplea.ai.sidecar.wire.WireState;
 
@@ -61,6 +62,25 @@ public final class ProSvfKnobs {
     applyDouble("AI_SVF_W_STRAT", "ai.svf.w.strat", proData::setWStrat);
     applyDouble("AI_SVF_ALPHA_OFF", "ai.svf.alpha.off", proData::setAlphaOff);
     applyDouble("AI_SVF_BETA_LAUNCH", "ai.svf.beta.launch", proData::setBetaLaunch);
+    applyScopeMode(proData);
+  }
+
+  /**
+   * Phase 3C (PR-E) knob — off-theater scope filter mode. Recognized values (case-insensitive):
+   * {@code off}, {@code strict}, {@code adaptive}. Default {@link AiTheaterScopeMode#OFF} preserves
+   * backward-compatible behavior. See {@code ProTheaterScopeFilter} for the policy each mode
+   * encodes.
+   */
+  private static void applyScopeMode(final ProData proData) {
+    final String raw = read("AI_THEATER_SCOPE_MODE", "ai.theater.scope.mode");
+    if (raw == null) {
+      return;
+    }
+    try {
+      proData.setAiTheaterScopeMode(AiTheaterScopeMode.valueOf(raw.trim().toUpperCase()));
+    } catch (final IllegalArgumentException e) {
+      // Silently keep the default — same convention as the numeric knobs.
+    }
   }
 
   /**

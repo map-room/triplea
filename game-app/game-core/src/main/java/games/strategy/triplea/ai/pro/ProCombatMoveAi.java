@@ -22,6 +22,7 @@ import games.strategy.triplea.ai.pro.util.ProOddsCalculator;
 import games.strategy.triplea.ai.pro.util.ProPurchaseUtils;
 import games.strategy.triplea.ai.pro.util.ProSortMoveOptionsUtils;
 import games.strategy.triplea.ai.pro.util.ProTerritoryValueUtils;
+import games.strategy.triplea.ai.pro.util.ProTheaterScopeFilter;
 import games.strategy.triplea.ai.pro.util.ProTransportUtils;
 import games.strategy.triplea.ai.pro.util.ProUtils;
 import games.strategy.triplea.attachments.TerritoryAttachment;
@@ -85,6 +86,18 @@ public class ProCombatMoveAi {
     // Remove territories that aren't worth attacking and prioritize the remaining ones
     final List<ProTerritory> attackOptions =
         territoryManager.removeTerritoriesThatCantBeConquered();
+    // Phase 3C / PR-E (map-room#2755): under KGF/KJF scope mode, drop off-theater attack
+    // candidates so the value-blend has only theater-relevant targets to re-rank. The blend
+    // alone can't pull US toward Berlin — Berlin isn't reachable from Pacific staging — but
+    // by removing Pacific targets, the Pacific-commit feedback loop is broken: US sits
+    // defensively (Phase 3A floor protects garrisons) while purchase+NCM build up Atlantic
+    // staging across turns. ADAPTIVE mode keeps Pacific scope open for tripped tripwires so
+    // a Japan landing on Hawaii or Marshall Islands still gets counter-attacked. STRICT
+    // mode blocks all Pacific offense regardless. OFF (default) is backward compatible.
+    if (ProTheaterScopeFilter.isFilterActive(proData)) {
+      attackOptions.removeIf(
+          patd -> ProTheaterScopeFilter.shouldSkipAttackTarget(proData, patd.getTerritory()));
+    }
     List<Territory> clearedTerritories = new ArrayList<>();
     for (final ProTerritory patd : attackOptions) {
       clearedTerritories.add(patd.getTerritory());
