@@ -8,6 +8,7 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.ai.pro.ProData;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
+import games.strategy.triplea.ai.pro.data.ProTransport;
 import games.strategy.triplea.ai.pro.logging.ProLogger;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.move.validation.MoveValidator;
@@ -55,12 +56,10 @@ public final class ProTransportStaging {
   public static int stageIdleTransports(
       final ProData proData,
       final GamePlayer player,
-      final Map<Unit, Set<Territory>> transportMoveMap,
+      final List<ProTransport> transportList,
       final Map<Territory, ProTerritory> moveMap) {
     // PR-F diagnostic: one summary line per call so we can see exactly which gate is firing
     // (or whether the gate passes but no transports get staged because all are committed).
-    // Always emits when player is US, regardless of activation state — so a missing wStrat
-    // shows up in logs as "active=false" rather than no log at all.
     final boolean isUs = player != null && "Americans".equals(player.getName());
     if (!isStagingActive(proData, player)) {
       if (isUs) {
@@ -87,13 +86,13 @@ public final class ProTransportStaging {
     final Set<Unit> alreadyAssigned = collectAssignedTransports(moveMap);
     alreadyAssigned.addAll(proData.getTransportsToHold());
 
-    int totalTransports = transportMoveMap.size();
+    int totalTransports = transportList.size();
     int skippedAssigned = 0;
     int skippedNullSource = 0;
     int skippedNoImprovement = 0;
     int staged = 0;
-    for (final Map.Entry<Unit, Set<Territory>> entry : transportMoveMap.entrySet()) {
-      final Unit transport = entry.getKey();
+    for (final ProTransport pt : transportList) {
+      final Unit transport = pt.getTransport();
       if (alreadyAssigned.contains(transport)) {
         skippedAssigned++;
         continue;
@@ -103,8 +102,13 @@ public final class ProTransportStaging {
         skippedNullSource++;
         continue;
       }
+      // ProTransport.seaTransportMap keys are sea zones reachable by this transport. The
+      // values are the load-from territories — we don't need them here since staging is a
+      // sea-only move. Empty seaTransportMap (e.g. for a fully-blocked transport) falls
+      // through as no-improvement.
+      final Set<Territory> reachableSeaZones = pt.getSeaTransportMap().keySet();
       final Territory bestSz =
-          pickBestStagingZone(currentSz, entry.getValue(), svf, map, player, data, transport);
+          pickBestStagingZone(currentSz, reachableSeaZones, svf, map, player, data, transport);
       if (bestSz == null || bestSz.equals(currentSz)) {
         skippedNoImprovement++;
         continue;

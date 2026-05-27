@@ -225,7 +225,7 @@ class ProNonCombatMoveAi {
     // amphib-defense pull instead of heading toward Europe. US-only, dormant unless wStrat > 0
     // so PR-F is zero-impact at SVF defaults.
     ProTransportStaging.stageIdleTransports(
-        proData, player, territoryManager.getDefendOptions().getTransportMoveMap(), moveMap);
+        proData, player, territoryManager.getDefendOptions().getTransportList(), moveMap);
 
     // Calculate move routes and perform moves
     doMove(isCombatMove, moveMap, moveDel, data, player);
