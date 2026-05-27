@@ -1149,6 +1149,17 @@ public class ProTerritoryManager {
       transportMap.values().removeIf(Collection::isEmpty);
     }
 
+    // Phase 3C diagnostic (map-room#2755 PR-F): when AI_TRANSPORT_DIAG=1 (or sysprop
+    // ai.transport.diag=1) is set, dump per-transport reachability so we can debug why
+    // expected amphib targets (e.g. Morocco) aren't entering the attack scope. US-only
+    // by default to match the SVF scope; set AI_TRANSPORT_DIAG_ALL=1 for all players.
+    if (isTransportDiagEnabled()
+        && shouldDiagFor(player)
+        && isCombatMove
+        && !isCheckingEnemyAttacks) {
+      logTransportDiag(proData, player, transportMapList);
+    }
+
     // Add transport units to attack map
     for (final ProTransport proTransportData : transportMapList) {
       final Map<Territory, Set<Territory>> transportMap = proTransportData.getTransportMap();
@@ -1284,5 +1295,67 @@ public class ProTerritoryManager {
           return true;
         });
     return Optional.ofNullable(destination.getValue());
+  }
+
+  // ---------- PR-F transport-reachability diagnostic (map-room#2755) ----------
+
+  private static boolean isTransportDiagEnabled() {
+    final String env = System.getenv("AI_TRANSPORT_DIAG");
+    if (env != null && !env.isEmpty()) {
+      return true;
+    }
+    final String sys = System.getProperty("ai.transport.diag");
+    return sys != null && !sys.isEmpty();
+  }
+
+  private static boolean shouldDiagFor(final GamePlayer player) {
+    if (player == null) {
+      return false;
+    }
+    final String allEnv = System.getenv("AI_TRANSPORT_DIAG_ALL");
+    final String allSys = System.getProperty("ai.transport.diag.all");
+    final boolean allPlayers =
+        (allEnv != null && !allEnv.isEmpty()) || (allSys != null && !allSys.isEmpty());
+    return allPlayers || "Americans".equals(player.getName());
+  }
+
+  /**
+   * Dumps per-transport reachability for the active player: starting sea zone, getUnitRange result,
+   * count + first-N keys of the computed {@code transportMap} (= reachable amphib unload
+   * destinations). Grep with {@code grep '\[SVF-XPORT-DIAG\]'} to extract.
+   *
+   * <p>Designed for an Atlantic-vs-Pacific debug: under KGF, we want to see whether US transports
+   * at SZ 101 / SZ 102 are actually surfacing North-African / European unload destinations or only
+   * Caribbean / Pacific. Output format is one line per transport, one extra line per destination
+   * beyond the first 10, plus a summary header per player call.
+   */
+  private static void logTransportDiag(
+      final ProData proData, final GamePlayer player, final List<ProTransport> transportMapList) {
+    ProLogger.info(
+        "[SVF-XPORT-DIAG] player=" + player.getName() + " transports=" + transportMapList.size());
+    for (final ProTransport pt : transportMapList) {
+      final Unit transport = pt.getTransport();
+      final Territory startTerritory = proData.getUnitTerritory(transport);
+      final BigDecimal range = getUnitRange(transport, startTerritory, player, false);
+      final Map<Territory, Set<Territory>> tmap = pt.getTransportMap();
+      final List<String> destPreview = new ArrayList<>();
+      for (final Territory dest : tmap.keySet()) {
+        if (destPreview.size() >= 10) {
+          break;
+        }
+        destPreview.add(dest.getName());
+      }
+      ProLogger.info(
+          "[SVF-XPORT-DIAG]   transport id="
+              + transport.getId()
+              + " at="
+              + (startTerritory == null ? "?" : startTerritory.getName())
+              + " range="
+              + range
+              + " destCount="
+              + tmap.size()
+              + " destPreview="
+              + destPreview);
+    }
   }
 }
