@@ -2,6 +2,7 @@ package games.strategy.triplea.ai.pro;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
+import games.strategy.engine.data.RelationshipTracker;
 import games.strategy.engine.data.RelationshipType;
 import games.strategy.triplea.ai.AiPoliticalUtils;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
@@ -94,6 +95,27 @@ class ProPoliticsAi {
     final List<PoliticalActionAttachment> results = new ArrayList<>();
     if (!enemyMap.isEmpty()) {
 
+      // Pre-roll: auto-declare on coalition mates of players we are already at war with.
+      // When a war globalizes on another player's turn (e.g. Japan attacks the US), the
+      // "declare war on Japan" action is no longer in enemyMap and the bystander's
+      // attackPercentage for distant axis coalition members hovers near zero, so without
+      // this pass the coalition would stay at peace indefinitely (map-room/map-room#2761).
+      final List<GamePlayer> existingEnemies = new ArrayList<>();
+      for (final GamePlayer other : data.getPlayerList().getPlayers()) {
+        if (!other.equals(player) && data.getRelationshipTracker().isAtWar(player, other)) {
+          existingEnemies.add(other);
+        }
+      }
+      if (!existingEnemies.isEmpty()) {
+        final List<PoliticalActionAttachment> preRollFollowUps =
+            findCoalitionFollowUps(existingEnemies, enemyMap, data.getRelationshipTracker());
+        for (final PoliticalActionAttachment action : preRollFollowUps) {
+          results.add(action);
+          ProLogger.debug(
+              "---Pre-roll coalition follow-up: declared war on " + enemyMap.get(action));
+        }
+      }
+
       // Find all attack options
       territoryManager.populatePotentialAttackOptions();
       final List<ProTerritory> attackOptions =
@@ -105,9 +127,12 @@ class ProPoliticsAi {
               + ", options="
               + attackOptions);
 
-      // Find attack options per war action
+      // Find attack options per war action — skip actions already claimed by pre-roll.
       final Map<PoliticalActionAttachment, Double> attackPercentageMap = new LinkedHashMap<>();
       for (final PoliticalActionAttachment action : enemyMap.keySet()) {
+        if (results.contains(action)) {
+          continue;
+        }
         int count = 0;
         final List<GamePlayer> enemyPlayers = enemyMap.get(action);
         for (final ProTerritory patd : attackOptions) {
@@ -138,6 +163,17 @@ class ProPoliticsAi {
         if (random <= warChance) {
           results.add(action);
           ProLogger.debug("---Declared war on " + enemyMap.get(action));
+          // Post-roll coalition follow-up: also declare on the primary target's coalition
+          // (in case any aren't already in results from the pre-roll pass).
+          final List<PoliticalActionAttachment> followUps =
+              findCoalitionFollowUps(enemyMap.get(action), enemyMap, data.getRelationshipTracker());
+          for (final PoliticalActionAttachment followUp : followUps) {
+            if (!results.contains(followUp)) {
+              results.add(followUp);
+              ProLogger.debug(
+                  "---Coalition follow-up: also declared war on " + enemyMap.get(followUp));
+            }
+          }
           break;
         }
       }
@@ -198,5 +234,39 @@ class ProPoliticsAi {
       ProLogger.debug("Performing action: " + action);
       politicsDelegate.attemptAction(action);
     }
+  }
+
+  /**
+   * Returns enemy war actions (from {@code enemyMap}) whose targets are allied per the in-game
+   * {@link RelationshipTracker} with at least one player in {@code anchorPlayers}. Pure lookup —
+   * the caller is responsible for skipping the anchor's own actions and deduplicating against any
+   * already-claimed results. Used both pre-roll (anchor = current enemies) and post-roll (anchor =
+   * primary target's players) to propagate war declarations across coalitions.
+   */
+  static List<PoliticalActionAttachment> findCoalitionFollowUps(
+      final List<GamePlayer> anchorPlayers,
+      final Map<PoliticalActionAttachment, List<GamePlayer>> enemyMap,
+      final RelationshipTracker relationshipTracker) {
+    final List<PoliticalActionAttachment> followUps = new ArrayList<>();
+    for (final Map.Entry<PoliticalActionAttachment, List<GamePlayer>> entry : enemyMap.entrySet()) {
+      if (sharesAlliance(anchorPlayers, entry.getValue(), relationshipTracker)) {
+        followUps.add(entry.getKey());
+      }
+    }
+    return followUps;
+  }
+
+  private static boolean sharesAlliance(
+      final List<GamePlayer> a,
+      final List<GamePlayer> b,
+      final RelationshipTracker relationshipTracker) {
+    for (final GamePlayer p1 : a) {
+      for (final GamePlayer p2 : b) {
+        if (relationshipTracker.isAllied(p1, p2)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }
