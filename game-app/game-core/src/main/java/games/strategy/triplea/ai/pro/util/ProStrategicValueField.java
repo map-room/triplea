@@ -93,10 +93,45 @@ public final class ProStrategicValueField {
       final BreadthFirstSearch bfs = new BreadthFirstSearch(List.of(anchor), edgeCond);
       bfs.traverse(
           (territory, distance) -> {
-            final double decayed = strength * Math.pow(gamma, distance);
-            final Double existing = field.get(territory);
-            if (existing == null || decayed > existing) {
-              field.put(territory, decayed);
+            // Convert BFS edge distance to game-turn distance per spec §4 "movement-step
+            // distance". Transport movement is 2 sea zones per turn, so divide by 2 to
+            // approximate turns. Kept as a FLOAT (not integer floor) so every BFS edge
+            // produces a distinct decay factor — gives sharper AI preferences and a
+            // useful visual gradient in the heatmap overlay.
+            //
+            // For pure-land paths this over-credits infantry-paced advance (BFS 4 = 2
+            // turns by formula vs 4 turns for infantry, 2 for armour). The SVF is
+            // US-only post-gate (spec §2), and US always crosses water to reach Eurasian
+            // targets, so naval-dominated routes dominate the math.
+            final double effectiveTurns = distance / 2.0;
+            final double decayed = strength * Math.pow(gamma, effectiveTurns);
+
+            // Allied-land suppression: don't store S for territories owned by an ally
+            // of the moving player (or by the player themselves). The SVF informs naval
+            // routing toward enemy theater + attack target selection — there's no AI
+            // decision a friendly-land S value helps with. Suppressing here keeps the
+            // heatmap focused on the actionable surface (sea zones + enemy land +
+            // neutrals) and prevents the AI from treating friendly land as a strategic
+            // pull-point (e.g. before this gate, French West Africa scored S=46 at
+            // gCap=75 because it sits on the Mediterranean route to Berlin — a
+            // gradient artifact, not a useful AI signal).
+            //
+            // BFS traversal still continues THROUGH friendly land — the gradient
+            // propagates to sea zones on the far side. Allied land just doesn't store
+            // its own S value (stays at the field's 0 initialization).
+            //
+            // True Neutrals + pro-side neutrals still get S>0 here because they're
+            // technically "not allied". The existing #2745 baseline /30 discount in
+            // findLandValue keeps their effective V low even with non-zero S. Smart
+            // handling of "pro-Allied neutrals US shouldn't attack" is a separate
+            // ProAi attack-targeting concern, out of SVF scope.
+            final boolean isAlliedLand =
+                !territory.isWater() && Matches.isAllied(player).test(territory.getOwner());
+            if (!isAlliedLand) {
+              final Double existing = field.get(territory);
+              if (existing == null || decayed > existing) {
+                field.put(territory, decayed);
+              }
             }
             return true;
           });
@@ -114,9 +149,26 @@ public final class ProStrategicValueField {
   }
 
   /**
-   * Returns the per-edge predicate for the combined land+sea movement graph. Per-power canal access
-   * ({@code ProMatches.noCanalsBetweenTerritories}) is honored — US route to Tokyo via Suez is
-   * closed for non-British powers; the BFS falls back through the Pacific.
+   * Returns the per-edge predicate for the combined movement graph. Two intentional restrictions:
+   *
+   * <ol>
+   *   <li>Per-power canal access ({@code ProMatches.noCanalsBetweenTerritories}) is honored — US
+   *       route to Tokyo via Suez is closed for non-British powers; the BFS falls back through the
+   *       Pacific.
+   *   <li><b>Traversal blocked through allied land.</b> The gradient stays in sea zones + enemy
+   *       land. Without this gate, Berlin's BFS would shortcut via Eurasia (Germany → ... → Soviet
+   *       allied land → Manchuria/Korea/Japan) and reach the Pacific in fewer hops than via the
+   *       Atlantic crossing. Empirical observation: Panama (SZ 64) scored S=44 vs Atlantic-adjacent
+   *       SZ 101 at S=37 for US under KGF — the Eurasian shortcut leaked the gradient into the
+   *       Pacific and made Panama more attractive than the Atlantic embarkation point. Blocking
+   *       allied-land traversal forces the Berlin gradient to propagate ONLY through enemy land +
+   *       sea zones, matching the spec §4 intent of "naval projection toward enemy theater".
+   * </ol>
+   *
+   * <p>Side effect of the traversal block: territories reachable only via allied-land transit
+   * become unreachable from a given anchor. For US under KGF, Asian territories are only reachable
+   * via the Pacific SZ chain (not via Soviet land). Tokyo's own alphaOff'd anchor still provides
+   * Asian pull, just not via Berlin's Eurasian projection.
    */
   private static BiPredicate<Territory, Territory> combinedMovementEdgeCond(
       final GamePlayer player) {
@@ -124,8 +176,13 @@ public final class ProStrategicValueField {
       if (!ProMatches.noCanalsBetweenTerritories(player).test(from, to)) {
         return false;
       }
-      return ProMatches.territoryCanPotentiallyMoveLandUnits(player).test(to)
-          || ProMatches.territoryCanMoveSeaUnits(player, true).test(to);
+      if (to.isWater()) {
+        return ProMatches.territoryCanMoveSeaUnits(player, true).test(to);
+      }
+      if (!ProMatches.territoryCanPotentiallyMoveLandUnits(player).test(to)) {
+        return false;
+      }
+      return !Matches.isAllied(player).test(to.getOwner());
     };
   }
 
