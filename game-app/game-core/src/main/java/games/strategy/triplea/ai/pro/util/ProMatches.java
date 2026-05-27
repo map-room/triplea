@@ -56,15 +56,34 @@ public final class ProMatches {
 
   public static Predicate<Territory> territoryCanMoveAirUnits(
       final GameState data, final GamePlayer player, final boolean isCombatMove) {
-    return Matches.territoryDoesNotCostMoneyToEnter(data.getProperties())
-        .and(
-            Matches.territoryIsPassableAndNotRestrictedAndOkByRelationships(
-                player, isCombatMove, false, false, true, false));
+    final GameProperties properties = data.getProperties();
+    return t -> {
+      final boolean passable =
+          Matches.territoryDoesNotCostMoneyToEnter(properties)
+              .and(
+                  Matches.territoryIsPassableAndNotRestrictedAndOkByRelationships(
+                      player, isCombatMove, false, false, true, false))
+              .test(t);
+      if (passable) {
+        return true;
+      }
+      return shouldBypassStaleMovementRestriction(player, t, properties, isCombatMove);
+    };
   }
 
   public static Predicate<Territory> territoryCanPotentiallyMoveAirUnits(final GamePlayer player) {
-    return Matches.territoryDoesNotCostMoneyToEnter(player.getData().getProperties())
-        .and(Matches.territoryIsPassableAndNotRestricted(player));
+    final GameProperties properties = player.getData().getProperties();
+    return t -> {
+      final boolean passable =
+          Matches.territoryDoesNotCostMoneyToEnter(properties)
+              .and(Matches.territoryIsPassableAndNotRestricted(player))
+              .test(t);
+      if (passable) {
+        return true;
+      }
+      // isCombatMove=false: potential check has no combat-phase relationship constraint
+      return shouldBypassStaleMovementRestriction(player, t, properties, false);
+    };
   }
 
   public static Predicate<Territory> territoryCanMoveAirUnitsAndNoAa(
@@ -204,8 +223,85 @@ public final class ProMatches {
               .and(
                   Matches.territoryIsPassableAndNotRestrictedAndOkByRelationships(
                       player, isCombatMove, false, true, false, false));
-      return match.test(t);
+      if (match.test(t)) {
+        return true;
+      }
+      // map-room#2755 PR-J: simulate the cleared-restriction state when at war with axis.
+      // 1940 Global encodes the US/Japan/Russia "neutrality act" as a static XML list
+      // (RulesAttachment.movementRestrictionTerritories) plus a TriggerAttachment that
+      // clears the list once at war with an axis power. The sidecar is stateless per
+      // HTTP request, so it never executes the game-step boundary the trigger fires on
+      // — the list persists. The live TS engine implements the same rule procedurally
+      // (movement-validator.ts:getUSNeutralityRestriction) and lifts it on war, so AI
+      // and engine disagree on Atlantic reachability for the US once at war. Override
+      // here: if the only thing blocking the move is the stale-XML restriction list AND
+      // the player is at war with an axis, accept.
+      return shouldBypassStaleMovementRestriction(player, t, properties, isCombatMove);
     };
+  }
+
+  /**
+   * Returns {@code true} if {@code t} is rejected SOLELY by the static-XML {@code
+   * movementRestrictionTerritories} list and the player is at war with at least one axis power.
+   * Mirrors the effect of the {@code triggerAttachment_Americans_Unrestricted_Movement} XML trigger
+   * that the stateless sidecar cannot fire. Returns false (= preserve the rejection) when the
+   * property isn't set, when the player isn't at war with any axis, or when the territory isn't in
+   * the restriction list. Re-checks the non-restriction conditions (impassable, money cost,
+   * canMoveIntoDuringCombatMove) so territories blocked for OTHER reasons stay blocked.
+   */
+  private static boolean shouldBypassStaleMovementRestriction(
+      final GamePlayer player,
+      final Territory t,
+      final GameProperties properties,
+      final boolean isCombatMove) {
+    if (!Properties.getMovementByTerritoryRestricted(properties)) {
+      return false;
+    }
+    if (!isAtWarWithAnyAxis(player)) {
+      return false;
+    }
+    final games.strategy.triplea.attachments.RulesAttachment ra = player.getRulesAttachment();
+    if (ra == null) {
+      return false;
+    }
+    final String[] restrictionNames = ra.getMovementRestrictionTerritories();
+    if (restrictionNames == null || restrictionNames.length == 0) {
+      return false;
+    }
+    final java.util.Collection<Territory> listedTerritories =
+        ra.getListedTerritories(restrictionNames, true, true);
+    final boolean isInList = listedTerritories.contains(t);
+    final boolean isAllowedList = ra.isMovementRestrictionTypeAllowed();
+    final boolean blockedByRestriction = isAllowedList ? !isInList : isInList;
+    if (!blockedByRestriction) {
+      return false;
+    }
+    if (Matches.territoryIsImpassable().test(t)) {
+      return false;
+    }
+    if (!Matches.territoryDoesNotCostMoneyToEnter(properties).test(t)) {
+      return false;
+    }
+    if (isCombatMove
+        && !player
+            .getData()
+            .getRelationshipTracker()
+            .canMoveIntoDuringCombatMove(player, t.getOwner())) {
+      return false;
+    }
+    return true;
+  }
+
+  /** Returns true if {@code player} is at war with any of the Axis powers (1940 Global roster). */
+  private static boolean isAtWarWithAnyAxis(final GamePlayer player) {
+    final games.strategy.engine.data.PlayerList players = player.getData().getPlayerList();
+    for (final String axisName : new String[] {"Germans", "Italians", "Japanese"}) {
+      final GamePlayer axis = players.getPlayerId(axisName);
+      if (axis != null && player.isAtWar(axis)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public static Predicate<Territory> territoryCanMoveSeaUnitsThrough(
