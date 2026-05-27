@@ -1125,10 +1125,14 @@ public class ProTerritoryManager {
                   isCheckingEnemyAttacks ? canMoveSea : canMoveSeaThrough;
               // PR-H gate diagnostic: log per-candidate-zone evaluation of canMoveSea and
               // canMoveSeaThrough so we can see *which* sub-predicate is rejecting which
-              // Atlantic transit zones. Only the first iter (movesLeft at its initial
-              // value) emits — that's the broadest probe and avoids per-iter spam.
-              if (traceThisTransport && movesLeft == 3 && isGateProbeEnabled()) {
+              // Atlantic transit zones. Fires only on the OUTER iter (from == start) so
+              // it gets the full radius probe once per transport per call, regardless of
+              // whether the harbor bonus is +1 (range=3) or absent (range=2).
+              if (traceThisTransport && from.equals(transportTerritory) && isGateProbeEnabled()) {
                 logGateProbe(map, from, movesLeft, player, canMoveSea, canMoveSeaThrough);
+                if (isMovementRestrictionDumpEnabled()) {
+                  logMovementRestrictionOnce(player);
+                }
               }
               for (final Territory to : map.getNeighbors(from, movesLeft, canMove)) {
                 if (map.getRouteForUnit(from, to, canMoveSeaThrough, transport, player)
@@ -1423,6 +1427,43 @@ public class ProTerritoryManager {
     return firstNonEmpty(
             System.getenv("AI_TRANSPORT_GATE"), System.getProperty("ai.transport.gate"))
         != null;
+  }
+
+  private static boolean isMovementRestrictionDumpEnabled() {
+    return firstNonEmpty(System.getenv("AI_TRANSPORT_RA"), System.getProperty("ai.transport.ra"))
+        != null;
+  }
+
+  /**
+   * One-shot dump of the player's {@link
+   * games.strategy.triplea.attachments.RulesAttachment#getMovementRestrictionTerritories()}. This
+   * is the list consulted by {@code territoryIsPassableAndNotRestrictedAndOkByRelationships} when
+   * {@code Properties.getMovementByTerritoryRestricted} is enabled — the in-XML "neutrality act"
+   * encoding for US in 1940 Global. If the list still contains Atlantic zones after the US has
+   * declared war on Italy / Japan / Germany, it confirms the relationship-triggered clear isn't
+   * propagating to the Java side.
+   */
+  private static void logMovementRestrictionOnce(final GamePlayer player) {
+    final games.strategy.triplea.attachments.RulesAttachment ra = player.getRulesAttachment();
+    if (ra == null) {
+      ProLogger.info("[SVF-XPORT-RA] player=" + player.getName() + " rulesAttachment=null");
+      return;
+    }
+    final String[] terr = ra.getMovementRestrictionTerritories();
+    if (terr == null) {
+      ProLogger.info(
+          "[SVF-XPORT-RA] player=" + player.getName() + " movementRestrictionTerritories=null");
+      return;
+    }
+    ProLogger.info(
+        "[SVF-XPORT-RA] player="
+            + player.getName()
+            + " movementRestrictionType="
+            + (ra.isMovementRestrictionTypeAllowed() ? "allowed" : "disallowed")
+            + " count="
+            + terr.length
+            + " territories="
+            + java.util.Arrays.asList(terr));
   }
 
   /**
