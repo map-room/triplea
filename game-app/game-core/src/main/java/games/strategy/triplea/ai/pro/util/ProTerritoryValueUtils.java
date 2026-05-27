@@ -119,6 +119,18 @@ public final class ProTerritoryValueUtils {
         && (proData.getWStrat() > 0 || ProValueHeatmapDumper.isStrategicEnabled())) {
       proData.setStrategicValueField(ProStrategicValueField.compute(proData, player));
     }
+    // Phase 3A (map-room#2755): populate the off-theater defense floor at the same lazy hook
+    // so NCM's defense allocator can read it via proData.getDFloor(). Empty for non-US per
+    // spec §2; doesn't affect non-US behavior. Populated regardless of wStrat — the floor
+    // protects Pacific holdings (or Atlantic under KJF) from being stripped by NCM even when
+    // the SVF blend itself is off, so a user who sets AI_THEATER_PRIORITY without wStrat still
+    // gets the asymmetric defense protection.
+    if (proData.getDFloor().isEmpty()) {
+      final Map<Territory, Integer> floor = ProDefenseFloor.compute(proData, player);
+      if (!floor.isEmpty()) {
+        proData.setDFloor(floor);
+      }
+    }
     final int maxLandMassSize = findMaxLandMassSize(player);
     final Map<Territory, Double> enemyCapitalsAndFactoriesMap =
         findEnemyCapitalsAndFactoriesValue(

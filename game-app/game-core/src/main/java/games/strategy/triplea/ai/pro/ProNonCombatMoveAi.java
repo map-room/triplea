@@ -23,6 +23,7 @@ import games.strategy.triplea.ai.pro.data.ProTerritoryManager;
 import games.strategy.triplea.ai.pro.data.ProTransport;
 import games.strategy.triplea.ai.pro.logging.ProLogger;
 import games.strategy.triplea.ai.pro.util.ProBattleUtils;
+import games.strategy.triplea.ai.pro.util.ProDefenseFloor;
 import games.strategy.triplea.ai.pro.util.ProMatches;
 import games.strategy.triplea.ai.pro.util.ProMoveUtils;
 import games.strategy.triplea.ai.pro.util.ProOddsCalculator;
@@ -891,6 +892,15 @@ class ProNonCombatMoveAi {
         }
         if (!estimatesMap.isEmpty() && estimatesMap.lastKey() > 60) {
           final Territory minWinTerritory = estimatesMap.lastEntry().getValue();
+          // Phase 3A defense floor (map-room#2755): if pulling this unit would drop its
+          // source territory below the configured garrison floor (Hawaii under KGF, etc.),
+          // skip the assignment so the off-theater holding isn't strip-mined to feed the
+          // targeted theater. Empty floor map for non-US so this is a no-op for other
+          // players. Spec §4 "Off-theater defense floor".
+          if (ProDefenseFloor.wouldViolateFloor(
+              proData, proData.getUnitTerritory(unit), unit, addedUnits)) {
+            continue;
+          }
           final List<Unit> unitsToAdd = ProTransportUtils.getUnitsToAdd(proData, unit, moveMap);
           moveMap.get(minWinTerritory).addTempUnits(unitsToAdd);
           addedUnits.addAll(unitsToAdd);
@@ -924,6 +934,11 @@ class ProNonCombatMoveAi {
           }
         }
         if (maxWinTerritory != null) {
+          // Phase 3A defense floor — see comment on the earlier loop above.
+          if (ProDefenseFloor.wouldViolateFloor(
+              proData, proData.getUnitTerritory(unit), unit, addedUnits)) {
+            continue;
+          }
           ProTerritory to = moveMap.get(maxWinTerritory);
           to.setBattleResult(null);
           final List<Unit> unitsToAdd = ProTransportUtils.getUnitsToAdd(proData, unit, moveMap);
