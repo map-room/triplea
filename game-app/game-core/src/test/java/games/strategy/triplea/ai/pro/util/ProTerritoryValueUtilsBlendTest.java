@@ -119,27 +119,30 @@ class ProTerritoryValueUtilsBlendTest {
   }
 
   @Test
-  void blendMovesUSCoastValuePositiveUnderKGF() {
-    final Territory eastUs = data.getMap().getTerritoryOrThrow("Eastern United States");
+  void blendMovesAtlanticSeaZoneValuePositiveUnderKGF() {
+    // Post-allied-land-gate: the blend doesn't lift East US value (East US is allied
+    // land with S=0). It DOES lift the Atlantic SZ adjacent to East US, because that
+    // sea zone is where the SVF gradient lives and where transports get pulled to.
+    final Territory atlanticSz = data.getMap().getTerritoryOrThrow("101 Sea Zone");
     proData.setAiTheaterPriority(AiTheaterPriority.KGF);
 
     proData.setWStrat(0.0);
     proData.setStrategicValueField(null);
-    final double baseEast =
+    final double baseSz =
         ProTerritoryValueUtils.findTerritoryValues(
-                proData, americans, List.of(), List.of(), Set.of(eastUs))
-            .get(eastUs);
+                proData, americans, List.of(), List.of(), Set.of(atlanticSz))
+            .get(atlanticSz);
 
     proData.setWStrat(1.0);
     proData.setStrategicValueField(null);
-    final double blendedEast =
+    final double blendedSz =
         ProTerritoryValueUtils.findTerritoryValues(
-                proData, americans, List.of(), List.of(), Set.of(eastUs))
-            .get(eastUs);
+                proData, americans, List.of(), List.of(), Set.of(atlanticSz))
+            .get(atlanticSz);
 
-    assertThat(blendedEast)
-        .as("KGF blend with wStrat>0 must lift US East Coast value above the baseline")
-        .isGreaterThan(baseEast);
+    assertThat(blendedSz)
+        .as("KGF blend with wStrat>0 must lift Atlantic SZ value above the baseline")
+        .isGreaterThan(baseSz);
   }
 
   @Test

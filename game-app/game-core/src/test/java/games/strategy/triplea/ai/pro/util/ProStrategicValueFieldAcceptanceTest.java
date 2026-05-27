@@ -105,10 +105,13 @@ class ProStrategicValueFieldAcceptanceTest {
   }
 
   @Test
-  void underKGF_S_EasternUnitedStates_inCalibratedBracket_5to15() {
-    // The headline §10 Finding 2 acceptance: at default knobs (gCap=75, gamma=0.85), the
-    // gradient from Berlin should reach the US East Coast at value 5-15. Round-3 relationship
-    // state (US at war with the axis) is what makes this hold — see test class javadoc.
+  void underKGF_AtlanticSeaZone_adjacentToEastUS_hasMeaningfulPull() {
+    // Post-allied-land-gate: the headline §10 acceptance shifts from "gradient reaches
+    // US East Coast land" to "gradient reaches Atlantic sea zone adjacent to East US".
+    // The SVF informs naval routing toward enemy theater + attack target selection;
+    // friendly land (East US) doesn't need a pull because transports stage from sea
+    // zones, not from land. So the relevant question is: does 101 Sea Zone (adjacent
+    // to Eastern United States) have a meaningful S value pulling transports there?
     proData.setAiTheaterPriority(AiTheaterPriority.KGF);
     proData.setGCap(75.0);
     proData.setGamma(0.85);
@@ -116,18 +119,18 @@ class ProStrategicValueFieldAcceptanceTest {
 
     final Map<Territory, Double> field = ProStrategicValueField.compute(proData, americans);
     final Territory eastUs = data.getMap().getTerritoryOrThrow("Eastern United States");
-    final double s = field.get(eastUs);
+    final Territory atlanticSz = data.getMap().getTerritoryOrThrow("101 Sea Zone");
 
-    // §10 Finding 2 bracket. Slightly widened (4-20) to absorb gamma^d quantization across the
-    // ~16-18 hop transatlantic graph. If this test fails outside this range, that's tuning
-    // evidence for Phase 4A — the bracket assumption is wrong and the knob needs adjusting
-    // before wStrat default is flipped above 0.
-    assertThat(s)
+    assertThat(field.get(eastUs))
+        .as("Allied-land gate: US-owned land has S=0 (no pull to a territory we can't attack)")
+        .isEqualTo(0.0);
+    assertThat(field.get(atlanticSz))
         .as(
-            "§10 calibrated bracket for S(Eastern United States) at default knobs (post-war). "
-                + "Out-of-bracket failure here is tuning evidence for Phase 4A — Phase 4 must "
-                + "land before wStrat default is raised above 0.")
-        .isBetween(4.0, 20.0);
+            "§10-equivalent acceptance: 101 Sea Zone receives the gradient even though "
+                + "East US is gated to 0. Transports staged at 101 SZ embark eastbound. If "
+                + "S(101 SZ) is too low, that's Phase 4A tuning evidence — Phase 4 must land "
+                + "before wStrat default is raised above 0.")
+        .isGreaterThan(2.0);
   }
 
   @Test

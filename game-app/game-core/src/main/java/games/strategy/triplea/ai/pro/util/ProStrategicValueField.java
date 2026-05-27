@@ -95,26 +95,43 @@ public final class ProStrategicValueField {
           (territory, distance) -> {
             // Convert BFS edge distance to game-turn distance per spec §4 "movement-step
             // distance". Transport movement is 2 sea zones per turn, so divide by 2 to
-            // approximate turns. Kept as a FLOAT (not integer floor): although a single
-            // game turn is discrete, the SVF is a continuous value field used to compare
-            // territory attractiveness — a 0.5-turn-closer territory IS strictly
-            // preferable even when both round to the same integer "1 turn". Integer
-            // truncation (early attempt at this fix) collapsed 2-3 BFS edges into the
-            // same bucket and produced a visually-uniform heatmap with only ~12 distinct
-            // values across the entire board; the float version gives every BFS edge a
-            // distinct decay factor and substantially sharper AI preferences.
+            // approximate turns. Kept as a FLOAT (not integer floor) so every BFS edge
+            // produces a distinct decay factor — gives sharper AI preferences and a
+            // useful visual gradient in the heatmap overlay.
             //
             // For pure-land paths this over-credits infantry-paced advance (BFS 4 = 2
             // turns by formula vs 4 turns for infantry, 2 for armour). The SVF is
             // US-only post-gate (spec §2), and US always crosses water to reach Eurasian
-            // targets, so naval-dominated routes dominate the math — the approximation
-            // is biased correctly for the deployed use case. A future phase may refine
-            // per-edge with a Dijkstra accumulator.
+            // targets, so naval-dominated routes dominate the math.
             final double effectiveTurns = distance / 2.0;
             final double decayed = strength * Math.pow(gamma, effectiveTurns);
-            final Double existing = field.get(territory);
-            if (existing == null || decayed > existing) {
-              field.put(territory, decayed);
+
+            // Allied-land suppression: don't store S for territories owned by an ally
+            // of the moving player (or by the player themselves). The SVF informs naval
+            // routing toward enemy theater + attack target selection — there's no AI
+            // decision a friendly-land S value helps with. Suppressing here keeps the
+            // heatmap focused on the actionable surface (sea zones + enemy land +
+            // neutrals) and prevents the AI from treating friendly land as a strategic
+            // pull-point (e.g. before this gate, French West Africa scored S=46 at
+            // gCap=75 because it sits on the Mediterranean route to Berlin — a
+            // gradient artifact, not a useful AI signal).
+            //
+            // BFS traversal still continues THROUGH friendly land — the gradient
+            // propagates to sea zones on the far side. Allied land just doesn't store
+            // its own S value (stays at the field's 0 initialization).
+            //
+            // True Neutrals + pro-side neutrals still get S>0 here because they're
+            // technically "not allied". The existing #2745 baseline /30 discount in
+            // findLandValue keeps their effective V low even with non-zero S. Smart
+            // handling of "pro-Allied neutrals US shouldn't attack" is a separate
+            // ProAi attack-targeting concern, out of SVF scope.
+            final boolean isAlliedLand =
+                !territory.isWater() && Matches.isAllied(player).test(territory.getOwner());
+            if (!isAlliedLand) {
+              final Double existing = field.get(territory);
+              if (existing == null || decayed > existing) {
+                field.put(territory, decayed);
+              }
             }
             return true;
           });

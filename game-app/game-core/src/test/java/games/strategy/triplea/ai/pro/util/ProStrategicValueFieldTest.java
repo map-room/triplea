@@ -49,7 +49,7 @@ class ProStrategicValueFieldTest {
   }
 
   @Test
-  void underKgf_S_Berlin_dominates_S_USEastCoast_and_both_positive() {
+  void underKgf_S_Berlin_dominates_S_USEastCoast_and_atlanticSeaZoneIsPositive() {
     proData.setAiTheaterPriority(AiTheaterPriority.KGF);
     proData.setWStrat(1.0);
 
@@ -57,11 +57,17 @@ class ProStrategicValueFieldTest {
 
     final Territory berlin = data.getMap().getTerritoryOrThrow("Germany");
     final Territory eastUs = data.getMap().getTerritoryOrThrow("Eastern United States");
+    final Territory atlanticSz = data.getMap().getTerritoryOrThrow("101 Sea Zone");
     assertThat(field.get(berlin))
         .as("Berlin is the KGF anchor and must dominate any non-anchor")
-        .isGreaterThan(field.get(eastUs));
+        .isGreaterThan(field.get(atlanticSz));
     assertThat(field.get(eastUs))
-        .as("Decay must reach the US East Coast (>0) so the gradient is connected at default knobs")
+        .as(
+            "US East Coast is allied land — gate suppresses S there (transport routing happens at sea zones, not on friendly land)")
+        .isEqualTo(0.0);
+    assertThat(field.get(atlanticSz))
+        .as(
+            "101 Sea Zone (Atlantic, adjacent to East US) must receive the gradient — that's where transports stage from")
         .isPositive();
   }
 
@@ -202,7 +208,7 @@ class ProStrategicValueFieldTest {
   }
 
   @Test
-  void manualAcceptance_KGF_gradientReachesUSEastCoast() {
+  void manualAcceptance_KGF_gradientReachesAtlanticAdjacentToUSEastCoast() {
     proData.setAiTheaterPriority(AiTheaterPriority.KGF);
     proData.setGCap(75.0);
     proData.setGamma(0.85);
@@ -212,14 +218,44 @@ class ProStrategicValueFieldTest {
     final Map<Territory, Double> field = ProStrategicValueField.compute(proData, americans);
 
     final Territory eastUs = data.getMap().getTerritoryOrThrow("Eastern United States");
+    final Territory atlanticSz = data.getMap().getTerritoryOrThrow("101 Sea Zone");
     final Territory germany = data.getMap().getTerritoryOrThrow("Germany");
     final Territory westGermany = data.getMap().getTerritoryOrThrow("Western Germany");
     assertThat(field.get(germany))
         .as("§10 acceptance: KGF anchor — capital must dominate any neighbor")
         .isGreaterThan(field.get(westGermany));
+    // East US is allied land → no SVF pull (post-allied-land-gate). The relevant
+    // acceptance signal is now that the SEA ZONE adjacent to East US has meaningful
+    // S, since that's where transports get placed/staged for transatlantic operations.
     assertThat(field.get(eastUs))
-        .as("§10 acceptance: gradient reaches US East Coast at default knobs (>0)")
+        .as("§10 acceptance: allied land (East US) has S=0 by design")
+        .isEqualTo(0.0);
+    assertThat(field.get(atlanticSz))
+        .as("§10 acceptance: gradient reaches the Atlantic SZ adjacent to East US")
         .isPositive();
+  }
+
+  @Test
+  void alliedLand_hasZeroS_evenWhenReachable_via_BFS() {
+    // Pin the allied-land-gate behavior: territories owned by an ally of the moving
+    // player (or by the player themselves) get S=0 regardless of how close they are
+    // to the anchor on the BFS graph. Without this gate, French West Africa was
+    // scoring S=46 at gCap=75 because of the Mediterranean route to Berlin.
+    proData.setAiTheaterPriority(AiTheaterPriority.KGF);
+    proData.setWStrat(1.0);
+
+    final Map<Territory, Double> field = ProStrategicValueField.compute(proData, americans);
+
+    final Territory eastUs = data.getMap().getTerritoryOrThrow("Eastern United States");
+    final Territory westUs = data.getMap().getTerritoryOrThrow("Western United States");
+    // British, French, etc. are NOT yet declared allies at round 1 (no relationship
+    // changes performed in this test's setUp), so they may or may not be gated as
+    // allied depending on the default relationships. The US-owned territories are
+    // the load-bearing case — those are unambiguously allied-with-self.
+    assertThat(field.get(eastUs))
+        .as("US-owned land has S=0 regardless of BFS reach (allied with self)")
+        .isEqualTo(0.0);
+    assertThat(field.get(westUs)).as("US-owned land everywhere has S=0").isEqualTo(0.0);
   }
 
   @Test
