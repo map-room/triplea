@@ -31,6 +31,7 @@ import games.strategy.triplea.ai.pro.util.ProPurchaseUtils;
 import games.strategy.triplea.ai.pro.util.ProSortMoveOptionsUtils;
 import games.strategy.triplea.ai.pro.util.ProTerritoryValueUtils;
 import games.strategy.triplea.ai.pro.util.ProTheaterScopeFilter;
+import games.strategy.triplea.ai.pro.util.ProTransportStaging;
 import games.strategy.triplea.ai.pro.util.ProTransportUtils;
 import games.strategy.triplea.ai.pro.util.ProUtils;
 import games.strategy.triplea.attachments.TerritoryAttachment;
@@ -216,6 +217,15 @@ class ProNonCombatMoveAi {
                 + territoryManager.getDefendOptions().getUnitMoveMap().get(u));
       }
     }
+
+    // map-room#2755 PR-F: offense-intent transport staging. After defense + best-territory +
+    // infra placement, pick up any unloaded US transport that hasn't been assigned a
+    // destination and stage it eastward toward the highest-S(adjacent enemy land) reachable
+    // sea zone. Closes the gap where SZ 101 transports drift south to Caribbean via
+    // amphib-defense pull instead of heading toward Europe. US-only, dormant unless wStrat > 0
+    // so PR-F is zero-impact at SVF defaults.
+    ProTransportStaging.stageIdleTransports(
+        proData, player, territoryManager.getDefendOptions().getTransportMoveMap(), moveMap);
 
     // Calculate move routes and perform moves
     doMove(isCombatMove, moveMap, moveDel, data, player);
