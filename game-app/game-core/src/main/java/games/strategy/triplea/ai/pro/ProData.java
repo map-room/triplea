@@ -78,6 +78,14 @@ public final class ProData {
   @Setter private Map<Territory, Integer> dFloor = Map.of();
 
   /**
+   * Transports the combat-move amphib commit gate deferred this turn. NCM reads this and refuses to
+   * disperse — the transport sits at its current sea zone so it can mass with reinforcements next
+   * turn instead of dribbling its load into a losing assault. Phase 3B populates; cleared per
+   * request (sidecar is stateless per call).
+   */
+  @Setter private Set<Unit> transportsToHold = new HashSet<>();
+
+  /**
    * Lazy-cached strategic value field. Computed on first {@code findTerritoryValues}-style call
    * when {@code wStrat > 0}, then reused for the remainder of the request. Sidecar is stateless per
    * HTTP request, so the cache is scoped to one decision call — see plan §0 nuance.
