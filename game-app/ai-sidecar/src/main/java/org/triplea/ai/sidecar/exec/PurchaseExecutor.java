@@ -141,10 +141,11 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     proAi.getProData().setSeed(request.seed());
     proAi.seedBattleCalc(request.seed());
 
-    // Strategic Value Field (map-room#2755 PR-A): apply env/sysprop tuning knobs into ProData
-    // before any phase code reads them. wStrat=0 default keeps this zero-impact unless tuning
-    // env vars are explicitly set. PR-B replaces this with a wire-protocol-driven path.
-    ProSvfKnobs.applyTo(proAi.getProData());
+    // Strategic Value Field (map-room#2755 PR-B): wire-canonical theater priority, env-only for
+    // numeric tuning knobs. Wire wins when present (the lobby radio path); env is the debug-only
+    // fallback for curl/test requests that omit the field. wStrat=0 default keeps the blend
+    // zero-impact unless tuning env vars are explicitly set.
+    ProSvfKnobs.applyFromRequest(proAi.getProData(), request.state());
 
     final RecordingPurchaseDelegate recorder = new RecordingPurchaseDelegate();
     recorder.initialize("purchase", "Purchase");
@@ -231,7 +232,9 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
             request.state().round(),
             "combatMove",
             request.state().currentPlayer(),
-            List.of()),
+            List.of(),
+            request.state().setupVariant(),
+            request.state().aiTheaterPriority()),
         unitIdMap);
 
     final Map<UUID, String> uuidToWireId = new HashMap<>();

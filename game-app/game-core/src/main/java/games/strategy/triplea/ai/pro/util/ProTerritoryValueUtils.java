@@ -172,8 +172,15 @@ public final class ProTerritoryValueUtils {
     return territoryValueMap;
   }
 
-  /** Returns the value of each sea territory in {@link ProData#getData()}. */
+  /**
+   * Returns the value of each sea territory in {@link ProData#getData()}.
+   *
+   * <p>PR-B (map-room#2755): added the {@code proData} parameter to enable the SVF blend. The sole
+   * caller is {@code ProNonCombatMoveAi.doNonCombatMove}, which has {@code proData} in scope; no
+   * external consumers exist.
+   */
   public static Map<Territory, Double> findSeaTerritoryValues(
+      final ProData proData,
       final GamePlayer player,
       final List<Territory> territoriesThatCantBeHeld,
       final List<Territory> territoriesToCheck) {
@@ -211,16 +218,29 @@ public final class ProTerritoryValueUtils {
                 targetTerritory.getUnitCollection().countMatches(Matches.unitIsEnemyOf(player)));
 
         // Set final values
-        final double value = 100 * nearbySeaProductionValue + nearbyEnemySeaUnitValue;
+        double value = 100 * nearbySeaProductionValue + nearbyEnemySeaUnitValue;
+        // SVF blend (map-room#2755 PR-B). proData.getStrategicValueFieldFor returns 0 at
+        // wStrat==0 so this branch is byte-identical to pre-blend at default. §10 Finding 2
+        // noted the sea-only baseline values are often 0 in production runs — the SVF blend
+        // is what makes sea zones near targeted-theater coasts attractive in the first place.
+        value += proData.getWStrat() * proData.getStrategicValueFieldFor(t);
+        if (proData.getStrategicValueField() != null) {
+          value += ProStrategicValueField.launchBonus(t, proData.getStrategicValueField(), proData);
+        }
         territoryValueMap.put(t, value);
       } else if (t.isWater()) {
-        territoryValueMap.put(t, 0.0);
+        // Even unreachable sea zones get the SVF blend (returns 0 at default; non-zero if a
+        // strategic anchor reaches them through the combined movement graph).
+        double value = 0.0;
+        value += proData.getWStrat() * proData.getStrategicValueFieldFor(t);
+        if (proData.getStrategicValueField() != null) {
+          value += ProStrategicValueField.launchBonus(t, proData.getStrategicValueField(), proData);
+        }
+        territoryValueMap.put(t, value);
       }
     }
 
-    // findSeaTerritoryValues doesn't receive ProData; use the GameData-shaped dumper overload.
-    ProValueHeatmapDumper.dumpIfEnabledFromGameData(
-        player.getData(), player, "sea-only", territoryValueMap);
+    ProValueHeatmapDumper.dumpIfEnabled(proData, player, "sea-only", territoryValueMap);
     return territoryValueMap;
   }
 
@@ -448,6 +468,12 @@ public final class ProTerritoryValueUtils {
     // mainland scoring where raw IPC math already provides sufficient discrimination.
     value += computeBaseBonus(t);
 
+    // SVF blend (map-room#2755 PR-B). proData.getStrategicValueFieldFor returns 0 when wStrat==0
+    // (the zero-impact default), so the multiplication is byte-identical to pre-blend output at
+    // default tuning. With wStrat>0, the lazy compute populates S(n) on first read and this term
+    // pulls the value upward toward KGF/KJF objectives. Plan §4 Phase 1D.
+    value += proData.getWStrat() * proData.getStrategicValueFieldFor(t);
+
     return value;
   }
 
@@ -517,19 +543,10 @@ public final class ProTerritoryValueUtils {
       }
       final int distance = optionalRoute.get().numberOfSteps();
       if (distance > 0 && distance <= 3) {
-        if (ProMatches.territoryIsEnemyOrCantBeHeld(player, territoriesThatCantBeHeld)
-            .test(nearbyLandTerritory)) {
-          double value = TerritoryAttachment.getProduction(nearbyLandTerritory);
-          if (ProUtils.isNeutralLand(nearbyLandTerritory)) {
-            // True Neutrals contribute almost nothing to sea-zone staging value because
-            // the cascade rule makes them un-attackable in practice. Previously this
-            // summed full attack-value (3 × production), making Caribbean sea zones
-            // hugely attractive to transports because of nearby South American
-            // neutrals — pulling US/UK ground forces toward staging that never lands. #2745
-            value = findTerritoryAttackValue(proData, player, nearbyLandTerritory) / 30;
-          }
-          nearbyLandValue += value;
-        }
+        // Cache the recursive findLandValue for this nearby land territory regardless of
+        // ownership — the outer findTerritoryValues loop will reuse it. This is the perf
+        // optimization that was here originally; only the *addition* to nearbyLandValue
+        // needs the ownership gate.
         if (!territoryValueMap.containsKey(nearbyLandTerritory)) {
           final double value =
               findLandValue(
@@ -542,11 +559,40 @@ public final class ProTerritoryValueUtils {
                   territoriesToAttack);
           territoryValueMap.put(nearbyLandTerritory, value);
         }
-        nearbyLandValue += territoryValueMap.get(nearbyLandTerritory);
+        if (ProMatches.territoryIsEnemyOrCantBeHeld(player, territoriesThatCantBeHeld)
+            .test(nearbyLandTerritory)) {
+          double value = TerritoryAttachment.getProduction(nearbyLandTerritory);
+          if (ProUtils.isNeutralLand(nearbyLandTerritory)) {
+            // True Neutrals contribute almost nothing to sea-zone staging value because
+            // the cascade rule makes them un-attackable in practice. Previously this
+            // summed full attack-value (3 × production), making Caribbean sea zones
+            // hugely attractive to transports because of nearby South American
+            // neutrals — pulling US/UK ground forces toward staging that never lands. #2745
+            value = findTerritoryAttackValue(proData, player, nearbyLandTerritory) / 30;
+          }
+          nearbyLandValue += value;
+          // Recursive land-value contribution: the strategic value of the nearby land
+          // itself. Previously this line ran for EVERY nearby land territory regardless
+          // of ownership, which inflated sea-zone value for chokepoints near friendly
+          // coastlines (the Panama Canal at SZ 64 was the worst offender — it
+          // accumulated land-value from Central America + Colombia + Ecuador + SE Mexico,
+          // none of which were attackable enemy land). Now gated to enemy/can't-be-held
+          // land only, matching the production-based contribution above and the spirit
+          // of #2745. Caught during SVF PR-B live-run analysis — see map-room#2755.
+          nearbyLandValue += territoryValueMap.get(nearbyLandTerritory);
+        }
       }
     }
 
-    return capitalOrFactoryValue / 100 + nearbyLandValue / 10;
+    double value = capitalOrFactoryValue / 100 + nearbyLandValue / 10;
+    // SVF blend (map-room#2755 PR-B). Sea-zone blend mirrors land-side: at wStrat==0 these terms
+    // are 0 and value is byte-identical to pre-blend. The launch bonus is sea-only — it pools
+    // the fleet at embarkation points neighboring high-S coastal targets. Plan §4 Phase 1D.
+    value += proData.getWStrat() * proData.getStrategicValueFieldFor(t);
+    if (proData.getStrategicValueField() != null) {
+      value += ProStrategicValueField.launchBonus(t, proData.getStrategicValueField(), proData);
+    }
+    return value;
   }
 
   /**
