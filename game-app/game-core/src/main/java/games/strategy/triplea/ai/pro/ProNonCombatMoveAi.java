@@ -419,6 +419,7 @@ class ProNonCombatMoveAi {
     // This mirrors sortUnitMoveOptions tie-breaking and guarantees every reachable
     // Friendly_Neutral gets a unit if one is available (#2195).
     final Set<Unit> usedUnits = new HashSet<>();
+    final Set<Territory> landClaimed = new HashSet<>();
     for (final Territory t : toClaim) {
       final Unit chosen =
           candidates.get(t).stream()
@@ -434,7 +435,76 @@ class ProNonCombatMoveAi {
       moveMap.get(t).addUnit(chosen);
       unitMoveMap.remove(chosen);
       usedUnits.add(chosen);
+      landClaimed.add(t);
       ProLogger.debug(t + ", claimed Friendly_Neutral with: " + chosen);
+    }
+
+    // Amphib pass: for sea-isolated friendly neutrals not reachable by land, assign one
+    // infantry+transport pair from the transport map (Brazil, Liberia, Saudi Arabia, etc.).
+    // Prefer land path when available — only run for territories the land loop left unclaimed.
+    final List<ProTransport> transportMapList =
+        territoryManager.getDefendOptions().getTransportList();
+    final Map<Unit, Set<Territory>> transportMoveMap =
+        territoryManager.getDefendOptions().getTransportMoveMap();
+    final Set<Unit> usedTransports = new HashSet<>();
+    for (final Territory dest : toClaim) {
+      if (landClaimed.contains(dest)) {
+        continue;
+      }
+      Unit committedTransport = null;
+      for (final ProTransport pt : transportMapList) {
+        final Unit transport = pt.getTransport();
+        if (usedTransports.contains(transport)) {
+          continue;
+        }
+        final Set<Territory> loadFromTerritories = pt.getTransportMap().get(dest);
+        if (loadFromTerritories == null || loadFromTerritories.isEmpty()) {
+          continue;
+        }
+        // Find an adjacent sea zone this transport can reach.
+        Territory seaZone = null;
+        for (final Territory sz : data.getMap().getNeighbors(dest)) {
+          if (sz.isWater() && pt.getSeaTransportMap().containsKey(sz)) {
+            seaZone = sz;
+            break;
+          }
+        }
+        if (seaZone == null) {
+          continue;
+        }
+        // Get one transportable infantry not already committed.
+        final List<Unit> amphibUnits =
+            ProTransportUtils.getUnitsToTransportFromTerritories(
+                player, transport, loadFromTerritories, usedUnits);
+        if (amphibUnits.isEmpty()) {
+          continue;
+        }
+        final List<Unit> claimUnits = List.of(amphibUnits.get(0));
+        moveMap.get(dest).addUnit(claimUnits.get(0));
+        moveMap.get(dest).getTransportTerritoryMap().put(transport, seaZone);
+        moveMap.get(dest).putAmphibAttackMap(transport, claimUnits);
+        usedUnits.add(claimUnits.get(0));
+        usedTransports.add(transport);
+        unitMoveMap.remove(claimUnits.get(0));
+        unitMoveMap.remove(transport);
+        committedTransport = transport;
+        ProLogger.debug(
+            dest
+                + ", claimed sea-isolated Friendly_Neutral via amphib: "
+                + claimUnits.get(0)
+                + " on "
+                + transport
+                + " via "
+                + seaZone);
+        break;
+      }
+      // Remove the committed transport from all shared move maps so later NCM phases
+      // (moveUnitsToBestTerritories) don't re-assign it to a different destination.
+      if (committedTransport != null) {
+        final Unit finalTransport = committedTransport;
+        transportMapList.removeIf(pt -> pt.getTransport().equals(finalTransport));
+        transportMoveMap.remove(finalTransport);
+      }
     }
   }
 
