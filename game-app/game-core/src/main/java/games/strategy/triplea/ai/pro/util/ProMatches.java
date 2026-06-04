@@ -60,6 +60,11 @@ public final class ProMatches {
       final GameState data, final GamePlayer player, final boolean isCombatMove) {
     final GameProperties properties = data.getProperties();
     return t -> {
+      // Air units cannot overfly any neutral territory (strict/pro-Axis/pro-Allies), mirroring
+      // engine movement-validator.ts createTraversalFilter air branch (map-room#2876).
+      if (ProUtils.isNeutralLand(t)) {
+        return false;
+      }
       final boolean passable =
           Matches.territoryDoesNotCostMoneyToEnter(properties)
               .and(
@@ -76,6 +81,11 @@ public final class ProMatches {
   public static Predicate<Territory> territoryCanPotentiallyMoveAirUnits(final GamePlayer player) {
     final GameProperties properties = player.getData().getProperties();
     return t -> {
+      // Air units cannot overfly any neutral territory (strict/pro-Axis/pro-Allies), mirroring
+      // engine movement-validator.ts createTraversalFilter air branch (map-room#2876).
+      if (ProUtils.isNeutralLand(t)) {
+        return false;
+      }
       final boolean passable =
           Matches.territoryDoesNotCostMoneyToEnter(properties)
               .and(Matches.territoryIsPassableAndNotRestricted(player))
