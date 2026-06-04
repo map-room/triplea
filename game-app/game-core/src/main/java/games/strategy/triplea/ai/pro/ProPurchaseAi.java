@@ -57,6 +57,14 @@ import org.triplea.java.collections.IntegerMap;
 /** Pro purchase AI. */
 class ProPurchaseAi {
 
+  /**
+   * Diminishing-returns multiplier applied to each additional unit placed at the same factory in
+   * one turn: adjusted priority = basePriority / (1 + alreadyPlaced * PLACEMENT_SPREAD_FACTOR). Set
+   * to 0 to disable spreading (pure priority order, original behaviour). Package-private so tests
+   * can override it.
+   */
+  static double PLACEMENT_SPREAD_FACTOR = 0.5;
+
   private final AbstractProAi ai;
   private final ProOddsCalculator calc;
   private final ProData proData;
@@ -395,6 +403,11 @@ class ProPurchaseAi {
 
     // Add factory purchase territory to list
     purchaseTerritories.putAll(factoryPurchaseTerritories);
+
+    // Redistribute land unit allocations across available factories using diminishing-returns
+    // soft-cap so all buys don't concentrate at the single highest-priority factory
+    // (map-room#2638).
+    redistributeLandPlacementUnits(purchaseTerritories, prioritizedLandTerritories);
 
     // Determine final count of each production rule
     final IntegerMap<ProductionRule> purchaseMap =
@@ -2560,32 +2573,49 @@ class ProPurchaseAi {
       final Predicate<Unit> unitMatch) {
     ProLogger.info("Place units=" + player.getUnits());
 
-    // Loop through prioritized territories and place units
-    for (final ProPlaceTerritory placeTerritory : prioritizedTerritories) {
-      final Territory t = placeTerritory.getTerritory();
-      ProLogger.debug("Checking place for " + t.getName());
+    // Place one unit at a time to the territory with the highest adjusted priority,
+    // applying diminishing returns so all remaining units don't concentrate at the
+    // single top-ranked factory (map-room#2638).
+    final int n = prioritizedTerritories.size();
+    final Map<Territory, Integer> placedCounts = new HashMap<>();
+    boolean progress = true;
+    while (progress) {
+      progress = false;
+      ProPlaceTerritory best = null;
+      PlaceableUnits bestPlaceable = null;
+      double bestScore = Double.NEGATIVE_INFINITY;
 
-      // Check if any units can be placed
-      final PlaceableUnits placeableUnits =
-          placeDelegate.getPlaceableUnits(player.getMatches(unitMatch), t);
-      if (placeableUnits.isError()) {
-        ProLogger.trace(t + " can't place units with error: " + placeableUnits.getErrorMessage());
-        continue;
+      for (int i = 0; i < n; i++) {
+        final ProPlaceTerritory ppt = prioritizedTerritories.get(i);
+        final Territory t = ppt.getTerritory();
+        final PlaceableUnits pu = placeDelegate.getPlaceableUnits(player.getMatches(unitMatch), t);
+        if (pu.isError() || pu.getUnits().isEmpty()) {
+          continue;
+        }
+        int remaining = pu.getMaxUnits();
+        if (remaining == -1) {
+          remaining = Integer.MAX_VALUE;
+        }
+        if (remaining == 0) {
+          continue;
+        }
+        final int placed = placedCounts.getOrDefault(t, 0);
+        final double score = (double) (n - i) / (1.0 + placed * PLACEMENT_SPREAD_FACTOR);
+        if (score > bestScore) {
+          bestScore = score;
+          best = ppt;
+          bestPlaceable = pu;
+        }
       }
 
-      // Find remaining unit production
-      int remainingUnitProduction = placeableUnits.getMaxUnits();
-      if (remainingUnitProduction == -1) {
-        remainingUnitProduction = Integer.MAX_VALUE;
+      if (best != null && bestPlaceable != null) {
+        final Territory t = best.getTerritory();
+        final List<Unit> units = new ArrayList<>(bestPlaceable.getUnits());
+        ProLogger.trace(t + ", placedUnit=" + units.get(0));
+        doPlace(t, units.subList(0, 1), placeDelegate);
+        placedCounts.merge(t, 1, Integer::sum);
+        progress = true;
       }
-      ProLogger.trace(t + ", remainingUnitProduction=" + remainingUnitProduction);
-
-      // Place as many units as possible
-      final List<Unit> unitsThatCanBePlaced = new ArrayList<>(placeableUnits.getUnits());
-      final int placeCount = Math.min(remainingUnitProduction, unitsThatCanBePlaced.size());
-      final List<Unit> unitsToPlace = unitsThatCanBePlaced.subList(0, placeCount);
-      ProLogger.trace(t + ", placedUnits=" + unitsToPlace);
-      doPlace(t, unitsToPlace, placeDelegate);
     }
   }
 
@@ -2662,6 +2692,80 @@ class ProPurchaseAi {
       }
     }
     return territories;
+  }
+
+  /**
+   * Redistributes temp land-unit allocations across available factories using a diminishing-returns
+   * soft-cap, preventing all units from concentrating at the single highest-priority factory
+   * (map-room#2638).
+   *
+   * <p>Units are placed one at a time in the territory with the highest adjusted score {@code (n −
+   * index) / (1 + allocated × PLACEMENT_SPREAD_FACTOR)}, where {@code index} is the territory's
+   * rank in the priority list (0 = highest) and {@code allocated} is the count already assigned to
+   * that territory this turn. Factory capacity ({@link ProPurchaseTerritory#getUnitProduction}) is
+   * respected; territories at capacity are skipped.
+   */
+  void redistributeLandPlacementUnits(
+      final Map<Territory, ProPurchaseTerritory> purchaseTerritories,
+      final List<ProPlaceTerritory> prioritizedLandTerritories) {
+    if (prioritizedLandTerritories.isEmpty()) {
+      return;
+    }
+    // Collect attack-unit allocations only; defender allocations in other territories are
+    // untouched.
+    final List<Unit> allUnits = new ArrayList<>();
+    for (final ProPlaceTerritory ppt : prioritizedLandTerritories) {
+      allUnits.addAll(ppt.getPlaceUnits());
+      ppt.getPlaceUnits().clear();
+    }
+    if (allUnits.isEmpty()) {
+      return;
+    }
+    // Build destination list from ALL factory territories, not just the front-line subset, so
+    // spreading isn't artificially constrained by the prioritizeLandTerritories filter.
+    final List<ProPlaceTerritory> destinations = new ArrayList<>();
+    for (final ProPurchaseTerritory ppt : purchaseTerritories.values()) {
+      for (final ProPlaceTerritory placePpt : ppt.getCanPlaceTerritories()) {
+        if (!placePpt.getTerritory().isWater()) {
+          destinations.add(placePpt);
+          break;
+        }
+      }
+    }
+    destinations.sort(Comparator.comparingDouble(ProPlaceTerritory::getStrategicValue).reversed());
+    if (destinations.isEmpty()) {
+      prioritizedLandTerritories.get(0).getPlaceUnits().addAll(allUnits);
+      return;
+    }
+    final int n = destinations.size();
+    final Map<Territory, Integer> allocatedCounts = new HashMap<>();
+    for (final Unit unit : allUnits) {
+      ProPlaceTerritory best = null;
+      double bestScore = Double.NEGATIVE_INFINITY;
+      for (int i = 0; i < n; i++) {
+        final ProPlaceTerritory dest = destinations.get(i);
+        final Territory t = dest.getTerritory();
+        final ProPurchaseTerritory purchTerritory = purchaseTerritories.get(t);
+        if (purchTerritory == null) {
+          continue;
+        }
+        final int allocated = allocatedCounts.getOrDefault(t, 0);
+        final int remaining = purchTerritory.getRemainingUnitProduction() - allocated;
+        if (remaining <= 0) {
+          continue;
+        }
+        final double score = (double) (n - i) / (1.0 + allocated * PLACEMENT_SPREAD_FACTOR);
+        if (score > bestScore) {
+          bestScore = score;
+          best = dest;
+        }
+      }
+      if (best == null) {
+        best = destinations.get(0);
+      }
+      best.getPlaceUnits().add(unit);
+      allocatedCounts.merge(best.getTerritory(), 1, Integer::sum);
+    }
   }
 
   private static void doPlace(
