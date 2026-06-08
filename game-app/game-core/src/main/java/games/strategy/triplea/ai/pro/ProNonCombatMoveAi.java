@@ -803,6 +803,19 @@ class ProNonCombatMoveAi {
           || canAlreadyBeHeld
           || isNotFactoryAndHasNoEnemyNeighbors
           || isNotFactoryAndOnlyAmphib) {
+        // When a territory is removed because value<=0 (not worth assigning defenders) but it
+        // still has enemy attackers and is not already held, the CanHold=true flag set by
+        // determineIfMoveTerritoriesCanBeHeld reflects theoretical MaxDefenders that will never
+        // actually be deployed here. Reset to false so downstream transport safety checks
+        // (line ~1248) and amphib staging (line ~1489) don't treat the zone as safe.
+        // canAlreadyBeHeld=true is deliberately excluded: that means local units can hold it
+        // without reinforcements, so CanHold=true is correct there.
+        if (patd.isCanHold()
+            && patd.getValue() <= 0
+            && !canAlreadyBeHeld
+            && !patd.getMaxEnemyUnits().isEmpty()) {
+          patd.setCanHold(false);
+        }
         final double tuvSwing = minResult.getTuvSwing();
         final boolean hasRemainingLandUnit = minResult.isHasLandUnitRemaining();
         ProLogger.debug(
