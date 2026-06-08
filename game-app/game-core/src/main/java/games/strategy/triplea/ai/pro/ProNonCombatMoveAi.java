@@ -1728,8 +1728,31 @@ class ProNonCombatMoveAi {
           alreadyMovedUnits.addAll(t.getUnits());
         }
 
-        // Find safest territory
+        // Find nearest owned factory for factory-proximity tiebreaker (#2940).
+        final Territory transportCurrentTerritory = unitTerritoryMap.get(transport);
+        Territory nearestFactoryTerritory = null;
+        int nearestFactoryDist = Integer.MAX_VALUE;
+        for (final Territory ft : moveMap.keySet()) {
+          if (!ProMatches.territoryHasInfraFactoryAndIsOwnedLand(player).test(ft)) {
+            continue;
+          }
+          final int dist =
+              data.getMap()
+                  .getDistanceIgnoreEndForCondition(
+                      transportCurrentTerritory, ft, Matches.territoryIsWater());
+          if (dist > 0 && dist < nearestFactoryDist) {
+            nearestFactoryDist = dist;
+            nearestFactoryTerritory = ft;
+          }
+        }
+        final Territory factoryTarget = nearestFactoryTerritory;
+
+        // Find safest territory, with factory-proximity tiebreaker to avoid permanent stagnation.
+        // Among equally safe territories: prefer the one closest to the nearest factory.
+        // Among equal-distance ties: prefer a non-current territory (step toward factory vs. stay).
         double minStrengthDifference = Double.POSITIVE_INFINITY;
+        int minDistToFactory = Integer.MAX_VALUE;
+        boolean minIsCurrentTerritory = true;
         Territory minTerritory = null;
         for (final Territory t : currentTransportMoveMap.get(transport)) {
           final ProTerritory proTerritory = moveMap.get(t);
@@ -1740,20 +1763,37 @@ class ProNonCombatMoveAi {
           defenders.removeAll(ProTransportUtils.getAirThatCantLandOnCarrier(player, t, defenders));
           final double strengthDifference =
               ProBattleUtils.estimateStrengthDifference(t, attackers, defenders);
-
-          // TODO: add logic to move towards closest factory
+          final int distToFactory =
+              (factoryTarget == null)
+                  ? Integer.MAX_VALUE
+                  : data.getMap()
+                      .getDistanceIgnoreEndForCondition(
+                          t, factoryTarget, Matches.territoryIsWater());
+          final boolean isCurrentTerritory = t.equals(transportCurrentTerritory);
           ProLogger.trace(
               transport
                   + " at "
                   + t
                   + ", strengthDifference="
                   + strengthDifference
+                  + ", distToFactory="
+                  + distToFactory
                   + ", attackers="
                   + attackers
                   + ", defenders="
                   + defenders);
-          if (strengthDifference < minStrengthDifference) {
+          final boolean betterStrength = strengthDifference < minStrengthDifference;
+          final boolean sameStrengthBetterDist =
+              strengthDifference == minStrengthDifference && distToFactory < minDistToFactory;
+          final boolean sameStrengthSameDistPreferMove =
+              strengthDifference == minStrengthDifference
+                  && distToFactory == minDistToFactory
+                  && !isCurrentTerritory
+                  && minIsCurrentTerritory;
+          if (betterStrength || sameStrengthBetterDist || sameStrengthSameDistPreferMove) {
             minStrengthDifference = strengthDifference;
+            minDistToFactory = distToFactory;
+            minIsCurrentTerritory = isCurrentTerritory;
             minTerritory = t;
           }
         }

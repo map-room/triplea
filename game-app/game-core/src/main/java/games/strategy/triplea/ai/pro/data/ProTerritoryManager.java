@@ -761,7 +761,6 @@ public class ProTerritoryManager {
         if (!isCombatMove && !potentialTerritories.contains(myUnitTerritory)) {
           potentialTerritories.add(myUnitTerritory);
         }
-
         for (final Territory potentialTerritory : potentialTerritories) {
           // Find route over water
           final Optional<Route> optionalRoute =
