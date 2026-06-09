@@ -360,30 +360,23 @@ public class ProLoadedTransportSafetyTest {
   }
 
   /**
-   * Hardened-check regression: phantom defender at SZ19 inflates MaxDefenders, making
-   * determineIfMoveTerritoriesCanBeHeld set CanHold=true for SZ20. But SZ20's value=0 triggers
-   * removal from the defend list, so the phantom BB is never assigned there. The ACTUAL escort is a
-   * lone destroyer — which loses to a British battleship.
-   *
-   * <p>The transport safety check must use REAL committed defenders (getAllDefenders()), not the
-   * optimistic MaxDefenders that include the phantom BB. This invariant must hold regardless of
-   * whether CanHold bookkeeping is stale.
+   * Phantom-defender regression: a Japanese battleship at SZ19 inflates MaxDefenders for SZ20,
+   * causing determineIfMoveTerritoriesCanBeHeld to set CanHold=true. But SZ20's value=0 triggers
+   * removal in prioritizeDefendOptions, which fires the CanHold-reset and sets CanHold=false. With
+   * the corrected flag, the transport safety check correctly skips SZ20 as a staging zone.
    *
    * <p>Setup:
    *
    * <ul>
    *   <li>SZ20: loaded transport + destroyer (actual escort)
-   *   <li>SZ19: Japanese battleship (phantom — boosts MaxDefenders so CanHold=true for SZ20, but
-   *       SZ20 value=0 removes it from the defend list before the BB is ever committed there)
+   *   <li>SZ19: Japanese battleship (phantom — boosts MaxDefenders so CanHold=true initially)
    *   <li>SZ35: British battleship (adjacent, can reach SZ20)
    *   <li>Japan: factory_major + infantry (so the AI has a plan context)
    * </ul>
    *
-   * <p>Without the hardened check: CanHold=true is stale, transport is NOT flagged → stays at SZ20
-   * with destroyer escort that cannot survive a BB attack.
-   *
-   * <p>With the hardened check: getAllDefenders() = {destroyer, transport}, maxEnemyUnits = {BB} →
-   * estimateStrengthDifference &gt; 50 → transport flagged and relocated.
+   * <p>The CanHold-reset in prioritizeDefendOptions (not the safety-check expression itself) is the
+   * load-bearing fix here: it fires before amphib staging selects a zone, clearing the stale
+   * CanHold=true so staging never places the transport at SZ20.
    */
   @Test
   void loadedTransportInZoneWithPhantomDefenderAndWeakRealEscortMustRelocate() {

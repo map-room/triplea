@@ -803,9 +803,10 @@ class ProNonCombatMoveAi {
           || canAlreadyBeHeld
           || isNotFactoryAndHasNoEnemyNeighbors
           || isNotFactoryAndOnlyAmphib) {
-        // When removing a sea zone because value=0 (open water), stale CanHold=true from
-        // phantom MaxDefenders would mislead the transport safety check below. Reset it so
-        // the downstream check at line 1248 reflects the real situation.
+        // When removing an empty/low-value sea zone, phantom MaxDefenders may have made
+        // determineIfMoveTerritoriesCanBeHeld optimistic (CanHold=true). Correct it now so
+        // amphib staging (which runs later and reads isCanHold) does not select a zone the
+        // real committed defenders cannot actually protect. (#2945)
         if (patd.getValue() <= 0 && !canAlreadyBeHeld && !patd.getMaxEnemyUnits().isEmpty()) {
           patd.setCanHold(false);
         }
@@ -1252,20 +1253,10 @@ class ProNonCombatMoveAi {
         for (final Unit transport : patd.getTransportTerritoryMap().keySet()) {
           final Territory transportTerritory = patd.getTransportTerritoryMap().get(transport);
           final ProTerritory seaZone = moveMap.get(transportTerritory);
-          // Primary: check whether the ACTUAL committed defenders (getAllDefenders) can survive
-          // the enemy units that can reach the staging zone. MaxDefenders includes phantom mobile
-          // units that may never be assigned here; getAllDefenders reflects only what will
-          // genuinely
-          // be present after NCM planning, which is the correct threat model for a staged
-          // transport.
-          final boolean seaZoneUnholdable =
-              !seaZone.isCanHold()
-                  || (!seaZone.getMaxEnemyUnits().isEmpty()
-                      && ProBattleUtils.estimateStrengthDifference(
-                              transportTerritory,
-                              seaZone.getMaxEnemyUnits(),
-                              seaZone.getAllDefenders())
-                          > 50);
+          // isCanHold is corrected for empty/low-value sea zones in prioritizeDefendOptions
+          // (the CanHold-reset at that call site) before this check runs, so a stale true from
+          // phantom MaxDefenders has already been cleared for any zone where the fix applies.
+          final boolean seaZoneUnholdable = !seaZone.isCanHold();
           if (seaZoneUnholdable) {
             unsafeTransports.add(transport);
           }
