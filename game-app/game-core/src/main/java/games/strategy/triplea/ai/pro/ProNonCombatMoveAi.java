@@ -803,6 +803,13 @@ class ProNonCombatMoveAi {
           || canAlreadyBeHeld
           || isNotFactoryAndHasNoEnemyNeighbors
           || isNotFactoryAndOnlyAmphib) {
+        // When removing an empty/low-value sea zone, phantom MaxDefenders may have made
+        // determineIfMoveTerritoriesCanBeHeld optimistic (CanHold=true). Correct it now so
+        // amphib staging (which runs later and reads isCanHold) does not select a zone the
+        // real committed defenders cannot actually protect. (#2945)
+        if (patd.getValue() <= 0 && !canAlreadyBeHeld && !patd.getMaxEnemyUnits().isEmpty()) {
+          patd.setCanHold(false);
+        }
         final double tuvSwing = minResult.getTuvSwing();
         final boolean hasRemainingLandUnit = minResult.isHasLandUnitRemaining();
         ProLogger.debug(
@@ -1245,7 +1252,12 @@ class ProNonCombatMoveAi {
         final List<Unit> unsafeTransports = new ArrayList<>();
         for (final Unit transport : patd.getTransportTerritoryMap().keySet()) {
           final Territory transportTerritory = patd.getTransportTerritoryMap().get(transport);
-          if (!moveMap.get(transportTerritory).isCanHold()) {
+          final ProTerritory seaZone = moveMap.get(transportTerritory);
+          // isCanHold is corrected for empty/low-value sea zones in prioritizeDefendOptions
+          // (the CanHold-reset at that call site) before this check runs, so a stale true from
+          // phantom MaxDefenders has already been cleared for any zone where the fix applies.
+          final boolean seaZoneUnholdable = !seaZone.isCanHold();
+          if (seaZoneUnholdable) {
             unsafeTransports.add(transport);
           }
         }
