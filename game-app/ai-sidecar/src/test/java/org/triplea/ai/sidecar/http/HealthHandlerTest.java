@@ -16,37 +16,49 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import org.junit.jupiter.api.Test;
+import org.triplea.ai.sidecar.SidecarBuildInfo;
 
 class HealthHandlerTest {
+
+  private static HealthHandler handler() {
+    return new HealthHandler(SidecarBuildInfo.load());
+  }
+
   @Test
   void returns200WithOkStatus() throws Exception {
-    final HealthHandler h = new HealthHandler();
     final FakeHttpExchange ex = new FakeHttpExchange("GET", "/health", null);
-    h.handle(ex);
+    handler().handle(ex);
     assertEquals(200, ex.responseCode());
     assertTrue(ex.responseBodyString().contains("\"status\":\"ok\""));
   }
 
   @Test
+  void responseIncludesVersionAndCommitFields() throws Exception {
+    final FakeHttpExchange ex = new FakeHttpExchange("GET", "/health", null);
+    handler().handle(ex);
+    assertEquals(200, ex.responseCode());
+    final String body = ex.responseBodyString();
+    assertTrue(body.contains("\"version\":"), "expected 'version' field in: " + body);
+    assertTrue(body.contains("\"commit\":"), "expected 'commit' field in: " + body);
+  }
+
+  @Test
   void rejectsNonGet() throws Exception {
-    final HealthHandler h = new HealthHandler();
     final FakeHttpExchange ex = new FakeHttpExchange("POST", "/health", null);
-    h.handle(ex);
+    handler().handle(ex);
     assertEquals(405, ex.responseCode());
   }
 
   @Test
   void swallowsBrokenPipeWithoutRethrow() {
-    final HealthHandler h = new HealthHandler();
     final HttpExchange ex = throwingGetExchange("Broken pipe");
-    assertDoesNotThrow(() -> h.handle(ex));
+    assertDoesNotThrow(() -> handler().handle(ex));
   }
 
   @Test
   void rethrowsUnexpectedIoException() {
-    final HealthHandler h = new HealthHandler();
     final HttpExchange ex = throwingGetExchange("Disk full");
-    assertThrows(IOException.class, () -> h.handle(ex));
+    assertThrows(IOException.class, () -> handler().handle(ex));
   }
 
   /** Returns a minimal GET /health exchange whose response OutputStream throws on write. */

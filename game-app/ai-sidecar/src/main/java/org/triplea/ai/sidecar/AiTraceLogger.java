@@ -12,16 +12,14 @@ import java.util.UUID;
 /**
  * Emits single-line structured AI-TRACE log entries for sidecar executor decisions.
  *
- * <p>Format: {@code [AI-TRACE] matchID=<id> side=sidecar nation=X phase=Y key=value ...} Arrays use
- * {@code [a,b,c]} notation; unit counts use {@code type×N} notation; territory names containing
- * spaces are double-quoted.
+ * <p>Format: {@code [AI-TRACE] matchID=<id> requestId=<id> side=sidecar nation=X phase=Y key=value
+ * ...} Arrays use {@code [a,b,c]} notation; unit counts use {@code type×N} notation; territory
+ * names containing spaces are double-quoted.
  *
- * <p>The {@code matchID} tag is sourced from {@link #setMatchId(String)}, which the request
- * boundary in {@code DecisionHandler} sets before dispatching an executor and clears in a finally
- * block. The system uses a per-thread context (functionally an MDC slot for {@code
- * System.Logger}-based code) — every executor call site already runs on the HTTP request thread, so
- * a {@link ThreadLocal} carries the matchID through the executor stack without having to thread it
- * through every method signature.
+ * <p>The {@code matchID} and {@code requestId} tags are sourced from {@link #setMatchId(String)}
+ * and {@link #setRequestId(String)}, which the request boundary in {@code DecisionHandler} sets
+ * before dispatching an executor and clears in a finally block. A {@link ThreadLocal} carries each
+ * value through the executor stack without threading it through every method signature.
  *
  * <p>If no context is bound when an emit happens (e.g. tests, or a background path that never went
  * through {@code DecisionHandler}), every field falls back to the {@code -} sentinel so grep
@@ -35,6 +33,7 @@ public final class AiTraceLogger {
   public static final String SENTINEL = "-";
 
   private static final ThreadLocal<String> MATCH_ID = new ThreadLocal<>();
+  private static final ThreadLocal<String> REQUEST_ID = new ThreadLocal<>();
   private static final ThreadLocal<String> ROUND = new ThreadLocal<>();
   private static final ThreadLocal<String> PLAYER = new ThreadLocal<>();
 
@@ -47,6 +46,14 @@ public final class AiTraceLogger {
    */
   public static void setMatchId(final String matchId) {
     MATCH_ID.set(matchId);
+  }
+
+  /**
+   * Bind the request ID from the {@code X-Request-Id} header for the current thread. Used to
+   * correlate sidecar log lines with the ai-bot request that triggered them.
+   */
+  public static void setRequestId(final String requestId) {
+    REQUEST_ID.set(requestId);
   }
 
   /** Bind the game round for the current thread. */
@@ -62,6 +69,7 @@ public final class AiTraceLogger {
   /** Clear all per-thread context fields. Always call from a finally block. */
   public static void clearAll() {
     MATCH_ID.remove();
+    REQUEST_ID.remove();
     ROUND.remove();
     PLAYER.remove();
   }
@@ -81,6 +89,15 @@ public final class AiTraceLogger {
    */
   public static String currentMatchId() {
     final String v = MATCH_ID.get();
+    return v == null ? SENTINEL : v;
+  }
+
+  /**
+   * Read the per-thread requestId, falling back to {@link #SENTINEL}. Public so tests can assert
+   * that {@code DecisionHandler} binds and clears the context around executor dispatch.
+   */
+  public static String currentRequestId() {
+    final String v = REQUEST_ID.get();
     return v == null ? SENTINEL : v;
   }
 
@@ -130,8 +147,9 @@ public final class AiTraceLogger {
     final String transportId = resolveTransportId(move, uuidToWireId);
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase={2} kind={3} from={4} to={5} unitIds=[{6}] types=[{7}] transportId={8}",
+        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase={3} kind={4} from={5} to={6} unitIds=[{7}] types=[{8}] transportId={9}",
         currentMatchId(),
+        currentRequestId(),
         nation,
         phase,
         kind,
@@ -166,10 +184,11 @@ public final class AiTraceLogger {
       final int overBy) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=purchase kind=PURCHASE-BUDGET"
-            + " startPUs={2} repairCost={3} availableAfterRepair={4}"
-            + " plannedSpend={5} overspend={6} overBy={7}",
+        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase=purchase kind=PURCHASE-BUDGET"
+            + " startPUs={3} repairCost={4} availableAfterRepair={5}"
+            + " plannedSpend={6} overspend={7} overBy={8}",
         currentMatchId(),
+        currentRequestId(),
         nation,
         startPUs,
         repairCost,
@@ -183,8 +202,9 @@ public final class AiTraceLogger {
   public static void logPurchaseOrder(final String nation, final String unitType, final int count) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=purchase units=[{2}×{3}]",
+        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase=purchase units=[{3}×{4}]",
         currentMatchId(),
+        currentRequestId(),
         nation,
         unitType,
         count);
@@ -195,8 +215,9 @@ public final class AiTraceLogger {
       final String nation, final String territory, final Collection<String> unitTypes) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=place territory={2} units=[{3}]",
+        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase=place territory={3} units=[{4}]",
         currentMatchId(),
+        currentRequestId(),
         nation,
         maybeQuote(territory),
         stringTypeCounts(unitTypes));
@@ -208,8 +229,9 @@ public final class AiTraceLogger {
   public static void logWarDeclaration(final String nation, final String target) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=politics target={2}",
+        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase=politics target={3}",
         currentMatchId(),
+        currentRequestId(),
         nation,
         target);
   }
@@ -240,12 +262,13 @@ public final class AiTraceLogger {
       final Map<UUID, String> uuidToWireId) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=battle kind=select-casualties"
-            + " battleId={2} territory={3} hitCount={4}"
-            + " consideredIds=[{5}] consideredTypes=[{6}]"
-            + " pickedIds=[{7}] pickedTypes=[{8}]"
-            + " defaultIds=[{9}] reason={10}",
+        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase=battle kind=select-casualties"
+            + " battleId={3} territory={4} hitCount={5}"
+            + " consideredIds=[{6}] consideredTypes=[{7}]"
+            + " pickedIds=[{8}] pickedTypes=[{9}]"
+            + " defaultIds=[{10}] reason={11}",
         currentMatchId(),
+        currentRequestId(),
         nation,
         battleId,
         maybeQuote(territory),
@@ -277,9 +300,10 @@ public final class AiTraceLogger {
       final String retreatTo) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=battle kind=retreat-decision"
-            + " battleId={2} territory={3} candidates=[{4}] retreatTo={5} reason={6}",
+        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase=battle kind=retreat-decision"
+            + " battleId={3} territory={4} candidates=[{5}] retreatTo={6} reason={7}",
         currentMatchId(),
+        currentRequestId(),
         nation,
         battleId,
         maybeQuote(territory),
@@ -306,12 +330,13 @@ public final class AiTraceLogger {
       final Map<UUID, String> uuidToWireId) {
     LOG.log(
         System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} side=sidecar nation={1} phase=battle kind=scramble-decision"
-            + " territory={2}"
-            + " candidatesIds=[{3}] candidatesTypes=[{4}]"
-            + " pickedIds=[{5}] pickedTypes=[{6}]"
-            + " reason={7}",
+        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase=battle kind=scramble-decision"
+            + " territory={3}"
+            + " candidatesIds=[{4}] candidatesTypes=[{5}]"
+            + " pickedIds=[{6}] pickedTypes=[{7}]"
+            + " reason={8}",
         currentMatchId(),
+        currentRequestId(),
         nation,
         maybeQuote(territory),
         unitWireIds(candidates, uuidToWireId),

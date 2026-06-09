@@ -231,7 +231,7 @@ class AiTraceLoggerTest {
 
     assertThat(cap.formatted()).hasSize(1);
     assertThat(cap.formatted().get(0))
-        .startsWith("[AI-TRACE] matchID=match-cas-001 side=sidecar nation=Germans")
+        .startsWith("[AI-TRACE] matchID=match-cas-001 requestId=- side=sidecar nation=Germans")
         .contains("phase=battle kind=select-casualties")
         .contains("battleId=b-france-1")
         .contains("territory=\"Western Europe\"")
@@ -282,7 +282,7 @@ class AiTraceLoggerTest {
 
     assertThat(cap.formatted()).hasSize(1);
     assertThat(cap.formatted().get(0))
-        .startsWith("[AI-TRACE] matchID=match-ret-001 side=sidecar nation=Germans")
+        .startsWith("[AI-TRACE] matchID=match-ret-001 requestId=- side=sidecar nation=Germans")
         .contains("phase=battle kind=retreat-decision")
         .contains("battleId=b-france-1")
         .contains("territory=\"Western Europe\"")
@@ -372,7 +372,7 @@ class AiTraceLoggerTest {
 
     assertThat(cap.formatted()).hasSize(1);
     assertThat(cap.formatted().get(0))
-        .startsWith("[AI-TRACE] matchID=match-pb-001 side=sidecar nation=Germans")
+        .startsWith("[AI-TRACE] matchID=match-pb-001 requestId=- side=sidecar nation=Germans")
         .contains("phase=purchase kind=PURCHASE-BUDGET")
         .contains("startPUs=40")
         .contains("repairCost=7")
@@ -395,7 +395,7 @@ class AiTraceLoggerTest {
 
     assertThat(cap.formatted()).hasSize(1);
     assertThat(cap.formatted().get(0))
-        .startsWith("[AI-TRACE] matchID=match-pb-002 side=sidecar nation=British")
+        .startsWith("[AI-TRACE] matchID=match-pb-002 requestId=- side=sidecar nation=British")
         .contains("phase=purchase kind=PURCHASE-BUDGET")
         .contains("startPUs=40")
         .contains("repairCost=7")
@@ -431,7 +431,7 @@ class AiTraceLoggerTest {
 
     assertThat(cap.formatted()).hasSize(1);
     assertThat(cap.formatted().get(0))
-        .startsWith("[AI-TRACE] matchID=match-scr-001 side=sidecar nation=Germans")
+        .startsWith("[AI-TRACE] matchID=match-scr-001 requestId=- side=sidecar nation=Germans")
         .contains("phase=battle kind=scramble-decision")
         .contains("territory=\"112 Sea Zone\"")
         .contains("candidatesIds=[u-fighter-1,u-fighter-2]")

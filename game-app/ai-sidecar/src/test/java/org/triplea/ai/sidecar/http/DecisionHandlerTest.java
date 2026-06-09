@@ -168,6 +168,72 @@ class DecisionHandlerTest {
     assertEquals(AiTraceLogger.SENTINEL, AiTraceLogger.currentMatchId());
   }
 
+  // ---------------------------------------------------------------------
+  // Request-id propagation — X-Request-Id header must flow into AiTraceLogger
+  // ---------------------------------------------------------------------
+
+  @Test
+  void requestId_fromHeader_bindsDuringExecution() throws Exception {
+    final AtomicReference<String> seenInExecutor = new AtomicReference<>();
+    final DecisionHandler h =
+        new DecisionHandler(
+            canonical,
+            (c, req) -> {
+              seenInExecutor.set(AiTraceLogger.currentRequestId());
+              return new PurchasePlan(List.of(), List.of(), List.of());
+            },
+            (c, req) -> {
+              throw new AssertionError();
+            });
+
+    AiTraceLogger.clearAll();
+    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", body("purchase"));
+    ex.getRequestHeaders().add("X-Request-Id", "req-abc-123");
+    h.handle(ex);
+
+    assertEquals("req-abc-123", seenInExecutor.get());
+    assertEquals(AiTraceLogger.SENTINEL, AiTraceLogger.currentRequestId());
+  }
+
+  @Test
+  void requestId_absentHeader_usesSentinel() throws Exception {
+    final AtomicReference<String> seenInExecutor = new AtomicReference<>();
+    final DecisionHandler h =
+        new DecisionHandler(
+            canonical,
+            (c, req) -> {
+              seenInExecutor.set(AiTraceLogger.currentRequestId());
+              return new PurchasePlan(List.of(), List.of(), List.of());
+            },
+            (c, req) -> {
+              throw new AssertionError();
+            });
+
+    AiTraceLogger.clearAll();
+    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", body("purchase"));
+    h.handle(ex);
+
+    assertEquals(AiTraceLogger.SENTINEL, seenInExecutor.get());
+  }
+
+  // ---------------------------------------------------------------------
+  // X-Decision-Time-Ms header — must appear on successful 200 responses
+  // ---------------------------------------------------------------------
+
+  @Test
+  void successfulDecision_hasDecisionTimeMsHeader() throws Exception {
+    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", body("purchase"));
+    stubHandler().handle(ex);
+    assertEquals(200, ex.responseCode());
+    final List<String> timingHeader = ex.getResponseHeaders().get("X-Decision-Time-Ms");
+    assertTrue(
+        timingHeader != null && !timingHeader.isEmpty(),
+        "expected X-Decision-Time-Ms header in response");
+    // Value must be a non-negative integer (elapsed ms).
+    final long ms = Long.parseLong(timingHeader.get(0));
+    assertTrue(ms >= 0, "X-Decision-Time-Ms must be non-negative, got " + ms);
+  }
+
   @Test
   void nonPost_returns405() throws Exception {
     final DecisionHandler h = stubHandler();

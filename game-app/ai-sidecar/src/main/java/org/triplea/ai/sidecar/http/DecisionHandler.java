@@ -67,6 +67,9 @@ public final class DecisionHandler implements HttpHandler {
       return;
     }
 
+    final long startNanos = System.nanoTime();
+    final String requestId = firstHeader(exchange, "X-Request-Id");
+
     final String body =
         new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
     final DecisionRequest request;
@@ -86,19 +89,24 @@ public final class DecisionHandler implements HttpHandler {
     }
 
     AiTraceLogger.setMatchId(matchIdFor(request));
+    AiTraceLogger.setRequestId(requestId != null ? requestId : AiTraceLogger.SENTINEL);
     setRoundAndPlayer(request);
     try {
       switch (request) {
         case PurchaseRequest pr -> {
           final PurchasePlan plan = purchaseExecutor.execute(canonical, pr);
-          writeJson(exchange, 200, JsonBodies.readyBody(plan));
+          writeJsonTimed(exchange, 200, JsonBodies.readyBody(plan), startNanos);
         }
         case NoncombatMoveRequest nm -> {
           final NoncombatMovePlan plan = noncombatMoveExecutor.execute(canonical, nm);
-          writeJson(exchange, 200, JsonBodies.readyBody(plan));
+          writeJsonTimed(exchange, 200, JsonBodies.readyBody(plan), startNanos);
         }
         case OtherOffensiveRequest oo ->
-            writeJson(exchange, 501, JsonBodies.errorBodyWithKind("not-implemented", oo.kind()));
+            writeJsonTimed(
+                exchange,
+                501,
+                JsonBodies.errorBodyWithKind("not-implemented", oo.kind()),
+                startNanos);
       }
     } catch (final IllegalArgumentException e) {
       LOG.log(System.Logger.Level.ERROR, "Decision bad-request: IllegalArgumentException", e);
@@ -109,6 +117,12 @@ public final class DecisionHandler implements HttpHandler {
     } finally {
       AiTraceLogger.clearAll();
     }
+  }
+
+  /** Returns the first value of the named request header, or {@code null} if absent. */
+  private static String firstHeader(final HttpExchange exchange, final String name) {
+    final var values = exchange.getRequestHeaders().get(name);
+    return (values != null && !values.isEmpty()) ? values.get(0) : null;
   }
 
   /**
@@ -141,6 +155,18 @@ public final class DecisionHandler implements HttpHandler {
         // OtherOffensiveRequest has no state — leave round/player as sentinel.
       }
     }
+  }
+
+  /**
+   * Write a JSON response and include {@code X-Decision-Time-Ms} so the 0.6 orchestrator can
+   * calibrate the shared-pool P bound (p99 latency < 90s purchase budget per decision D1).
+   */
+  private static void writeJsonTimed(
+      final HttpExchange ex, final int status, final String body, final long startNanos)
+      throws IOException {
+    final long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
+    ex.getResponseHeaders().add("X-Decision-Time-Ms", Long.toString(elapsedMs));
+    writeJson(ex, status, body);
   }
 
   private static void writeJson(final HttpExchange ex, final int status, final String body)

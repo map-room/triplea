@@ -26,7 +26,8 @@ class SidecarMainIntegrationTest {
   void bootsEndToEnd() throws Exception {
     final SidecarConfig cfg =
         SidecarConfig.fromEnv(Map.of("SIDECAR_PORT", "0", "SIDECAR_BIND_HOST", "127.0.0.1"));
-    final HttpService svc = HttpService.start(cfg, CanonicalGameData.load());
+    final HttpService svc =
+        HttpService.start(cfg, CanonicalGameData.load(), SidecarBuildInfo.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =
