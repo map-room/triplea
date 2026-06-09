@@ -34,6 +34,29 @@ application {
     ]
 }
 
+// Bake the git commit SHA and fork version into a classpath resource at build time.
+// The sidecar health endpoint reads these so operators know exactly which build is running.
+processResources {
+    def gitCommit = "unknown"
+    try {
+        gitCommit = ["git", "rev-parse", "--short", "HEAD"].execute().text.trim()
+    } catch (ignored) {}
+    def forkVersion = "unknown"
+    try {
+        def props = new Properties()
+        def versionFile = rootProject.file("latest_version.properties")
+        if (versionFile.exists()) {
+            versionFile.withInputStream { props.load(it) }
+            forkVersion = props.getProperty("LATEST", "unknown")
+        }
+    } catch (ignored) {}
+    inputs.property("gitCommit", gitCommit)
+    inputs.property("forkVersion", forkVersion)
+    filesMatching("sidecar-build.properties") {
+        expand(gitCommit: gitCommit, forkVersion: forkVersion)
+    }
+}
+
 dependencies {
     implementation project(":game-app:game-core")
     implementation project(":game-app:domain-data")

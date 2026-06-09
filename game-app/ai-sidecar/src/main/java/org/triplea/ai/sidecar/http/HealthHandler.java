@@ -4,9 +4,23 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import org.triplea.ai.sidecar.SidecarBuildInfo;
 
 public final class HealthHandler implements HttpHandler {
   private static final System.Logger LOG = System.getLogger(HealthHandler.class.getName());
+
+  private final byte[] body;
+
+  public HealthHandler(final SidecarBuildInfo buildInfo) {
+    final String json =
+        "{\"status\":\"ok\",\"version\":\""
+            + buildInfo.version
+            + "\",\"commit\":\""
+            + buildInfo.commit
+            + "\"}";
+    this.body = json.getBytes(StandardCharsets.UTF_8);
+  }
 
   @Override
   public void handle(final HttpExchange exchange) throws IOException {
@@ -15,7 +29,6 @@ public final class HealthHandler implements HttpHandler {
       exchange.close();
       return;
     }
-    final byte[] body = "{\"status\":\"ok\"}".getBytes();
     exchange.getResponseHeaders().add("Content-Type", "application/json");
     exchange.sendResponseHeaders(200, body.length);
     try (OutputStream os = exchange.getResponseBody()) {

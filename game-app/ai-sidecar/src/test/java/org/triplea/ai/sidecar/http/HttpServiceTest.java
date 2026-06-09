@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.SidecarBuildInfo;
 import org.triplea.ai.sidecar.SidecarConfig;
 
 class HttpServiceTest {
@@ -26,7 +27,8 @@ class HttpServiceTest {
   void healthEndpointReturns200OverHttp() throws Exception {
     final SidecarConfig cfg =
         new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
-    final HttpService svc = HttpService.start(cfg, CanonicalGameData.load());
+    final HttpService svc =
+        HttpService.start(cfg, CanonicalGameData.load(), SidecarBuildInfo.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =
@@ -48,7 +50,8 @@ class HttpServiceTest {
   void decisionEndpointRequiresAuth() throws Exception {
     final SidecarConfig cfg =
         new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
-    final HttpService svc = HttpService.start(cfg, CanonicalGameData.load());
+    final HttpService svc =
+        HttpService.start(cfg, CanonicalGameData.load(), SidecarBuildInfo.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =
@@ -69,7 +72,8 @@ class HttpServiceTest {
   void deletedSessionsEndpointReturns404() throws Exception {
     final SidecarConfig cfg =
         new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
-    final HttpService svc = HttpService.start(cfg, CanonicalGameData.load());
+    final HttpService svc =
+        HttpService.start(cfg, CanonicalGameData.load(), SidecarBuildInfo.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =
