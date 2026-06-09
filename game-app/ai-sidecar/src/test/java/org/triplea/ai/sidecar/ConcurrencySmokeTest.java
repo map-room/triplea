@@ -78,20 +78,22 @@ class ConcurrencySmokeTest {
       // plans" assertion that proves no cross-thread state contamination.
       final List<Integer> budgets = List.of(3, 7, 20, 40);
 
-      final HttpClient client =
-          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-
       final List<Callable<String>> tasks = new ArrayList<>();
       for (final int pus : budgets) {
         final String body = purchaseBodyWithPus(pus);
         tasks.add(
             () -> {
+              // Fresh client per task: avoids HTTP/1.1 connection-pool races where the
+              // server closes a keep-alive connection while a second task tries to reuse
+              // it, producing "header parser received no bytes" on slow CI hardware.
+              final HttpClient client =
+                  HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
               final HttpResponse<String> resp =
                   client.send(
                       HttpRequest.newBuilder(URI.create(base + "/decision"))
                           .header("Authorization", auth)
                           .POST(HttpRequest.BodyPublishers.ofString(body))
-                          .timeout(Duration.ofSeconds(60))
+                          .timeout(Duration.ofSeconds(120))
                           .build(),
                       HttpResponse.BodyHandlers.ofString());
               assertEquals(
@@ -142,23 +144,24 @@ class ConcurrencySmokeTest {
       final String auth = "Bearer dev-token";
 
       final List<String> players = List.of("Germans", "Russians", "Americans", "British");
-      final HttpClient client =
-          HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
-
       final List<Callable<HttpResponse<String>>> tasks = new ArrayList<>();
       for (int i = 0; i < players.size(); i++) {
         final String player = players.get(i);
         final String reqId = "smoke-req-" + i;
         tasks.add(
-            () ->
-                client.send(
-                    HttpRequest.newBuilder(URI.create(base + "/decision"))
-                        .header("Authorization", auth)
-                        .header("X-Request-Id", reqId)
-                        .POST(HttpRequest.BodyPublishers.ofString(purchaseBody(player)))
-                        .timeout(Duration.ofSeconds(60))
-                        .build(),
-                    HttpResponse.BodyHandlers.ofString()));
+            () -> {
+              // Fresh client per task — same rationale as the first smoke test.
+              final HttpClient client =
+                  HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30)).build();
+              return client.send(
+                  HttpRequest.newBuilder(URI.create(base + "/decision"))
+                      .header("Authorization", auth)
+                      .header("X-Request-Id", reqId)
+                      .POST(HttpRequest.BodyPublishers.ofString(purchaseBody(player)))
+                      .timeout(Duration.ofSeconds(120))
+                      .build(),
+                  HttpResponse.BodyHandlers.ofString());
+            });
       }
 
       final ExecutorService pool = Executors.newFixedThreadPool(players.size());

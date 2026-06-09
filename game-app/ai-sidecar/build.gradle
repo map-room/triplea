@@ -36,11 +36,21 @@ application {
 
 // Bake the git commit SHA and fork version into a classpath resource at build time.
 // The sidecar health endpoint reads these so operators know exactly which build is running.
+//
+// providers.exec {} defers the git process to execution time, satisfying the Gradle
+// config-cache requirement that external processes must not start at configuration time.
 processResources {
-    def gitCommit = "unknown"
-    try {
-        gitCommit = ["git", "rev-parse", "--short", "HEAD"].execute().text.trim()
-    } catch (ignored) {}
+    def gitCommitProvider =
+        providers
+            .exec {
+              commandLine "git", "rev-parse", "--short", "HEAD"
+              ignoreExitValue = true
+            }
+            .standardOutput
+            .asText
+            .map { it.trim() }
+            .orElse("unknown")
+
     def forkVersion = "unknown"
     try {
         def props = new Properties()
@@ -50,10 +60,11 @@ processResources {
             forkVersion = props.getProperty("LATEST", "unknown")
         }
     } catch (ignored) {}
-    inputs.property("gitCommit", gitCommit)
+
+    inputs.property("gitCommit", gitCommitProvider)
     inputs.property("forkVersion", forkVersion)
     filesMatching("sidecar-build.properties") {
-        expand(gitCommit: gitCommit, forkVersion: forkVersion)
+        expand(gitCommit: gitCommitProvider.get(), forkVersion: forkVersion)
     }
 }
 
