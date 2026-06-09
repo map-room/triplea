@@ -40,6 +40,18 @@ class ConcurrencySmokeTest {
     ClientSetting.setPreferences(new MemoryPreferences());
   }
 
+  /**
+   * Build a purchase request with a specific PU budget for the Germans. Different PU amounts drive
+   * different purchase decisions, giving the "differing plans" assertion a ground truth to check.
+   */
+  private static String purchaseBodyWithPus(final int pus) {
+    return "{\"kind\":\"purchase\",\"state\":{\"territories\":[],"
+        + "\"players\":[{\"playerId\":\"Germans\",\"pus\":"
+        + pus
+        + ",\"tech\":[],\"capitalCaptured\":false}],"
+        + "\"round\":1,\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"},\"seed\":42}";
+  }
+
   private static String purchaseBody(final String player) {
     return "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],"
         + "\"round\":1,\"phase\":\"purchase\",\"currentPlayer\":\""
@@ -60,15 +72,18 @@ class ConcurrencySmokeTest {
       final String base = "http://127.0.0.1:" + port;
       final String auth = "Bearer dev-token";
 
-      // Four players → four different planning contexts.
-      final List<String> players = List.of("Germans", "Russians", "Americans", "British");
+      // Four requests with wildly different PU budgets — the AI's purchase quantity
+      // differs per budget, so the response bodies are non-identical even though the
+      // nation (Germans) is the same. This is the ground truth for the "differing
+      // plans" assertion that proves no cross-thread state contamination.
+      final List<Integer> budgets = List.of(3, 7, 20, 40);
 
       final HttpClient client =
           HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
       final List<Callable<String>> tasks = new ArrayList<>();
-      for (final String player : players) {
-        final String body = purchaseBody(player);
+      for (final int pus : budgets) {
+        final String body = purchaseBodyWithPus(pus);
         tasks.add(
             () -> {
               final HttpResponse<String> resp =
@@ -80,15 +95,13 @@ class ConcurrencySmokeTest {
                           .build(),
                       HttpResponse.BodyHandlers.ofString());
               assertEquals(
-                  200,
-                  resp.statusCode(),
-                  "Expected 200 for player=" + player + "; body=" + resp.body());
+                  200, resp.statusCode(), "Expected 200 for pus=" + pus + "; body=" + resp.body());
               return resp.body();
             });
       }
 
       // Submit all four concurrently.
-      final ExecutorService pool = Executors.newFixedThreadPool(players.size());
+      final ExecutorService pool = Executors.newFixedThreadPool(budgets.size());
       final List<Future<String>> futures = pool.invokeAll(tasks);
       pool.shutdown();
 
@@ -102,8 +115,8 @@ class ConcurrencySmokeTest {
         assertTrue(body.contains("\"status\":\"ready\""), "Not a ready response: " + body);
       }
 
-      // The four plans must not all be identical — differing states → differing plans.
-      // (If all four were the same string, state leaked between threads.)
+      // Plans must differ — a 3-PU budget buys far fewer units than a 40-PU budget.
+      // If all four are identical, the thread-local state bled across requests.
       final Set<String> distinct = Set.copyOf(bodies);
       assertTrue(
           distinct.size() > 1,

@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.concurrent.Executors;
 import org.triplea.ai.sidecar.CanonicalGameData;
 import org.triplea.ai.sidecar.SidecarBuildInfo;
 import org.triplea.ai.sidecar.SidecarConfig;
@@ -26,7 +27,7 @@ public final class HttpService {
     server.createContext("/sessions", new SessionsHandler());
     registerAuthed(server, "/decision", new DecisionHandler(canonical), auth);
 
-    server.setExecutor(null);
+    server.setExecutor(Executors.newFixedThreadPool(cfg.workerCount()));
     server.start();
     return new HttpService(server);
   }
