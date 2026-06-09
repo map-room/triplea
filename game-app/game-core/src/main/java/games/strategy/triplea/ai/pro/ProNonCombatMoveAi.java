@@ -803,17 +803,10 @@ class ProNonCombatMoveAi {
           || canAlreadyBeHeld
           || isNotFactoryAndHasNoEnemyNeighbors
           || isNotFactoryAndOnlyAmphib) {
-        // When a territory is removed because value<=0 (not worth assigning defenders) but it
-        // still has enemy attackers and is not already held, the CanHold=true flag set by
-        // determineIfMoveTerritoriesCanBeHeld reflects theoretical MaxDefenders that will never
-        // actually be deployed here. Reset to false so downstream transport safety checks
-        // (line ~1248) and amphib staging (line ~1489) don't treat the zone as safe.
-        // canAlreadyBeHeld=true is deliberately excluded: that means local units can hold it
-        // without reinforcements, so CanHold=true is correct there.
-        if (patd.isCanHold()
-            && patd.getValue() <= 0
-            && !canAlreadyBeHeld
-            && !patd.getMaxEnemyUnits().isEmpty()) {
+        // When removing a sea zone because value=0 (open water), stale CanHold=true from
+        // phantom MaxDefenders would mislead the transport safety check below. Reset it so
+        // the downstream check at line 1248 reflects the real situation.
+        if (patd.getValue() <= 0 && !canAlreadyBeHeld && !patd.getMaxEnemyUnits().isEmpty()) {
           patd.setCanHold(false);
         }
         final double tuvSwing = minResult.getTuvSwing();
@@ -1258,7 +1251,22 @@ class ProNonCombatMoveAi {
         final List<Unit> unsafeTransports = new ArrayList<>();
         for (final Unit transport : patd.getTransportTerritoryMap().keySet()) {
           final Territory transportTerritory = patd.getTransportTerritoryMap().get(transport);
-          if (!moveMap.get(transportTerritory).isCanHold()) {
+          final ProTerritory seaZone = moveMap.get(transportTerritory);
+          // Primary: check whether the ACTUAL committed defenders (getAllDefenders) can survive
+          // the enemy units that can reach the staging zone. MaxDefenders includes phantom mobile
+          // units that may never be assigned here; getAllDefenders reflects only what will
+          // genuinely
+          // be present after NCM planning, which is the correct threat model for a staged
+          // transport.
+          final boolean seaZoneUnholdable =
+              !seaZone.isCanHold()
+                  || (!seaZone.getMaxEnemyUnits().isEmpty()
+                      && ProBattleUtils.estimateStrengthDifference(
+                              transportTerritory,
+                              seaZone.getMaxEnemyUnits(),
+                              seaZone.getAllDefenders())
+                          > 50);
+          if (seaZoneUnholdable) {
             unsafeTransports.add(transport);
           }
         }

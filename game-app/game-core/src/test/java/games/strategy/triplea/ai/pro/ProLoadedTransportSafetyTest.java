@@ -359,6 +359,91 @@ public class ProLoadedTransportSafetyTest {
         .isFalse();
   }
 
+  /**
+   * Hardened-check regression: phantom defender at SZ19 inflates MaxDefenders, making
+   * determineIfMoveTerritoriesCanBeHeld set CanHold=true for SZ20. But SZ20's value=0 triggers
+   * removal from the defend list, so the phantom BB is never assigned there. The ACTUAL escort is a
+   * lone destroyer — which loses to a British battleship.
+   *
+   * <p>The transport safety check must use REAL committed defenders (getAllDefenders()), not the
+   * optimistic MaxDefenders that include the phantom BB. This invariant must hold regardless of
+   * whether CanHold bookkeeping is stale.
+   *
+   * <p>Setup:
+   *
+   * <ul>
+   *   <li>SZ20: loaded transport + destroyer (actual escort)
+   *   <li>SZ19: Japanese battleship (phantom — boosts MaxDefenders so CanHold=true for SZ20, but
+   *       SZ20 value=0 removes it from the defend list before the BB is ever committed there)
+   *   <li>SZ35: British battleship (adjacent, can reach SZ20)
+   *   <li>Japan: factory_major + infantry (so the AI has a plan context)
+   * </ul>
+   *
+   * <p>Without the hardened check: CanHold=true is stale, transport is NOT flagged → stays at SZ20
+   * with destroyer escort that cannot survive a BB attack.
+   *
+   * <p>With the hardened check: getAllDefenders() = {destroyer, transport}, maxEnemyUnits = {BB} →
+   * estimateStrengthDifference &gt; 50 → transport flagged and relocated.
+   */
+  @Test
+  void loadedTransportInZoneWithPhantomDefenderAndWeakRealEscortMustRelocate() {
+    declareWar(japanese, british);
+    data.getSequence().setRoundAndStep(2, "Non Combat Move", japanese);
+
+    final Territory sz19 = data.getMap().getTerritoryOrThrow("19 Sea Zone");
+    final Territory sz20 = data.getMap().getTerritoryOrThrow(SEA_ZONE_20);
+    final Territory sz35 = data.getMap().getTerritoryOrThrow(SEA_ZONE_35);
+    final Territory japan = data.getMap().getTerritoryOrThrow(JAPAN);
+
+    for (final Territory t : data.getMap().getTerritories()) {
+      data.performChange(ChangeFactory.removeUnits(t, t.getUnits()));
+    }
+
+    // SZ20: loaded transport + destroyer (destroyer is the only REAL escort).
+    final Unit japTransport = GameDataTestUtil.transport(data).create(1, japanese).get(0);
+    final Unit japInfantry = GameDataTestUtil.infantry(data).create(1, japanese).get(0);
+    final Unit japDestroyer = GameDataTestUtil.destroyer(data).create(1, japanese).get(0);
+    data.performChange(
+        ChangeFactory.addUnits(sz20, List.of(japTransport, japInfantry, japDestroyer)));
+    japInfantry.setTransportedBy(japTransport);
+
+    // SZ19: Japanese battleship — phantom MaxDefender. Its presence makes
+    // MaxDefenders for SZ20 = {BB, destroyer, transport}, so CanHold=true. But SZ20
+    // value=0 causes removal from the defend list before the BB is committed there.
+    final Unit japBattleship = GameDataTestUtil.battleship(data).create(1, japanese).get(0);
+    data.performChange(ChangeFactory.addUnits(sz19, List.of(japBattleship)));
+
+    // SZ35: British battleship — adjacent to SZ20; threatens it next combat turn.
+    final Unit britBattleship = GameDataTestUtil.battleship(data).create(1, british).get(0);
+    data.performChange(ChangeFactory.addUnits(sz35, List.of(britBattleship)));
+
+    // Japan: factory + infantry so the AI has a planning context.
+    final UnitType factoryMajor = data.getUnitTypeList().getUnitType("factory_major").orElseThrow();
+    data.performChange(ChangeFactory.addUnits(japan, factoryMajor.create(1, japanese)));
+    data.performChange(
+        ChangeFactory.addUnits(japan, GameDataTestUtil.infantry(data).create(2, japanese)));
+
+    final List<MoveDescription> dispatched;
+    try (ProLogCapture log = new ProLogCapture()) {
+      dispatched = runNonCombatMoveFor(japanese);
+      log.printAll();
+    }
+
+    // Transport must be relocated. A lone destroyer cannot defend SZ20 against a British
+    // battleship. The phantom BB at SZ19 inflates MaxDefenders, but the real committed escort
+    // (getAllDefenders) is {destroyer, transport} — which loses to the British BB.
+    final boolean transportMoved =
+        dispatched.stream().anyMatch(md -> md.getUnits().contains(japTransport));
+    assertThat(transportMoved)
+        .as(
+            "Loaded transport in SZ20 must relocate: real escort is a lone destroyer, "
+                + "which cannot hold against a British battleship. "
+                + "Phantom BB at SZ19 must not make the zone appear safe. "
+                + "Dispatched: "
+                + dispatched)
+        .isTrue();
+  }
+
   // ---- helpers ----
 
   private void declareWar(final GamePlayer p1, final GamePlayer p2) {
