@@ -230,6 +230,43 @@ public final class ProMatches {
           }
         }
       }
+      // US-Europe neutrality restriction (Global 1940): while neutral with ALL axis powers
+      // (Germany, Italy, AND Japan), US sea units on the Europe map (sea zones numbered ≥ 83:
+      // Atlantic, Mediterranean, Indian Ocean) may only enter zones adjacent to US-controlled
+      // territories. The restriction lifts immediately when the US enters war with any axis power.
+      // Mirrors engine movement-validator.ts getUSNeutralityRestriction Rule 2.
+      if (t.isWater() && player.getName().equals("Americans")) {
+        final GamePlayer germany = player.getData().getPlayerList().getPlayerId("Germans");
+        final GamePlayer italy = player.getData().getPlayerList().getPlayerId("Italians");
+        final GamePlayer japan = player.getData().getPlayerList().getPlayerId("Japanese");
+        if (germany != null
+            && italy != null
+            && japan != null
+            && !player.isAllied(germany)
+            && !player.isAtWar(germany)
+            && !player.isAllied(italy)
+            && !player.isAtWar(italy)
+            && !player.isAllied(japan)
+            && !player.isAtWar(japan)) {
+          final String name = t.getName();
+          if (name.endsWith(" Sea Zone")) {
+            try {
+              final int zoneNum =
+                  Integer.parseInt(name.substring(0, name.length() - " Sea Zone".length()).trim());
+              if (zoneNum >= 83) {
+                final boolean adjToUs =
+                    player.getData().getMap().getNeighbors(t).stream()
+                        .anyMatch(adj -> !adj.isWater() && adj.isOwnedBy(player));
+                if (!adjToUs) {
+                  return false;
+                }
+              }
+            } catch (final NumberFormatException ignored) {
+              // Named zones (e.g. "Black Sea") don't match "N Sea Zone"; skip.
+            }
+          }
+        }
+      }
       // Japan Pacific-reach restriction (Global 1940): Japan's RulesAttachment starts with
       // movementRestrictionType=disallowed listing 8 sea zones near the US mainland.
       // triggerAttachment_Japanese_Unrestricted_Movement clears movementRestrictionType once Japan
