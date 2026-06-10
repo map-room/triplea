@@ -69,6 +69,11 @@ public abstract class AbstractProAi extends AbstractAi {
   private final ProCombatMoveAi combatMoveAi;
   private final ProNonCombatMoveAi nonCombatMoveAi;
   private final ProPurchaseAi purchaseAi;
+
+  ProPurchaseAi getPurchaseAi() {
+    return purchaseAi;
+  }
+
   private final ProRetreatAi retreatAi;
   private final ProScrambleAi scrambleAi;
   private final ProPoliticsAi politicsAi;
