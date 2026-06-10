@@ -35,8 +35,14 @@ class ProMatchesStaleRestrictionTest {
   /** Atlantic sea zone in the US disallowed list — blocked while neutral. */
   private static final String RESTRICTED_ATLANTIC = "103 Sea Zone";
 
-  /** Atlantic sea zone NOT in the restriction list — control case. */
-  private static final String UNRESTRICTED_ATLANTIC = "102 Sea Zone";
+  /**
+   * Atlantic sea zone NOT in the stale restriction list AND adjacent to Eastern United States —
+   * control case. SZ 101 satisfies both conditions: it is absent from the XML {@code
+   * movementRestrictionTerritories} list, AND Rule 2 ({@code getUSNeutralityRestriction}) allows it
+   * because it borders US-controlled land. SZ 102 was the former control but is no longer suitable:
+   * it has no land connections at all, so Rule 2 now correctly blocks it during neutrality.
+   */
+  private static final String UNRESTRICTED_ATLANTIC = "101 Sea Zone";
 
   private GameData data;
   private GamePlayer americans;
