@@ -10,23 +10,24 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.AiTraceLogger;
-import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.CanonicalGameDataRegistry;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 
 class DecisionHandlerTest {
 
-  private static CanonicalGameData canonical;
+  private static CanonicalGameDataRegistry registry;
 
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    registry = CanonicalGameDataRegistry.loadAll();
   }
 
   private static final String EMPTY_STATE =
       "\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-          + "\"phase\":\"combat\",\"currentPlayer\":\"Germans\"}";
+          + "\"phase\":\"combat\",\"currentPlayer\":\"Germans\","
+          + "\"gameDataKey\":\"ww2global40_2nd_edition\"}";
 
   private static String body(final String kind) {
     return "{\"kind\":\"" + kind + "\"," + EMPTY_STATE + ",\"seed\":42}";
@@ -44,7 +45,7 @@ class DecisionHandlerTest {
 
   private static DecisionHandler stubHandler() {
     return new DecisionHandler(
-        canonical,
+        registry,
         (canonical, req) -> new PurchasePlan(List.of(), List.of(), List.of()),
         (canonical, req) -> new NoncombatMovePlan(List.of()));
   }
@@ -105,7 +106,7 @@ class DecisionHandlerTest {
     final AtomicReference<String> seenInExecutor = new AtomicReference<>();
     final DecisionHandler h =
         new DecisionHandler(
-            canonical,
+            registry,
             (canonical, req) -> {
               seenInExecutor.set(AiTraceLogger.currentMatchId());
               return new PurchasePlan(List.of(), List.of(), List.of());
@@ -130,7 +131,7 @@ class DecisionHandlerTest {
     final AtomicReference<String> seenInExecutor = new AtomicReference<>();
     final DecisionHandler h =
         new DecisionHandler(
-            canonical,
+            registry,
             (canonical, req) -> {
               seenInExecutor.set(AiTraceLogger.currentMatchId());
               return new PurchasePlan(List.of(), List.of(), List.of());
@@ -151,7 +152,7 @@ class DecisionHandlerTest {
   void matchIdIsClearedEvenWhenExecutorThrows() throws Exception {
     final DecisionHandler h =
         new DecisionHandler(
-            canonical,
+            registry,
             (canonical, req) -> {
               throw new IllegalArgumentException("simulated bad-request");
             },
@@ -177,7 +178,7 @@ class DecisionHandlerTest {
     final AtomicReference<String> seenInExecutor = new AtomicReference<>();
     final DecisionHandler h =
         new DecisionHandler(
-            canonical,
+            registry,
             (c, req) -> {
               seenInExecutor.set(AiTraceLogger.currentRequestId());
               return new PurchasePlan(List.of(), List.of(), List.of());
@@ -200,7 +201,7 @@ class DecisionHandlerTest {
     final AtomicReference<String> seenInExecutor = new AtomicReference<>();
     final DecisionHandler h =
         new DecisionHandler(
-            canonical,
+            registry,
             (c, req) -> {
               seenInExecutor.set(AiTraceLogger.currentRequestId());
               return new PurchasePlan(List.of(), List.of(), List.of());

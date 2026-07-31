@@ -55,7 +55,8 @@ class Phase3PurchaseIntegrationTest {
           + "\"phase\":\"purchase\","
           + "\"currentPlayer\":\""
           + NATION
-          + "\""
+          + "\","
+          + "\"gameDataKey\":\"ww2global40_2nd_edition\""
           + "}";
 
   private static final String PURCHASE_DECISION_BODY =

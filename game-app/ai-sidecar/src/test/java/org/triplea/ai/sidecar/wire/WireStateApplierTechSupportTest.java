@@ -37,7 +37,7 @@ class WireStateApplierTechSupportTest {
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
   private GameData fresh() {
@@ -68,7 +68,8 @@ class WireStateApplierTechSupportTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(gd, wire, freshIdMap());
 
@@ -90,7 +91,8 @@ class WireStateApplierTechSupportTest {
             1,
             "combat",
             "Americans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(gd, wire, freshIdMap());
 
@@ -110,7 +112,8 @@ class WireStateApplierTechSupportTest {
             1,
             "combat",
             "Russians",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(gd, wire, freshIdMap());
 
@@ -135,7 +138,8 @@ class WireStateApplierTechSupportTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(gd, wire, freshIdMap());
 

@@ -49,14 +49,15 @@ class ConcurrencySmokeTest {
         + "\"players\":[{\"playerId\":\"Germans\",\"pus\":"
         + pus
         + ",\"tech\":[],\"capitalCaptured\":false}],"
-        + "\"round\":1,\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"},\"seed\":42}";
+        + "\"round\":1,\"phase\":\"purchase\",\"currentPlayer\":\"Germans\","
+        + "\"gameDataKey\":\"ww2global40_2nd_edition\"},\"seed\":42}";
   }
 
   private static String purchaseBody(final String player) {
     return "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],"
         + "\"round\":1,\"phase\":\"purchase\",\"currentPlayer\":\""
         + player
-        + "\"},\"seed\":42}";
+        + "\",\"gameDataKey\":\"ww2global40_2nd_edition\"},\"seed\":42}";
   }
 
   @Test

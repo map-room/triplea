@@ -20,7 +20,8 @@ import org.triplea.ai.sidecar.http.HttpService;
 class SidecarIntegrationTest {
   private static final String DECISION_BODY =
       "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-          + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"},\"seed\":42}";
+          + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\","
+          + "\"gameDataKey\":\"ww2global40_2nd_edition\"},\"seed\":42}";
 
   @TempDir Path tempDir;
 

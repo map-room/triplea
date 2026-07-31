@@ -25,7 +25,7 @@ class WireMoveDescriptionBuilderTest {
 
   @BeforeAll
   static void loadCanonical() {
-    canonical = CanonicalGameData.load();
+    canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
   @BeforeEach

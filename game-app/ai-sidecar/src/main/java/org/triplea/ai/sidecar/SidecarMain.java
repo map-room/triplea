@@ -22,10 +22,10 @@ public final class SidecarMain {
     ClientSetting.initialize();
 
     final SidecarConfig cfg = SidecarConfig.fromEnv(System.getenv());
-    final CanonicalGameData canonical = CanonicalGameData.load();
+    final CanonicalGameDataRegistry registry = CanonicalGameDataRegistry.loadAll();
     final SidecarBuildInfo buildInfo = SidecarBuildInfo.load();
 
-    final HttpService svc = HttpService.start(cfg, canonical, buildInfo);
+    final HttpService svc = HttpService.start(cfg, registry, buildInfo);
     LOG.log(System.Logger.Level.INFO, "listening on {0}:{1}", cfg.bindHost(), svc.boundPort());
 
     final CountDownLatch latch = new CountDownLatch(1);
@@ -43,9 +43,9 @@ public final class SidecarMain {
   static HttpService startForTest(final Map<String, String> env) throws IOException {
     ClientSetting.initialize();
     final SidecarConfig cfg = SidecarConfig.fromEnv(env);
-    final CanonicalGameData canonical = CanonicalGameData.load();
+    final CanonicalGameDataRegistry registry = CanonicalGameDataRegistry.loadAll();
     final SidecarBuildInfo buildInfo = SidecarBuildInfo.load();
-    return HttpService.start(cfg, canonical, buildInfo);
+    return HttpService.start(cfg, registry, buildInfo);
   }
 
   private static void initializeLogging() {

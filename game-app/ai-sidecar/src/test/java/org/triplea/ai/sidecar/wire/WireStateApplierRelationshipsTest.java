@@ -20,7 +20,7 @@ class WireStateApplierRelationshipsTest {
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
   private GameData fresh() {
@@ -40,7 +40,8 @@ class WireStateApplierRelationshipsTest {
             3,
             "combat-move",
             "Germans",
-            List.of(new WireRelationship("Germans", "Russians", "war")));
+            List.of(new WireRelationship("Germans", "Russians", "war")),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(data, wire, new ConcurrentHashMap<>());
 
@@ -62,7 +63,8 @@ class WireStateApplierRelationshipsTest {
             3,
             "combat-move",
             "Germans",
-            List.of(new WireRelationship("Germans", "Russians", "allied")));
+            List.of(new WireRelationship("Germans", "Russians", "allied")),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(data, wire, new ConcurrentHashMap<>());
 
@@ -88,7 +90,8 @@ class WireStateApplierRelationshipsTest {
             3,
             "combat-move",
             "Germans",
-            List.of(new WireRelationship("Germans", "Russians", "neutral")));
+            List.of(new WireRelationship("Germans", "Russians", "neutral")),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(data, wire, new ConcurrentHashMap<>());
 
@@ -105,7 +108,9 @@ class WireStateApplierRelationshipsTest {
     final RelationshipType before =
         data.getRelationshipTracker().getRelationshipType(germans, russians);
 
-    final WireState wire = new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of());
+    final WireState wire =
+        new WireState(
+            List.of(), List.of(), 1, "purchase", "Germans", List.of(), "ww2global40_2nd_edition");
     WireStateApplier.apply(data, wire, new ConcurrentHashMap<>());
 
     assertThat(data.getRelationshipTracker().getRelationshipType(germans, russians))
@@ -123,7 +128,8 @@ class WireStateApplierRelationshipsTest {
             1,
             "purchase",
             "Germans",
-            List.of(new WireRelationship("Germans", "Mongolia", "war")));
+            List.of(new WireRelationship("Germans", "Mongolia", "war")),
+            "ww2global40_2nd_edition");
     // Should NOT throw.
     WireStateApplier.apply(data, wire, new ConcurrentHashMap<>());
   }

@@ -30,7 +30,7 @@ class WireStateApplierTest {
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
   private GameData fresh() {
@@ -53,7 +53,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Russians",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
     assertThat(gd.getMap().getTerritoryOrThrow("Germany").getOwner().getName())
         .isEqualTo("Russians");
@@ -71,7 +72,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     assertThat(germany.getUnits()).hasSize(1);
@@ -88,7 +90,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
     assertThat(gd.getPlayerList().getPlayerId("Germans").getResources().getQuantity("PUs"))
         .isEqualTo(42);
@@ -117,7 +120,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
 
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
@@ -154,7 +158,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
 
     assertThat(gd.getMap().getTerritoryOrThrow("France").getUnits()).hasSize(2);
@@ -180,7 +185,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
 
     final Territory wg = gd.getMap().getTerritoryOrThrow("Western Germany");
@@ -209,7 +215,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, a, idMap);
     assertThat(gd.getMap().getTerritoryOrThrow("Germany").getUnits()).hasSize(2);
 
@@ -222,7 +229,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Russians",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, b, idMap);
 
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
@@ -245,7 +253,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     final UUID first = idMap.get("u-inf-1");
 
@@ -270,7 +279,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     assertThatThrownBy(() -> WireStateApplier.apply(gd, wire, freshIdMap()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Atlantis");
@@ -286,7 +296,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     assertThatThrownBy(() -> WireStateApplier.apply(gd, wire, freshIdMap()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Martians");
@@ -304,7 +315,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     assertThatThrownBy(() -> WireStateApplier.apply(gd, wire, freshIdMap()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("deathstar");
@@ -335,7 +347,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
 
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
@@ -365,7 +378,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(gd, wire, freshIdMap());
 
@@ -389,7 +403,8 @@ class WireStateApplierTest {
             1,
             "combatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -411,7 +426,8 @@ class WireStateApplierTest {
             1,
             "nonCombatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -437,7 +453,8 @@ class WireStateApplierTest {
             1,
             "combatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -482,7 +499,8 @@ class WireStateApplierTest {
             1,
             "noncombat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     final Unit tac = germany.getUnits().iterator().next();
@@ -504,7 +522,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, first, idMap);
     final WireState second =
         new WireState(
@@ -515,7 +534,8 @@ class WireStateApplierTest {
             1,
             "noncombat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, second, idMap);
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
     final Unit fighter = germany.getUnits().iterator().next();
@@ -537,7 +557,8 @@ class WireStateApplierTest {
             1,
             "combatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -559,7 +580,8 @@ class WireStateApplierTest {
             1,
             "combatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -581,7 +603,8 @@ class WireStateApplierTest {
             1,
             "combatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -625,7 +648,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, first, idMap);
 
     assertThat(
@@ -664,7 +688,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Russians",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, second, idMap);
 
     final Territory france = gd.getMap().getTerritoryOrThrow("France");
@@ -685,7 +710,8 @@ class WireStateApplierTest {
             1,
             "place",
             "British",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
     final Territory ethiopia = gd.getMap().getTerritoryOrThrow("Ethiopia");
     assertThat(gd.getBattleDelegate().getBattleTracker().getConquered()).contains(ethiopia);
@@ -704,7 +730,8 @@ class WireStateApplierTest {
             1,
             "place",
             "British",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, withConquered, idMap);
     final Territory ethiopia = gd.getMap().getTerritoryOrThrow("Ethiopia");
     assertThat(gd.getBattleDelegate().getBattleTracker().getConquered()).contains(ethiopia);
@@ -716,7 +743,8 @@ class WireStateApplierTest {
             2,
             "purchase",
             "British",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, withoutConquered, idMap);
     assertThat(gd.getBattleDelegate().getBattleTracker().getConquered()).doesNotContain(ethiopia);
   }
@@ -731,7 +759,8 @@ class WireStateApplierTest {
             1,
             "combat",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
     assertThat(gd.getPlayerList().getPlayerId("Germans").getTechAttachment().getHeavyBomber())
         .isTrue();
@@ -797,7 +826,8 @@ class WireStateApplierTest {
             1,
             "combatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(gd, wire, idMap);
 
@@ -881,7 +911,8 @@ class WireStateApplierTest {
             1,
             "combatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
 
     WireStateApplier.apply(gd, wire, freshIdMap());
 
@@ -967,7 +998,8 @@ class WireStateApplierTest {
             1,
             "combatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wireA, idMap);
 
     final Territory seaZone = gd.getMap().getTerritoryOrNull("112 Sea Zone");
@@ -1013,7 +1045,8 @@ class WireStateApplierTest {
             1,
             "nonCombatMove",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wireB, idMap);
 
     // Stale unloaded list must be cleared — transport has no dead cargo (#2268 regression fence).
@@ -1085,7 +1118,8 @@ class WireStateApplierTest {
             1,
             "combatMove",
             "Germans",
-            List.of()),
+            List.of(),
+            "ww2global40_2nd_edition"),
         idMap);
 
     final Territory seaZone = gd.getMap().getTerritoryOrNull("112 Sea Zone");
@@ -1127,7 +1161,8 @@ class WireStateApplierTest {
             1,
             "nonCombatMove",
             "Germans",
-            List.of()),
+            List.of(),
+            "ww2global40_2nd_edition"),
         idMap);
 
     assertThat(transportUnit.getUnloaded())
@@ -1159,7 +1194,8 @@ class WireStateApplierTest {
             1,
             "purchase",
             "Chinese",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
 
     assertThat(gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName())
@@ -1179,7 +1215,8 @@ class WireStateApplierTest {
             1,
             "purchase",
             "Chinese",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
 
     assertThat(gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName())
@@ -1213,7 +1250,8 @@ class WireStateApplierTest {
             1,
             "purchase",
             "Chinese",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
 
     assertThat(gd.getPlayerList().getPlayerId("Chinese").getProductionFrontier().getName())
@@ -1255,7 +1293,8 @@ class WireStateApplierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
 
     assertThat(germans.getUnitCollection().getUnits())

@@ -21,7 +21,8 @@ class WireStateRoundTripTest {
           + "],"
           + "\"round\":3,"
           + "\"phase\":\"combat-move\","
-          + "\"currentPlayer\":\"Germans\""
+          + "\"currentPlayer\":\"Germans\","
+          + "\"gameDataKey\":\"ww2global40_2nd_edition\""
           + "}";
 
   @Test

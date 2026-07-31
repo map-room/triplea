@@ -33,12 +33,14 @@ class PurchaseExecutorTest {
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
   private static PurchaseRequest purchaseRequestFor(final String nation) {
     return new PurchaseRequest(
-        new WireState(List.of(), List.of(), 1, "purchase", nation, List.of()), 0L);
+        new WireState(
+            List.of(), List.of(), 1, "purchase", nation, List.of(), "ww2global40_2nd_edition"),
+        0L);
   }
 
   private static int playerPus(final GameData data, final String nation) {

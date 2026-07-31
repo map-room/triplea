@@ -27,7 +27,7 @@ class WireStateApplierPhase3Test {
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
   private GameData fresh() {
@@ -41,7 +41,9 @@ class WireStateApplierPhase3Test {
   @Test
   void appliesRoundAndStep() {
     final GameData gd = fresh();
-    final WireState wire = new WireState(List.of(), List.of(), 3, "purchase", "Germans", List.of());
+    final WireState wire =
+        new WireState(
+            List.of(), List.of(), 3, "purchase", "Germans", List.of(), "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
     assertThat(gd.getSequence().getRound()).isEqualTo(3);
     // Uniquely identify the step via its XML name attribute + player. GameStep.getDisplayName
@@ -56,7 +58,14 @@ class WireStateApplierPhase3Test {
     final GameData gd = fresh();
     final WireTerritory egypt = new WireTerritory("Egypt", "Germans", List.of(), true);
     final WireState wire =
-        new WireState(List.of(egypt), List.of(), 3, "purchase", "Germans", List.of());
+        new WireState(
+            List.of(egypt),
+            List.of(),
+            3,
+            "purchase",
+            "Germans",
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, freshIdMap());
 
     final Territory egyptT = gd.getMap().getTerritoryOrThrow("Egypt");
@@ -75,7 +84,8 @@ class WireStateApplierPhase3Test {
     final WireUnit wu = new WireUnit("u-factory-1", "factory_major", 0, 0, 2);
     final WireTerritory wt = new WireTerritory("Germany", "Germans", List.of(wu), false);
     final WireState wire =
-        new WireState(List.of(wt), List.of(), 3, "purchase", "Germans", List.of());
+        new WireState(
+            List.of(wt), List.of(), 3, "purchase", "Germans", List.of(), "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
 
     final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
