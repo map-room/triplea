@@ -31,7 +31,7 @@ class WireStateVerifierTest {
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
   // ---- log capture ----
@@ -118,7 +118,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     applyAndVerify(gd, wire, idMap);
 
     assertThat(warnings()).isEmpty();
@@ -137,7 +138,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     // Capture state after a CLEAN apply — should be 0 drifts.
     final long cleanWarnings = warnings().stream().filter(w -> w.contains("apply-drift")).count();
@@ -175,7 +177,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     captured.clear();
 
@@ -215,7 +218,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     captured.clear();
 
@@ -251,7 +255,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     captured.clear();
 
@@ -285,7 +290,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of(new WireRelationship("Germans", "Russians", "war")));
+            List.of(new WireRelationship("Germans", "Russians", "war")),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     captured.clear();
 
@@ -323,7 +329,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     captured.clear();
 
@@ -356,7 +363,8 @@ class WireStateVerifierTest {
             1,
             "place",
             "British",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, firstApply, idMap);
 
     captured.clear();
@@ -367,7 +375,8 @@ class WireStateVerifierTest {
             2,
             "purchase",
             "British",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, secondApply, idMap);
 
     assertThat(warnings())
@@ -389,7 +398,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     captured.clear();
 
@@ -434,7 +444,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     captured.clear();
 
@@ -476,7 +487,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     captured.clear();
 
@@ -517,7 +529,8 @@ class WireStateVerifierTest {
             1,
             "purchase",
             "Germans",
-            List.of());
+            List.of(),
+            "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     captured.clear();
 
@@ -547,7 +560,9 @@ class WireStateVerifierTest {
   @Test
   void summaryLine_alwaysEmitted() {
     final GameData gd = fresh();
-    final WireState wire = new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of());
+    final WireState wire =
+        new WireState(
+            List.of(), List.of(), 1, "purchase", "Germans", List.of(), "ww2global40_2nd_edition");
     WireStateVerifier.verifyApply(gd, wire, freshIdMap());
     assertThat(infos()).anyMatch(m -> m.contains("apply-verify"));
   }

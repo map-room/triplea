@@ -7,6 +7,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import org.triplea.ai.sidecar.AiTraceLogger;
 import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.CanonicalGameDataRegistry;
 import org.triplea.ai.sidecar.dto.DecisionPlan;
 import org.triplea.ai.sidecar.dto.DecisionRequest;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
@@ -29,29 +30,30 @@ import org.triplea.ai.sidecar.exec.PurchaseExecutor;
  * <p>Known decision kinds: {@code purchase} and {@code noncombat-move}. Any other kind returns 400
  * via Jackson deserialisation failure (unknown discriminator value).
  *
- * <p>The handler holds no per-request state. Each call constructs its own {@link
- * games.strategy.engine.data.GameData} clone (from {@link CanonicalGameData}) and {@link
+ * <p>The handler holds no per-request state. Each call resolves the {@link CanonicalGameData} for
+ * the request's {@code gameDataKey} out of the injected {@link CanonicalGameDataRegistry}, then
+ * constructs its own {@link games.strategy.engine.data.GameData} clone and {@link
  * games.strategy.triplea.ai.pro.ProAi} — see executor implementations.
  */
 public final class DecisionHandler implements HttpHandler {
 
   private static final System.Logger LOG = System.getLogger(DecisionHandler.class.getName());
 
-  private final CanonicalGameData canonical;
+  private final CanonicalGameDataRegistry registry;
   private final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor;
   private final DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> noncombatMoveExecutor;
 
   /** Production constructor — wires all executors. */
-  public DecisionHandler(final CanonicalGameData canonical) {
-    this(canonical, new PurchaseExecutor(), new NoncombatMoveExecutor());
+  public DecisionHandler(final CanonicalGameDataRegistry registry) {
+    this(registry, new PurchaseExecutor(), new NoncombatMoveExecutor());
   }
 
   /** Test constructor — accepts executor stubs so handler logic can be exercised in isolation. */
   public DecisionHandler(
-      final CanonicalGameData canonical,
+      final CanonicalGameDataRegistry registry,
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor,
       final DecisionExecutor<NoncombatMoveRequest, NoncombatMovePlan> noncombatMoveExecutor) {
-    this.canonical = canonical;
+    this.registry = registry;
     this.purchaseExecutor = purchaseExecutor;
     this.noncombatMoveExecutor = noncombatMoveExecutor;
   }
@@ -94,10 +96,12 @@ public final class DecisionHandler implements HttpHandler {
     try {
       switch (request) {
         case PurchaseRequest pr -> {
+          final CanonicalGameData canonical = registry.forKey(pr.state().gameDataKey());
           final PurchasePlan plan = purchaseExecutor.execute(canonical, pr);
           writeJsonTimed(exchange, 200, JsonBodies.readyBody(plan), startNanos);
         }
         case NoncombatMoveRequest nm -> {
+          final CanonicalGameData canonical = registry.forKey(nm.state().gameDataKey());
           final NoncombatMovePlan plan = noncombatMoveExecutor.execute(canonical, nm);
           writeJsonTimed(exchange, 200, JsonBodies.readyBody(plan), startNanos);
         }

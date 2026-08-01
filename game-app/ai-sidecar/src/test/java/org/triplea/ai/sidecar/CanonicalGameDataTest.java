@@ -22,7 +22,7 @@ class CanonicalGameDataTest {
 
   @Test
   void loadsGlobal1940() {
-    final CanonicalGameData canonical = CanonicalGameData.load();
+    final CanonicalGameData canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
     final GameData data = canonical.template();
     assertNotNull(data);
     assertNotNull(data.getPlayerList().getPlayerId("Germans"));
@@ -42,7 +42,7 @@ class CanonicalGameDataTest {
   @Test
   void concurrentClones_unitGraphsAreFullyDisjoint_submergedMutationDoesNotBleed()
       throws Exception {
-    final CanonicalGameData canonical = CanonicalGameData.load();
+    final CanonicalGameData canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
 
     // Produce two clones concurrently (same pattern as the sidecar thread pool).
     final CompletableFuture<GameData> futA =
@@ -70,7 +70,7 @@ class CanonicalGameDataTest {
 
   @Test
   void cloneIsIndependent() {
-    final CanonicalGameData canonical = CanonicalGameData.load();
+    final CanonicalGameData canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
     final GameData a = canonical.cloneForSession();
     final GameData b = canonical.cloneForSession();
     assertNotSame(a, b);

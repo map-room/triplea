@@ -14,7 +14,8 @@ class JsonBodiesTest {
     final PurchaseRequest r =
         JsonBodies.readValue(
             "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-                + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"},\"seed\":7}",
+                + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\","
+                + "\"gameDataKey\":\"ww2global40_2nd_edition\"},\"seed\":7}",
             PurchaseRequest.class);
     assertEquals("Germans", r.state().currentPlayer());
     assertEquals(1, r.state().round());
@@ -24,7 +25,8 @@ class JsonBodiesTest {
   @Test
   void writeValueSerializes() throws Exception {
     final WireState state =
-        new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of());
+        new WireState(
+            List.of(), List.of(), 1, "purchase", "Germans", List.of(), "ww2global40_2nd_edition");
     final String s = JsonBodies.writeValue(new PurchaseRequest(state, 7L));
     assertTrue(s.contains("\"currentPlayer\":\"Germans\""));
     assertTrue(s.contains("\"seed\":7"));
@@ -47,7 +49,8 @@ class JsonBodiesTest {
     final PurchaseRequest r =
         JsonBodies.readValue(
             "{\"kind\":\"purchase\",\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-                + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"},\"seed\":7,"
+                + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\","
+                + "\"gameDataKey\":\"ww2global40_2nd_edition\"},\"seed\":7,"
                 + "\"unknownExtraField\":\"ignored\",\"anotherUnknown\":{\"nested\":42}}",
             PurchaseRequest.class);
     assertEquals("Germans", r.state().currentPlayer());

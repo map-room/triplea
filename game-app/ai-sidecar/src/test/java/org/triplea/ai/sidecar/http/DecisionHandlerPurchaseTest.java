@@ -10,7 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
-import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.CanonicalGameDataRegistry;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
@@ -28,17 +28,18 @@ class DecisionHandlerPurchaseTest {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  private static CanonicalGameData canonical;
+  private static CanonicalGameDataRegistry registry;
 
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    registry = CanonicalGameDataRegistry.loadAll();
   }
 
   private static final String EMPTY_STATE =
       "\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-          + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}";
+          + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\","
+          + "\"gameDataKey\":\"ww2global40_2nd_edition\"}";
 
   private static final String PURCHASE_BODY =
       "{\"kind\":\"purchase\"," + EMPTY_STATE + ",\"seed\":42}";
@@ -50,7 +51,7 @@ class DecisionHandlerPurchaseTest {
   private static DecisionHandler handlerWithPurchaseStub(
       final DecisionExecutor<PurchaseRequest, PurchasePlan> purchaseExecutor) {
     return new DecisionHandler(
-        canonical, purchaseExecutor, (canonical, req) -> new NoncombatMovePlan(List.of()));
+        registry, purchaseExecutor, (canonical, req) -> new NoncombatMovePlan(List.of()));
   }
 
   // -------------------------------------------------------------------------

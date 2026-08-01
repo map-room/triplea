@@ -12,7 +12,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
-import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.CanonicalGameDataRegistry;
 import org.triplea.ai.sidecar.SidecarBuildInfo;
 import org.triplea.ai.sidecar.SidecarConfig;
 
@@ -28,7 +28,7 @@ class HttpServiceTest {
     final SidecarConfig cfg =
         new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
     final HttpService svc =
-        HttpService.start(cfg, CanonicalGameData.load(), SidecarBuildInfo.load());
+        HttpService.start(cfg, CanonicalGameDataRegistry.loadAll(), SidecarBuildInfo.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =
@@ -51,7 +51,7 @@ class HttpServiceTest {
     final SidecarConfig cfg =
         new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
     final HttpService svc =
-        HttpService.start(cfg, CanonicalGameData.load(), SidecarBuildInfo.load());
+        HttpService.start(cfg, CanonicalGameDataRegistry.loadAll(), SidecarBuildInfo.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =
@@ -73,7 +73,7 @@ class HttpServiceTest {
     final SidecarConfig cfg =
         new SidecarConfig("127.0.0.1", 0, 2, "test-token", "data/sessions", null);
     final HttpService svc =
-        HttpService.start(cfg, CanonicalGameData.load(), SidecarBuildInfo.load());
+        HttpService.start(cfg, CanonicalGameDataRegistry.loadAll(), SidecarBuildInfo.load());
     try {
       final int port = svc.boundPort();
       final HttpClient client =

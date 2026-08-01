@@ -226,7 +226,8 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
             request.state().round(),
             "combatMove",
             request.state().currentPlayer(),
-            List.of()),
+            List.of(),
+            request.state().gameDataKey()),
         unitIdMap);
 
     final Map<UUID, String> uuidToWireId = new HashMap<>();

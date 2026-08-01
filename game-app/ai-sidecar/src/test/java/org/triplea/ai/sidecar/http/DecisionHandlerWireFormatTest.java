@@ -12,7 +12,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
-import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.CanonicalGameDataRegistry;
 import org.triplea.ai.sidecar.dto.NoncombatMovePlan;
 import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
@@ -29,12 +29,12 @@ class DecisionHandlerWireFormatTest {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  private static CanonicalGameData canonical;
+  private static CanonicalGameDataRegistry registry;
 
   @BeforeAll
   static void initPrefs() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    registry = CanonicalGameDataRegistry.loadAll();
   }
 
   // ---------------------------------------------------------------------
@@ -43,7 +43,8 @@ class DecisionHandlerWireFormatTest {
 
   private static final String EMPTY_STATE =
       "\"state\":{\"territories\":[],\"players\":[],\"round\":1,"
-          + "\"phase\":\"combat\",\"currentPlayer\":\"Germans\"}";
+          + "\"phase\":\"combat\",\"currentPlayer\":\"Germans\","
+          + "\"gameDataKey\":\"ww2global40_2nd_edition\"}";
 
   private static String offensiveBody(final String kind) {
     return "{\"kind\":\"" + kind + "\"," + EMPTY_STATE + ",\"seed\":42}";
@@ -55,7 +56,7 @@ class DecisionHandlerWireFormatTest {
 
   private static DecisionHandler stubHandler() {
     return new DecisionHandler(
-        canonical,
+        registry,
         (canonical, req) -> new PurchasePlan(List.of(), List.of(), List.of()),
         (canonical, req) -> new NoncombatMovePlan(List.of()));
   }
@@ -74,7 +75,7 @@ class DecisionHandlerWireFormatTest {
         new PurchasePlan(List.of(new PurchaseOrder("infantry", 1, null)), List.of(), List.of());
     final DecisionHandler h =
         new DecisionHandler(
-            canonical,
+            registry,
             (canonical, req) -> fixedPlan,
             (canonical, req) -> new NoncombatMovePlan(List.of()));
 
@@ -109,7 +110,7 @@ class DecisionHandlerWireFormatTest {
 
     final DecisionHandler h =
         new DecisionHandler(
-            canonical,
+            registry,
             (canonical, req) -> new PurchasePlan(List.of(), List.of(), List.of()),
             (canonical, req) -> fixedPlan);
 

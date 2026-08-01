@@ -52,7 +52,7 @@ class StatelessReplayDeterminismTest {
   @BeforeAll
   static void init() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
   /**
@@ -64,7 +64,15 @@ class StatelessReplayDeterminismTest {
   void purchasePlan_isReplayDeterministicAcrossFreshExecutors() throws Exception {
     final PurchaseRequest request =
         new PurchaseRequest(
-            new WireState(List.of(), List.of(), 1, "purchase", "Germans", List.of()), SEED);
+            new WireState(
+                List.of(),
+                List.of(),
+                1,
+                "purchase",
+                "Germans",
+                List.of(),
+                "ww2global40_2nd_edition"),
+            SEED);
 
     final PurchasePlan first = new PurchaseExecutor().execute(canonical, request);
     final PurchasePlan second = new PurchaseExecutor().execute(canonical, request);
@@ -95,7 +103,15 @@ class StatelessReplayDeterminismTest {
   void noncombatMovePlan_isReplayDeterministicAcrossFreshExecutors() throws Exception {
     final org.triplea.ai.sidecar.dto.NoncombatMoveRequest request =
         new org.triplea.ai.sidecar.dto.NoncombatMoveRequest(
-            new WireState(List.of(), List.of(), 1, "nonCombatMove", "Germans", List.of()), SEED);
+            new WireState(
+                List.of(),
+                List.of(),
+                1,
+                "nonCombatMove",
+                "Germans",
+                List.of(),
+                "ww2global40_2nd_edition"),
+            SEED);
 
     final NoncombatMovePlan first = new NoncombatMoveExecutor().execute(canonical, request);
     final NoncombatMovePlan second = new NoncombatMoveExecutor().execute(canonical, request);

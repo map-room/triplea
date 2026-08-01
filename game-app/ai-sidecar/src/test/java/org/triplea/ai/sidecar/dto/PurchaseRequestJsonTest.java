@@ -12,7 +12,8 @@ class PurchaseRequestJsonTest {
     String json =
         "{\"kind\":\"purchase\",\"seed\":42,\"state\":{"
             + "\"territories\":[],\"players\":[],\"round\":1,"
-            + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\"}}";
+            + "\"phase\":\"purchase\",\"currentPlayer\":\"Germans\","
+            + "\"gameDataKey\":\"ww2global40_2nd_edition\"}}";
     DecisionRequest req = mapper.readValue(json, DecisionRequest.class);
     assertInstanceOf(PurchaseRequest.class, req);
     assertEquals("Germans", ((PurchaseRequest) req).state().currentPlayer());

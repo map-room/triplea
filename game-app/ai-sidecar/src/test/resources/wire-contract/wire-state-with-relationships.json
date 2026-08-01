@@ -20,5 +20,6 @@
     "a" : "Germans",
     "b" : "Russians",
     "kind" : "neutral"
-  } ]
+  } ],
+  "gameDataKey" : "ww2global40_2nd_edition"
 }

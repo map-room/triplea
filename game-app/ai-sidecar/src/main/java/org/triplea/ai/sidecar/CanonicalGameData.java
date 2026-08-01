@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 public final class CanonicalGameData {
-  private static final String XML_RESOURCE = "ww2global40_2nd_edition.xml";
 
   private final GameData template;
   private final byte[] serialized;
@@ -25,16 +24,21 @@ public final class CanonicalGameData {
     this.serialized = serialized;
   }
 
-  public static CanonicalGameData load() {
+  /**
+   * Parses the given classpath XML resource (e.g. {@code "ww2global40_2nd_edition.xml"}) into a
+   * template {@link GameData} plus a serialized snapshot used by {@link #cloneForSession()}.
+   */
+  public static CanonicalGameData load(final String resource) {
     try {
-      final GameData data = parseCanonicalXml();
+      final GameData data = parseCanonicalXml(resource);
       final ByteArrayOutputStream baos = new ByteArrayOutputStream();
       try (ObjectOutputStream oos = new ObjectOutputStream(baos)) {
         oos.writeObject(data);
       }
       return new CanonicalGameData(data, baos.toByteArray());
     } catch (final IOException e) {
-      throw new UncheckedIOException("Failed to serialize canonical Global 1940 GameData", e);
+      throw new UncheckedIOException(
+          "Failed to serialize canonical GameData for resource: " + resource, e);
     }
   }
 
@@ -56,10 +60,10 @@ public final class CanonicalGameData {
     }
   }
 
-  private static GameData parseCanonicalXml() throws IOException {
-    final URL url = CanonicalGameData.class.getClassLoader().getResource(XML_RESOURCE);
+  private static GameData parseCanonicalXml(final String resource) throws IOException {
+    final URL url = CanonicalGameData.class.getClassLoader().getResource(resource);
     if (url == null) {
-      throw new IllegalStateException("Missing classpath resource: " + XML_RESOURCE);
+      throw new IllegalStateException("Missing classpath resource: " + resource);
     }
     final Path tmp = Files.createTempFile("ai-sidecar-g40-", ".xml");
     tmp.toFile().deleteOnExit();
@@ -67,7 +71,6 @@ public final class CanonicalGameData {
       Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING);
     }
     return GameParser.parse(tmp, false)
-        .orElseThrow(
-            () -> new IllegalStateException("GameParser returned empty for " + XML_RESOURCE));
+        .orElseThrow(() -> new IllegalStateException("GameParser returned empty for " + resource));
   }
 }

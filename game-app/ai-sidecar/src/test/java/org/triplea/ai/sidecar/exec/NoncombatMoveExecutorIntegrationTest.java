@@ -36,14 +36,15 @@ class NoncombatMoveExecutorIntegrationTest {
   @BeforeAll
   static void init() {
     ClientSetting.setPreferences(new MemoryPreferences());
-    canonical = CanonicalGameData.load();
+    canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
   // The StepNameMapper uses TripleA camelCase phase names: "purchase", "combatMove",
   // "nonCombatMove", "place". These must match exactly for WireStateApplier to advance the
   // game sequence to the correct step, which ProNonCombatMoveAi needs to call isCombatMove().
   private static WireState noncombatWireState(final String nation) {
-    return new WireState(List.of(), List.of(), 1, "nonCombatMove", nation, List.of());
+    return new WireState(
+        List.of(), List.of(), 1, "nonCombatMove", nation, List.of(), "ww2global40_2nd_edition");
   }
 
   /** Sanity smoke: Germans produce at least one noncombat move on turn 1. */
