@@ -10,7 +10,6 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.properties.GameProperties;
-import games.strategy.triplea.Constants;
 import games.strategy.triplea.Properties;
 import games.strategy.triplea.attachments.RulesAttachment;
 import games.strategy.triplea.delegate.AbstractMoveDelegate;
@@ -276,7 +275,12 @@ public final class ProMatches {
       if (t.isWater() && "Japanese".equals(player.getName())) {
         final GamePlayer american = player.getData().getPlayerList().getPlayerId("Americans");
         if (american != null && player.isAtWar(american)) {
-          final RulesAttachment ra = RulesAttachment.get(player, Constants.RULES_ATTACHMENT_NAME);
+          // Use getRulesAttachment() (null-tolerant), NOT RulesAttachment.get(...,
+          // allowNull=false).
+          // WW2v3-1941 has no rulesAttachment on Japanese (only Chinese has one for placement);
+          // Global 1940 attaches movementRestrictionTerritories here. A missing attachment means
+          // there is nothing to bypass — not a crash (map-room#3535).
+          final RulesAttachment ra = player.getRulesAttachment();
           if (ra != null && ra.isMovementRestrictionTypeDisallowed()) {
             final String[] restricted = ra.getMovementRestrictionTerritories();
             if (restricted != null) {
