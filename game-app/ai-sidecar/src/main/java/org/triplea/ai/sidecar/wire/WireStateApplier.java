@@ -209,52 +209,37 @@ public final class WireStateApplier {
   }
 
   /**
-   * Advance {@link GameData#getSequence()} to the wire-supplied round and step. This mirrors what
-   * {@code GameSequence.setRoundAndStep} does for save-game export: the {@code display name} lookup
-   * is case-insensitive and falls back to index 0 with an error log if no match is found — which is
-   * why the {@link StepNameMapper} contract is narrow.
+   * Advance {@link GameData#getSequence()} to the wire-supplied round and step.
+   *
+   * <p>Step names are resolved against the loaded map XML via {@link StepNameMapper#resolve} —
+   * per-edition by construction, because each {@code gameDataKey} loads a different sequence. A
+   * miss or ambiguity throws; silently leaving the sequence on {@code gameInitDelegate} is what
+   * turned a singular/plural name mismatch into {@code Cannot determine combat or not:
+   * gameInitDelegate} three layers away (map-room#3535).
+   *
+   * <p>Unmapped phases (e.g. tech, intelligence — not on the wire contract) leave the sequence
+   * untouched and log a warning; that path is deliberate, not a step-lookup miss.
    */
   private static void applyRoundAndStep(final GameData gameData, final WireState wire) {
-    // StepNameMapper covers all wired phases (purchase / combatMove / battle / nonCombatMove /
-    // place). Any unmapped phase (e.g. tech, intelligence) leaves the sequence untouched and
-    // logs a warning.
-    final String javaStepName;
+    final GameStep target;
     try {
-      javaStepName = StepNameMapper.toJavaStepName(wire.phase(), wire.currentPlayer());
+      target = StepNameMapper.resolve(gameData, wire.phase(), wire.currentPlayer());
     } catch (final IllegalArgumentException e) {
-      LOG.log(
-          Level.WARNING,
-          () -> "WireState phase '" + wire.phase() + "' not mappable; skipping round/step apply");
-      return;
-    }
-    final GamePlayer player = gameData.getPlayerList().getPlayerId(wire.currentPlayer());
-    if (player == null) {
-      throw new IllegalArgumentException("Unknown player in WireState: " + wire.currentPlayer());
+      // Unmapped phase (or unknown player name that is not on this map) — soft-skip only for
+      // unmapped phases. Unknown player is a caller bug and rethrown.
+      if (e.getMessage() != null && e.getMessage().startsWith("Unmapped Map Room phase:")) {
+        LOG.log(
+            Level.WARNING,
+            () -> "WireState phase '" + wire.phase() + "' not mappable; skipping round/step apply");
+        return;
+      }
+      throw e;
     }
     // GameSequence.setRoundAndStep compares against GameStep.getDisplayName() — which for
     // Global 1940 falls back to the delegate's displayName ("Purchase Units" etc.) and is
-    // thus the same across all players that share that delegate. The XML step <em>name</em>
-    // ("germansPurchase") is what uniquely identifies the step; locate the target step by
-    // name, then feed its own getDisplayName() + player back into setRoundAndStep so the
-    // existing API resolves to the correct step index.
-    GameStep target = null;
-    for (final GameStep step : gameData.getSequence().getSteps()) {
-      if (javaStepName.equalsIgnoreCase(step.getName()) && player.equals(step.getPlayerId())) {
-        target = step;
-        break;
-      }
-    }
-    if (target == null) {
-      LOG.log(
-          Level.WARNING,
-          () ->
-              "No GameStep matched name '"
-                  + javaStepName
-                  + "' for player "
-                  + wire.currentPlayer()
-                  + "; leaving sequence untouched");
-      return;
-    }
+    // thus the same across all players that share that delegate. Feed the resolved step's own
+    // displayName + player so the existing API resolves to the correct step index.
+    final GamePlayer player = target.getPlayerId();
     gameData.getSequence().setRoundAndStep(wire.round(), target.getDisplayName(), player);
   }
 
