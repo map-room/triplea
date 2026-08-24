@@ -30,6 +30,31 @@ class ProUtilsTest {
     assertFalse(ProUtils.isPassiveNeutralPlayer(pirates));
   }
 
+  /**
+   * The GameSequence cache (map-room#3695) must match the previous full-sequence scan for every G40
+   * player, including the second call (cache hit).
+   */
+  @Test
+  void isPassiveNeutralPlayer_matchesFullSequenceScanForEveryG40Player() {
+    final GameState data = TestMapGameData.GLOBAL1940.getGameData();
+    for (final GamePlayer player : data.getPlayerList().getPlayers()) {
+      final boolean scanned =
+          data.getSequence().getSteps().stream()
+              .filter(s -> player.equals(s.getPlayerId()))
+              .noneMatch(
+                  s -> games.strategy.engine.data.GameStep.isCombatMoveStepName(s.getName()));
+      assertThat(
+          player.getName(),
+          ProUtils.isPassiveNeutralPlayer(player),
+          is(player.isNull() || scanned));
+      // second call hits the per-sequence cache
+      assertThat(
+          player.getName() + " cached",
+          ProUtils.isPassiveNeutralPlayer(player),
+          is(player.isNull() || scanned));
+    }
+  }
+
   @Test
   void testIsNeutralPlayer() {
     final GameState data = TestMapGameData.GLOBAL1940.getGameData();

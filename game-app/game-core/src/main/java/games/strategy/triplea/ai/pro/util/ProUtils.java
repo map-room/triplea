@@ -2,7 +2,6 @@ package games.strategy.triplea.ai.pro.util;
 
 import static java.util.function.Predicate.not;
 
-import com.google.common.collect.Streams;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.GameSequence;
 import games.strategy.engine.data.GameState;
@@ -301,9 +300,7 @@ public final class ProUtils {
     if (player.isNull()) {
       return true;
     }
-    return Streams.stream(player.getData().getSequence())
-        .filter(s -> player.equals(s.getPlayerId()))
-        .noneMatch(s -> GameStep.isCombatMoveStepName(s.getName()));
+    return !player.getData().getSequence().hasCombatMoveStep(player);
   }
 
   /**

@@ -9,10 +9,12 @@ application {
 
     // JVM tuning for the long-running ProAi compute workload.
     //
-    // -Xmx1G: ~4× triplea's headless bot (-Xmx256M in game-headless). The sidecar
-    //   holds multiple concurrent session GameData clones (typically Germans,
-    //   Italians, Japanese) plus ProTerritoryManager and odds-calc intermediate
-    //   state. 1G is the sweet spot where ZGC's per-byte overhead starts paying off.
+    // -Xmx2G: ~8× triplea's headless bot (-Xmx256M in game-headless). The sidecar
+    //   holds multiple concurrent GameData clones (one per SIDECAR_WORKERS slot)
+    //   plus ProTerritoryManager and odds-calc intermediate state. 1G was the
+    //   original ZGC sweet spot, but a 2026-08 re-profile (#3695) saw young-gen
+    //   occupancy hit 850–940 MB before GC at 1.55 collections/s, and 8-worker
+    //   concurrent decisions sat at ~1.2 GB RSS. 2G gives ZGC more runway.
     //
     // -XX:+UseZGC -XX:+ZGenerational: generational ZGC (JDK 21 feature). Low-pause
     //   collector with excellent throughput on allocation-heavy workloads. ProAi
@@ -26,7 +28,7 @@ application {
     // -Xshare:auto: explicit Class Data Sharing mode (the default on JDK 21).
     //   Speeds startup by memory-mapping a shared archive of JDK classes.
     applicationDefaultJvmArgs = [
-        "-Xmx1G",
+        "-Xmx2G",
         "-XX:+UseZGC",
         "-XX:+ZGenerational",
         "-XX:+UseStringDeduplication",

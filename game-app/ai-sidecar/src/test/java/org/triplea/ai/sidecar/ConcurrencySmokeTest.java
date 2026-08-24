@@ -25,7 +25,7 @@ import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.http.HttpService;
 
 /**
- * Verifies that ≥4 simultaneous POST /decision calls with differing board states produce differing
+ * Verifies that ≥8 simultaneous POST /decision calls with differing board states produce differing
  * plans — proving no cross-thread state contamination between concurrent requests.
  *
  * <p>Each request uses a different {@code currentPlayer} so the AI's purchase selection for each
@@ -61,7 +61,7 @@ class ConcurrencySmokeTest {
   }
 
   @Test
-  void fourConcurrentRequestsWithDifferingStateProduceDifferingPlans() throws Exception {
+  void eightConcurrentRequestsWithDifferingStateProduceDifferingPlans() throws Exception {
     final HttpService svc =
         SidecarMain.startForTest(
             Map.of(
@@ -73,11 +73,11 @@ class ConcurrencySmokeTest {
       final String base = "http://127.0.0.1:" + port;
       final String auth = "Bearer dev-token";
 
-      // Four requests with wildly different PU budgets — the AI's purchase quantity
+      // Eight requests with wildly different PU budgets — the AI's purchase quantity
       // differs per budget, so the response bodies are non-identical even though the
       // nation (Germans) is the same. This is the ground truth for the "differing
       // plans" assertion that proves no cross-thread state contamination.
-      final List<Integer> budgets = List.of(3, 7, 20, 40);
+      final List<Integer> budgets = List.of(3, 7, 12, 20, 28, 40, 55, 80);
 
       final List<Callable<String>> tasks = new ArrayList<>();
       for (final int pus : budgets) {
@@ -103,7 +103,7 @@ class ConcurrencySmokeTest {
             });
       }
 
-      // Submit all four concurrently.
+      // Submit all eight concurrently.
       final ExecutorService pool = Executors.newFixedThreadPool(budgets.size());
       final List<Future<String>> futures = pool.invokeAll(tasks);
       pool.shutdown();
@@ -113,17 +113,17 @@ class ConcurrencySmokeTest {
         bodies.add(f.get());
       }
 
-      // All four must be 200 ready.
+      // All eight must be 200 ready.
       for (final String body : bodies) {
         assertTrue(body.contains("\"status\":\"ready\""), "Not a ready response: " + body);
       }
 
-      // Plans must differ — a 3-PU budget buys far fewer units than a 40-PU budget.
-      // If all four are identical, the thread-local state bled across requests.
+      // Plans must differ — a 3-PU budget buys far fewer units than an 80-PU budget.
+      // If all eight are identical, the thread-local state bled across requests.
       final Set<String> distinct = Set.copyOf(bodies);
       assertTrue(
           distinct.size() > 1,
-          "All 4 concurrent plans were identical — possible cross-thread contamination. "
+          "All 8 concurrent plans were identical — possible cross-thread contamination. "
               + "First body: "
               + bodies.get(0));
     } finally {
