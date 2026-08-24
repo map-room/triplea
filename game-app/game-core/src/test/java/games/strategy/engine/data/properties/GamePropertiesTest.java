@@ -3,11 +3,34 @@ package games.strategy.engine.data.properties;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
+import games.strategy.engine.data.GameData;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 final class GamePropertiesTest {
+  @Nested
+  final class ResolvedGetCacheTest {
+    @Test
+    void getReturnsSetValueAndSeesUpdateAfterSet() {
+      final GameProperties properties = new GameProperties(new GameData());
+      properties.set("IgnoreTransportInMovement", Boolean.TRUE);
+      assertThat(properties.get("IgnoreTransportInMovement", false), is(true));
+      // cache hit
+      assertThat(properties.get("IgnoreTransportInMovement", false), is(true));
+      properties.set("IgnoreTransportInMovement", Boolean.FALSE);
+      assertThat(properties.get("IgnoreTransportInMovement", true), is(false));
+    }
+
+    @Test
+    void missingKeyUsesDefaultAndCanBeFilledLater() {
+      final GameProperties properties = new GameProperties(new GameData());
+      assertThat(properties.get("missing", true), is(true));
+      properties.set("missing", Boolean.FALSE);
+      assertThat(properties.get("missing", true), is(false));
+    }
+  }
+
   @Nested
   final class ReadWriteEditablePropertiesTest {
     @Test

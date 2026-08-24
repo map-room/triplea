@@ -28,6 +28,25 @@ final class GameSequenceTest {
     }
 
     @Test
+    void hasCombatMoveStep_isTrueOnlyAfterACombatMoveStepIsAdded() {
+      final GameSequence sequence = new GameSequence(gameData);
+      assertThat(sequence.hasCombatMoveStep(player), is(false));
+      sequence.addStep(newGameStep(GAME_STEP_NAME, player));
+      assertThat(sequence.hasCombatMoveStep(player), is(false));
+      final IDelegate combatDelegate = new TestDelegate();
+      combatDelegate.initialize("combat", "Combat Move");
+      sequence.addStep(
+          new GameStep(
+              "playerCombatMove",
+              "Combat Move",
+              player,
+              combatDelegate,
+              gameData,
+              new Properties()));
+      assertThat(sequence.hasCombatMoveStep(player), is(true));
+    }
+
+    @Test
     void shouldSetRound() {
       gameSequence.addStep(newGameStep(GAME_STEP_NAME, player));
 

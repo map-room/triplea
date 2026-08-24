@@ -38,6 +38,14 @@ public class GameProperties extends GameDataComponent {
   private final List<String> ordering = new ArrayList<>();
   private final Map<String, IEditableProperty<?>> playerProperties = new HashMap<>();
 
+  /**
+   * Resolved {@link #get(String)} results. Map properties do not change during a ProAI decision
+   * (map-room#3695); looking up editable → player → constant on every call was ~3% of a 2026-06
+   * profile and still ~4% stack / 0.6% leaf in the 2026-08 re-measure. Cleared on any {@code set} /
+   * add.
+   */
+  private transient Map<String, Serializable> resolvedCache;
+
   public GameProperties(final GameData data) {
     super(data);
   }
@@ -65,6 +73,7 @@ public class GameProperties extends GameDataComponent {
       constantProperties.put(key, value);
       ordering.add(key);
     }
+    invalidateResolvedCache();
   }
 
   public void set(final String key, final @Nullable Object value) {
@@ -120,15 +129,39 @@ public class GameProperties extends GameDataComponent {
    * @param key referring key
    */
   public Serializable get(final String key) {
+    final Map<String, Serializable> cache = resolvedCache();
+    if (cache.containsKey(key)) {
+      return cache.get(key);
+    }
     IEditableProperty found = editableProperties.get(key);
+    final Serializable value;
     if (found != null) {
-      return (Serializable) found.getValue();
+      value = (Serializable) found.getValue();
+    } else {
+      found = playerProperties.get(key);
+      if (found != null) {
+        value = (Serializable) found.getValue();
+      } else {
+        value = constantProperties.get(key);
+      }
     }
-    found = playerProperties.get(key);
-    if (found != null) {
-      return (Serializable) found.getValue();
+    cache.put(key, value);
+    return value;
+  }
+
+  private Map<String, Serializable> resolvedCache() {
+    Map<String, Serializable> cache = resolvedCache;
+    if (cache == null) {
+      cache = new HashMap<>();
+      resolvedCache = cache;
     }
-    return constantProperties.get(key);
+    return cache;
+  }
+
+  private void invalidateResolvedCache() {
+    if (resolvedCache != null) {
+      resolvedCache.clear();
+    }
   }
 
   public boolean get(final String key, final boolean defaultValue) {
@@ -159,6 +192,7 @@ public class GameProperties extends GameDataComponent {
     // add to the editable properties
     editableProperties.put(property.getName(), property);
     ordering.add(property.getName());
+    invalidateResolvedCache();
   }
 
   /**
@@ -178,6 +212,7 @@ public class GameProperties extends GameDataComponent {
 
   public void addPlayerProperty(final IEditableProperty<?> property) {
     playerProperties.put(property.getName(), property);
+    invalidateResolvedCache();
   }
 
   public Optional<IEditableProperty<?>> getPlayerProperty(final String name) {

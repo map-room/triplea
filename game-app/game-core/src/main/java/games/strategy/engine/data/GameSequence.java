@@ -1,8 +1,10 @@
 package games.strategy.engine.data;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import javax.annotation.Nullable;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +18,13 @@ public class GameSequence extends GameDataComponent implements Iterable<GameStep
   private int currentIndex;
   private int round = 1;
   @Getter private int roundOffset = 0;
+
+  /**
+   * Player names that have a combat-move step. Filled lazily and wiped when {@link #addStep} runs.
+   * {@code ProUtils.isPassiveNeutralPlayer} used to walk {@code steps} on every call; this cache is
+   * the per-GameData answer to that (map-room#3695).
+   */
+  private transient Set<String> combatMovePlayerNames;
 
   public GameSequence(final GameData data) {
     super(data);
@@ -53,6 +62,32 @@ public class GameSequence extends GameDataComponent implements Iterable<GameStep
 
   public void addStep(final GameStep step) {
     steps.add(step);
+    combatMovePlayerNames = null;
+  }
+
+  /**
+   * Whether {@code player} has a combat-move step in this sequence. True-neutrals and the Null
+   * player do not; major powers do. Result is a function of the step list, which is fixed after
+   * parse, so this is safe to cache for the life of a {@link GameData} clone.
+   */
+  public boolean hasCombatMoveStep(final GamePlayer player) {
+    if (player == null) {
+      return false;
+    }
+    Set<String> names = combatMovePlayerNames;
+    if (names == null) {
+      names = new HashSet<>();
+      for (final GameStep step : steps) {
+        if (step != null
+            && step.getName() != null
+            && GameStep.isCombatMoveStepName(step.getName())
+            && step.getPlayerId() != null) {
+          names.add(step.getPlayerId().getName());
+        }
+      }
+      combatMovePlayerNames = names;
+    }
+    return names.contains(player.getName());
   }
 
   public int getRound() {
