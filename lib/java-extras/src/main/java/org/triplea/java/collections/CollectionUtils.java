@@ -16,7 +16,6 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.ThreadSafe;
 import lombok.experimental.UtilityClass;
@@ -37,7 +36,13 @@ public class CollectionUtils {
     checkNotNull(collection);
     checkNotNull(predicate);
 
-    return (int) collection.stream().filter(predicate).count();
+    int count = 0;
+    for (final T value : collection) {
+      if (predicate.test(value)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   /**
@@ -51,7 +56,13 @@ public class CollectionUtils {
     checkNotNull(it);
     checkNotNull(predicate);
 
-    return (int) StreamSupport.stream(it.spliterator(), false).filter(predicate).count();
+    int count = 0;
+    for (final T value : it) {
+      if (predicate.test(value)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   /**
@@ -68,7 +79,13 @@ public class CollectionUtils {
     checkNotNull(collection);
     checkNotNull(predicate);
 
-    return collection.stream().filter(predicate).collect(toArrayList());
+    final ArrayList<T> result = new ArrayList<>();
+    for (final T value : collection) {
+      if (predicate.test(value)) {
+        result.add(value);
+      }
+    }
+    return result;
   }
 
   /**
@@ -89,7 +106,16 @@ public class CollectionUtils {
     checkArgument(max >= 0, "max must not be negative");
     checkNotNull(predicate);
 
-    return collection.stream().filter(predicate).limit(max).collect(toArrayList());
+    final ArrayList<T> result = new ArrayList<>(Math.min(max, collection.size()));
+    for (final T value : collection) {
+      if (predicate.test(value)) {
+        result.add(value);
+        if (result.size() == max) {
+          break;
+        }
+      }
+    }
+    return result;
   }
 
   /**

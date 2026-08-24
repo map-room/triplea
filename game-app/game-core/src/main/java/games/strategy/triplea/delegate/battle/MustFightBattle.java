@@ -120,7 +120,7 @@ public class MustFightBattle extends DependentBattle
   // and resume while in the middle of a battle.
   private final ExecutionStack stack = new ExecutionStack();
 
-  @Getter private List<String> stepStrings;
+  @Getter private List<String> stepStrings = List.of();
   // Stores the firing units corresponding to the casualty steps in stepStrings. This is to fix a
   // "step name not found" error due to stepStrings being generated at the start of combat, but
   // actual steps being produced as we advance through combat. The error would happen when there are
@@ -341,9 +341,11 @@ public class MustFightBattle extends DependentBattle
 
   @Override
   public Collection<Unit> filterUnits(final UnitBattleFilter filter, final Side... sides) {
-    return filter.getFilter().stream()
-        .flatMap(status -> getUnits(status, sides).stream())
-        .collect(Collectors.toList());
+    final List<Unit> result = new ArrayList<>();
+    for (final BattleState.UnitBattleStatus status : filter.getFilter()) {
+      result.addAll(getUnits(status, sides));
+    }
+    return result;
   }
 
   private Collection<Unit> getUnits(final UnitBattleStatus status, final Side... sides) {
@@ -658,7 +660,12 @@ public class MustFightBattle extends DependentBattle
       endBattle(WhoWon.ATTACKER, bridge);
       return;
     }
-    determineStepStrings();
+    // Odds-calc / headless fights have no UI. Building step strings walks BattleSteps +
+    // FiringGroupSplitter on every round — the same work execute() already does — purely so
+    // listBattleSteps can paint names. HeadlessDisplay no-ops that, so skip it (map-room#3695).
+    if (!headless) {
+      determineStepStrings();
+    }
     final IDisplay display = bridge.getDisplayChannelBroadcaster();
     display.showBattle(
         battleId,
@@ -1319,9 +1326,11 @@ public class MustFightBattle extends DependentBattle
                             .map(UnitType::getName)
                             .collect(Collectors.joining(",")));
               }
-              determineStepStrings();
-              final IDisplay display = bridge.getDisplayChannelBroadcaster();
-              display.listBattleSteps(battleId, stepStrings);
+              if (!headless) {
+                determineStepStrings();
+                final IDisplay display = bridge.getDisplayChannelBroadcaster();
+                display.listBattleSteps(battleId, stepStrings);
+              }
               // continue fighting the recursive steps
               // this should always be the base of the stack
               // when we execute the loop, it will populate the stack with the battle steps
