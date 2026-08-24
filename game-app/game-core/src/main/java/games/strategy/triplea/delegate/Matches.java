@@ -36,6 +36,7 @@ import games.strategy.triplea.util.UnitSeparator;
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -223,30 +224,43 @@ public final class Matches {
       int battleRound,
       Collection<Unit> enemyUnits) {
     final Collection<UnitType> enemyUnitTypes = UnitUtils.getUnitTypesFromUnitList(enemyUnits);
+    final boolean landBattle = !battleSite.isWater();
+    // Every predicate below is a function of this method's arguments only, never of the unit under
+    // test, but they used to be constructed inside the lambda — so a filter over n units built n
+    // copies of each, including the multi-branch PredicateBuilder chain behind unitCanBeInBattle.
+    // Battle simulation calls this for every side of every round of every simulated battle, which
+    // put predicate construction alone into the profile (map-room#3698). Hoisting changes nothing
+    // observable: the same predicates are applied to the same units in the same order, with the
+    // same short-circuits.
+    final Predicate<Unit> isLand = Matches.unitIsLand();
+    final Predicate<Unit> canBeInBattle =
+        Matches.unitCanBeInBattle(attack, landBattle, battleRound, false, enemyUnitTypes);
+    final Predicate<Unit> canBeCapturedOnEntering =
+        Matches.unitCanBeCapturedOnEnteringThisTerritory(attacker, battleSite);
+    final Predicate<Unit> stuckOnDamagedCarrier =
+        Matches.unitIsBeingTransported()
+            .and(Matches.unitIsAir())
+            .and(Matches.unitCanLandOnCarrier());
+    final Predicate<Unit> wasInAirBattle = Matches.unitWasInAirBattle();
     return u -> {
-      final boolean landBattle = !battleSite.isWater();
-      if (!landBattle && Matches.unitIsLand().test(u)) {
+      if (!landBattle && isLand.test(u)) {
         return false;
       }
       // still allow infrastructure type units that can provide support have combat abilities
       // remove infrastructure units that can't take part in combat (air/naval bases, etc...)
-      if (!Matches.unitCanBeInBattle(attack, landBattle, battleRound, false, enemyUnitTypes)
-          .test(u)) {
+      if (!canBeInBattle.test(u)) {
         return false;
       }
       // remove capturableOnEntering units (veqryn)
-      if (Matches.unitCanBeCapturedOnEnteringThisTerritory(attacker, battleSite).test(u)) {
+      if (canBeCapturedOnEntering.test(u)) {
         return false;
       }
       // remove any allied air units that are stuck on damaged carriers (veqryn)
-      if (Matches.unitIsBeingTransported()
-          .and(Matches.unitIsAir())
-          .and(Matches.unitCanLandOnCarrier())
-          .test(u)) {
+      if (stuckOnDamagedCarrier.test(u)) {
         return false;
       }
       // remove any units that were in air combat (veqryn)
-      return !Matches.unitWasInAirBattle().test(u);
+      return !wasInAirBattle.test(u);
     };
   }
 
@@ -299,19 +313,25 @@ public final class Matches {
 
   public static Predicate<Unit> unitCanBeCapturedOnEnteringThisTerritory(
       final GamePlayer player, final Territory t) {
+    // The rule switch and everything derived from the territory depend on (player, t) alone, but
+    // were being re-read for every unit tested. TerritoryAttachment.get(t) on its own accounted
+    // for ~2.8% of sidecar CPU inside battle simulation (map-room#3698). All five call sites
+    // build this predicate and immediately filter with it, and both inputs are static map
+    // configuration rather than mutable game state, so resolving them once per predicate instead
+    // of once per unit yields the same answer for every unit.
+    if (!Properties.getCaptureUnitsOnEnteringTerritory(player.getData().getProperties())) {
+      return unit -> false;
+    }
+    final Optional<TerritoryAttachment> optionalTerritoryAttachment = TerritoryAttachment.get(t);
+    if (optionalTerritoryAttachment.isEmpty()) {
+      return unit -> false;
+    }
+    final boolean territoryCanHaveUnitsThatCanBeCapturedByPlayer =
+        optionalTerritoryAttachment.get().getCaptureUnitOnEnteringBy().contains(player);
     return unit -> {
-      if (!Properties.getCaptureUnitsOnEnteringTerritory(player.getData().getProperties())) {
-        return false;
-      }
       final GamePlayer unitOwner = unit.getOwner();
       final UnitAttachment ua = unit.getUnitAttachment();
       final boolean unitCanBeCapturedByPlayer = ua.getCanBeCapturedOnEnteringBy().contains(player);
-      final Optional<TerritoryAttachment> optionalTerritoryAttachment = TerritoryAttachment.get(t);
-      if (optionalTerritoryAttachment.isEmpty()) {
-        return false;
-      }
-      final boolean territoryCanHaveUnitsThatCanBeCapturedByPlayer =
-          optionalTerritoryAttachment.get().getCaptureUnitOnEnteringBy().contains(player);
       final PlayerAttachment pa = PlayerAttachment.get(unitOwner);
       if (pa == null) {
         return false;
@@ -2115,15 +2135,30 @@ public final class Matches {
       final boolean includeAttackersThatCanNotMove,
       final boolean doNotIncludeBombardingSeaUnits,
       final Collection<UnitType> firingUnits) {
+    // unitTypeCanBeInBattle() assembles a four-branch PredicateBuilder chain on every call, and
+    // the only argument it takes from the unit is its owner — every other input is fixed for the
+    // life of this predicate. A battle typically holds units of one or two owners, so building
+    // one chain per distinct owner instead of one per unit removes almost all of that
+    // construction from the simulation loop (map-room#3698) while testing exactly the same
+    // predicate against exactly the same unit type. Synchronized rather than a bare HashMap:
+    // callers all filter sequentially today, but a shared predicate is the kind of thing a future
+    // caller could hand to a parallel stream, and silent map corruption is not worth the few
+    // nanoseconds. Not a ConcurrentHashMap — that rejects the null owner an un-owned unit has.
+    final Map<GamePlayer, Predicate<UnitType>> byOwner =
+        Collections.synchronizedMap(new HashMap<>());
     return unit ->
-        unitTypeCanBeInBattle(
-                attack,
-                isLandBattle,
+        byOwner
+            .computeIfAbsent(
                 unit.getOwner(),
-                battleRound,
-                includeAttackersThatCanNotMove,
-                doNotIncludeBombardingSeaUnits,
-                firingUnits)
+                owner ->
+                    unitTypeCanBeInBattle(
+                        attack,
+                        isLandBattle,
+                        owner,
+                        battleRound,
+                        includeAttackersThatCanNotMove,
+                        doNotIncludeBombardingSeaUnits,
+                        firingUnits))
             .test(unit.getType());
   }
 

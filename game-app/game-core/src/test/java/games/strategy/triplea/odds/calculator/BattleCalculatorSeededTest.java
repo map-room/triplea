@@ -65,5 +65,19 @@ class BattleCalculatorSeededTest extends AbstractClientSettingTestCase {
     assertEquals(0.015, a.getDrawPercent(), 1e-9);
     assertEquals(1.48, a.getAverageAttackingUnitsLeft(), 1e-9);
     assertEquals(1.925, a.getAverageDefendingUnitsLeft(), 1e-9);
+
+    // Pinned the same way, added in map-room#3698. getAverage*UnitsRemaining() picks the single
+    // simulated result closest to the average — it is the observable output of
+    // getBattleResultsClosestToAverage(), which #3698 de-quadratifies. If that hoist changed
+    // which result is chosen, these two sizes would move.
+    assertEquals(0, a.getAverageAttackingUnitsRemaining().size());
+    assertEquals(2, a.getAverageDefendingUnitsRemaining().size());
+    assertEquals(
+        a.getAverageAttackingUnitsRemaining().size(), b.getAverageAttackingUnitsRemaining().size());
+    assertEquals(
+        a.getAverageDefendingUnitsRemaining().size(), b.getAverageDefendingUnitsRemaining().size());
+    assertEquals(5.425, a.getAverageBattleRoundsFought(), 1e-9);
+    assertEquals(3.844155844155844, a.getAverageAttackingUnitsLeftWhenAttackerWon(), 1e-9);
+    assertEquals(3.2083333333333335, a.getAverageDefendingUnitsLeftWhenDefenderWon(), 1e-9);
   }
 }

@@ -79,16 +79,23 @@ public class AggregateResults {
   }
 
   private Optional<BattleResults> getBattleResultsClosestToAverage() {
+    // Both averages are constants of the whole result set, but they used to be read from inside
+    // the comparator key extractor. Comparator#comparingDouble re-runs that extractor on both
+    // operands of every comparison, so a min() over n results recomputed each average O(n) times
+    // — and each recomputation is itself an O(n) stream that allocates a fresh double[n] and runs
+    // a full Mean. That made choosing the representative battle O(n^2) in the simulation count,
+    // and it was ~7% of all sidecar CPU (map-room#3698). Hoisting them leaves every comparison
+    // key bit-identical, so min() still selects the same result.
+    final double averageAttackingUnitsLeft = getAverageAttackingUnitsLeft();
+    final double averageDefendingUnitsLeft = getAverageDefendingUnitsLeft();
     return results.stream()
         .min(
             Comparator.comparingDouble(
                 result ->
-                    Math.abs(
-                            result.getRemainingAttackingUnits().size()
-                                - getAverageAttackingUnitsLeft())
+                    Math.abs(result.getRemainingAttackingUnits().size() - averageAttackingUnitsLeft)
                         + Math.abs(
                             result.getRemainingDefendingUnits().size()
-                                - getAverageDefendingUnitsLeft())));
+                                - averageDefendingUnitsLeft)));
   }
 
   public Collection<Unit> getAverageAttackingUnitsRemaining() {
