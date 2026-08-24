@@ -13,12 +13,12 @@ import games.strategy.triplea.attachments.UnitAttachment;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.TechTracker;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import lombok.experimental.UtilityClass;
 import org.triplea.java.collections.CollectionUtils;
@@ -34,7 +34,15 @@ import org.triplea.java.collections.IntegerMap;
 public class UnitUtils {
 
   public static Set<UnitType> getUnitTypesFromUnitList(final Collection<Unit> units) {
-    return units.stream().map(Unit::getType).collect(Collectors.toSet());
+    // Collectors.toSet() also produces a default-capacity HashSet, so this is the same set with
+    // the same iteration order — just without the stream pipeline, which showed up in the battle
+    // simulation profile because unitCanParticipateInCombat() calls this for every side of every
+    // round of every simulated battle (map-room#3698).
+    final Set<UnitType> types = new HashSet<>();
+    for (final Unit unit : units) {
+      types.add(unit.getType());
+    }
+    return types;
   }
 
   public static int getProductionPotentialOfTerritory(
