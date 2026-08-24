@@ -24,6 +24,8 @@ jobs:
           context: .
           file: Dockerfile
           push: true
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
           tags: |
             ghcr.io/map-room/ai-sidecar:latest
             ghcr.io/map-room/ai-sidecar:${{ github.sha }}

@@ -1,6 +1,11 @@
 # syntax=docker/dockerfile:1.6
 # Stage 1: build the fat jar with Gradle
 FROM eclipse-temurin:21-jdk AS build
+# CI passes the commit it's building in directly (this stage has no .git/ dir —
+# see .dockerignore — and eclipse-temurin ships no git binary, so the build.gradle
+# fallback that shells out to git cannot run here).
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
 WORKDIR /src
 COPY . .
 # --configure-on-demand keeps Gradle from configuring :game-app:game-headed

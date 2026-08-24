@@ -42,7 +42,7 @@ application {
 // providers.exec {} defers the git process to execution time, satisfying the Gradle
 // config-cache requirement that external processes must not start at configuration time.
 processResources {
-    def gitCommitProvider =
+    def gitCommitFromExec =
         providers
             .exec {
               commandLine "git", "rev-parse", "--short", "HEAD"
@@ -52,6 +52,24 @@ processResources {
             .asText
             .map { it.trim() }
             .orElse("unknown")
+
+    // CI passes the commit in directly via GIT_COMMIT (the Docker build stage has
+    // no .git/ dir and no git binary — see Dockerfile). Local/dev builds fall back
+    // to the git exec above. That exec is wrapped in providers.provider {} here
+    // because a MISSING git binary fails at process start, not with a non-zero
+    // exit: ignoreExitValue and .orElse("unknown") only cover a present-but-failing
+    // git, not an absent one, so evaluating gitCommitFromExec.get() can still throw.
+    def gitCommitProvider = providers.provider {
+        def fromEnv = System.getenv("GIT_COMMIT")
+        if (fromEnv) {
+            return fromEnv
+        }
+        try {
+            return gitCommitFromExec.get()
+        } catch (Exception ignored) {
+            return "unknown"
+        }
+    }
 
     def forkVersion = "unknown"
     try {
