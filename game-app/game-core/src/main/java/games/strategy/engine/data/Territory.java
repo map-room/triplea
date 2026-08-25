@@ -12,6 +12,14 @@ public class Territory extends NamedAttachable implements NamedUnitHolder, Compa
   private final boolean water;
 
   /**
+   * Dense 0..n-1 index assigned by {@link GameMap}. -1 until the territory is added to a map.
+   * Transient: a missing field on old save games would otherwise deserialize as 0 for every
+   * territory, colliding under int-indexed pathfinding (map-room#3703).
+   */
+  @Getter(lombok.AccessLevel.NONE)
+  private transient int index = -1;
+
+  /**
    * The territory owner; defaults to {@link PlayerList#getNullPlayer()} if the territory is not
    * owned.
    */
@@ -30,6 +38,14 @@ public class Territory extends NamedAttachable implements NamedUnitHolder, Compa
     this.water = water;
     owner = data.getPlayerList().getNullPlayer();
     unitCollection = new UnitCollection(this, getData());
+  }
+
+  int getIndex() {
+    return index;
+  }
+
+  void setIndex(final int index) {
+    this.index = index;
   }
 
   public void setOwner(final @Nullable GamePlayer owner) {

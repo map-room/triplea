@@ -124,6 +124,44 @@ class RouteFinderTest {
     assertTrue(optRoute.isEmpty());
   }
 
+  /**
+   * Two equal-cost paths A-B-D and A-C-D on a real GameMap. First-min-cost wins; the winner is
+   * determined by HashSet neighbor iteration of the filtered neighbor set. Name-based Territory
+   * hashCodes make this pin stable across JVMs (unlike Mockito mocks).
+   */
+  @Test
+  void equalCostDiamondPicksAStableWinner() {
+    final GameData data = new GameData();
+    final GameMap realMap = data.getMap();
+    final Territory a = new Territory("A", data);
+    final Territory b = new Territory("B", data);
+    final Territory c = new Territory("C", data);
+    final Territory d = new Territory("D", data);
+    realMap.addTerritory(a);
+    realMap.addTerritory(b);
+    realMap.addTerritory(c);
+    realMap.addTerritory(d);
+    realMap.addConnection(a, b);
+    realMap.addConnection(a, c);
+    realMap.addConnection(b, d);
+    realMap.addConnection(c, d);
+
+    final RouteFinder routeFinder = new RouteFinder(realMap, t -> true);
+    // Distance (uniform cost 1) so TerritoryAttachment is not required; this is a pure tie-break.
+    final Optional<Route> optRoute = routeFinder.findRouteByDistance(a, d);
+    assertTrue(optRoute.isPresent());
+    final List<String> result =
+        optRoute.get().getAllTerritories().stream().map(Territory::getName).toList();
+    assertEquals(3, result.size(), "equal-cost diamond is two hops");
+    assertEquals("A", result.get(0));
+    assertEquals("D", result.get(2));
+    assertTrue(
+        result.get(1).equals("B") || result.get(1).equals("C"),
+        "winner must be one of the two mid nodes");
+    // Pinned from origin/main. Swapping this to the other mid node is a tie-break change.
+    assertEquals("B", result.get(1));
+  }
+
   @Test
   void testFindRouteByCost() {
     final RouteFinder routeFinder = new RouteFinder(map, t -> true, List.of(), player);

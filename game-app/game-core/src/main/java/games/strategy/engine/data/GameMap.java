@@ -6,6 +6,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.annotations.VisibleForTesting;
 import games.strategy.engine.data.util.BreadthFirstSearch;
 import games.strategy.triplea.delegate.Matches;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -57,9 +59,21 @@ public class GameMap extends GameDataComponent implements Iterable<Territory> {
     if (territories.contains(t1)) {
       throw new IllegalArgumentException("Map already contains " + t1.getName());
     }
+    t1.setIndex(territories.size());
     territories.add(t1);
     connections.put(t1, Set.of());
     territoryLookup.put(t1.getName(), t1);
+  }
+
+  private void readObject(final ObjectInputStream in) throws IOException, ClassNotFoundException {
+    in.defaultReadObject();
+    reindexTerritories();
+  }
+
+  private void reindexTerritories() {
+    for (int i = 0; i < territories.size(); i++) {
+      territories.get(i).setIndex(i);
+    }
   }
 
   /** Bidirectional. T1 connects to T2, and T2 connects to T1. */
@@ -126,9 +140,15 @@ public class GameMap extends GameDataComponent implements Iterable<Territory> {
 
   private Set<Territory> getNeighbors(
       final Territory territory, final BiPredicate<Territory, Territory> routeCondition) {
-    return getNeighbors(territory).stream()
-        .filter(n -> routeCondition.test(territory, n))
-        .collect(Collectors.toSet());
+    // Same HashSet insertion order as the previous stream().filter().collect(toSet()) — encounter
+    // order of connections.get(territory) — so RouteFinder's first-min-cost tie-break is unchanged.
+    final Set<Territory> neighbors = new HashSet<>();
+    for (final Territory n : getNeighbors(territory)) {
+      if (routeCondition.test(territory, n)) {
+        neighbors.add(n);
+      }
+    }
+    return neighbors;
   }
 
   /**
