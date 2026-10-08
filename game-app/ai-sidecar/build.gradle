@@ -88,6 +88,16 @@ processResources {
     }
 }
 
+// map-room/map-room#1837: 62 test classes ran serially in one JVM fork — no
+// maxParallelForks, no forkEvery. Tests are CPU+IO bound (XML parse via
+// CanonicalGameData, battle-sim). Half the available cores is a reasonable
+// default on a dev box; forking too aggressively past that hurts more than
+// it helps on a contended machine. If a fork exposes a shared-state bug,
+// fix the shared state — don't lower this to paper over it.
+tasks.named("test", Test) {
+    maxParallelForks = Math.max(2, Runtime.runtime.availableProcessors().intdiv(2))
+}
+
 dependencies {
     implementation project(":game-app:game-core")
     implementation project(":game-app:domain-data")
