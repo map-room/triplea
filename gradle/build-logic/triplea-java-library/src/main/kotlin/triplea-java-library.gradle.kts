@@ -29,3 +29,14 @@ spotless {
         removeUnusedImports()
     }
 }
+
+// map-room/map-room#2015: spotlessJavaCheck is excluded from UP-TO-DATE
+// avoidance and the build cache. Five files drifted out of the project's
+// Java formatting standard without anyone noticing, because nothing re-ran
+// this check once the files' own inputs stopped changing — it surfaced only
+// on a build with no cache to reuse. The check is cheap; silent drift
+// across an unknown number of files is not.
+tasks.named("spotlessJavaCheck") {
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+}

@@ -65,6 +65,20 @@ subprojects {
         options.setIncremental(true)
     }
 
+    // map-room/map-room#2015: compileTestJava is excluded from UP-TO-DATE
+    // avoidance and the build cache. A cached/skipped compileTestJava let two
+    // backward-compat factory/constructor signatures drift out of
+    // compile-correctness for an unknown length of time — nothing re-ran this
+    // task on the files in question until a PR finally touched them, at which
+    // point an unrelated change was blocked by pre-existing rot. Other
+    // JavaCompile tasks (compileJava, etc.) keep normal caching — this is
+    // deliberately scoped to test compilation only, which is cheap relative
+    // to the silent-drift risk.
+    tasks.named("compileTestJava") {
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+    }
+
     tasks.withType<Test>().configureEach {
         useJUnitPlatform() {}
         testLogging {
