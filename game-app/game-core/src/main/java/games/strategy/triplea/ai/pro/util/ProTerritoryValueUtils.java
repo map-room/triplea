@@ -56,6 +56,30 @@ public final class ProTerritoryValueUtils {
    */
   public static final double ZERO_IPC_ISLAND_FLOOR = 2.0;
 
+  /**
+   * Land route used to measure whether a territory is an island. Passable land only; a canal
+   * between two territories breaks the mass, matching {@link #findLandValue}.
+   */
+  private static BiPredicate<Territory, Territory> landRoute(final GamePlayer player) {
+    return (t1, t2) ->
+        ProMatches.territoryCanPotentiallyMoveLandUnits(player).test(t2)
+            && ProMatches.noCanalsBetweenTerritories(player).test(t1, t2);
+  }
+
+  /**
+   * Number of passable land territories in {@code t}'s mass, counting {@code t} itself, searched
+   * out to 6 hops. {@code 1} means nothing else is reachable: a real island. A production-0
+   * mainland colony such as British Guiana is much larger than 1. #2736
+   */
+  public static int landMassSize(final GamePlayer player, final Territory t) {
+    return 1 + player.getData().getMap().getNeighbors(t, 6, landRoute(player)).size();
+  }
+
+  /** True when {@code t} is land and {@link #landMassSize} is 1. */
+  public static boolean isIsland(final GamePlayer player, final Territory t) {
+    return !t.isWater() && landMassSize(player, t) == 1;
+  }
+
   // G40 represents bases as placed units: airfield (isAirBase=true) and harbour (givesMovement).
   // TerritoryAttachment.hasAirBase/hasNavalBase cover maps that use territory-attribute flags
   // instead, so we check both to be game-agnostic.
@@ -343,22 +367,19 @@ public final class ProTerritoryValueUtils {
       return 0.0;
     }
     final GameData data = proData.getData();
-    final BiPredicate<Territory, Territory> routeCond =
-        (t1, t2) ->
-            ProMatches.territoryCanPotentiallyMoveLandUnits(player).test(t2)
-                && ProMatches.noCanalsBetweenTerritories(player).test(t1, t2);
-    final int landMassSize = 1 + data.getMap().getNeighbors(t, 6, routeCond).size();
+    final BiPredicate<Territory, Territory> routeCond = landRoute(player);
+    final int mass = landMassSize(player, t);
 
     // Can't-hold short-circuit: mainland chunks we can't hold are scored zero (no point
     // pricing how productive an enemy mainland is if we can't keep it). For island
-    // territories (landMassSize == 1) we still emit the raid-value floor — capturing
+    // territories (mass == 1) we still emit the raid-value floor — capturing
     // a can't-hold island flips its IPC and can deny enemy basing even if we lose it
     // back next turn. Without this branch the island floor below is bypassed for any
     // island the AI marks can't-hold (e.g., Guam round 1 against a stacked Japanese
     // garrison). A production*0.5 floor is still 0 for 0-IPC islands, so enemy ones
     // use ZERO_IPC_ISLAND_FLOOR. #2736
     if (territoriesThatCantBeHeld.contains(t)) {
-      if (landMassSize == 1) {
+      if (mass == 1) {
         final double productionFloor =
             TerritoryAttachment.getProduction(t) * 0.5 + computeBaseBonus(t);
         // Enemy 0-IPC islands still have raid value (deny basing, stage the next hop) even
@@ -414,7 +435,7 @@ public final class ProTerritoryValueUtils {
         }
       }
     }
-    double value = nearbyEnemyValue * landMassSize / maxLandMassSize + capitalOrFactoryValue;
+    double value = nearbyEnemyValue * mass / maxLandMassSize + capitalOrFactoryValue;
     if (ProMatches.territoryHasInfraFactoryAndIsLand().test(t)) {
       value *= 1.1; // prefer territories with factories
     }
@@ -431,11 +452,11 @@ public final class ProTerritoryValueUtils {
     // when no enemy target was within range. #2747
     final boolean isAttackCandidate =
         ProMatches.territoryIsEnemyOrCantBeHeld(player, territoriesThatCantBeHeld).test(t);
-    if (landMassSize == 1
+    if (mass == 1
         && Matches.isTerritoryEnemy(player).test(t)
         && TerritoryAttachment.getProduction(t) == 0) {
       value = Math.max(value, ZERO_IPC_ISLAND_FLOOR);
-    } else if (landMassSize == 1 && isAttackCandidate) {
+    } else if (mass == 1 && isAttackCandidate) {
       value = Math.max(value, TerritoryAttachment.getProduction(t) * 0.5);
     }
 
