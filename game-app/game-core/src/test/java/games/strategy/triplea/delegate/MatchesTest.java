@@ -1,5 +1,7 @@
 package games.strategy.triplea.delegate;
 
+import static games.strategy.triplea.Constants.CAPTURE_UNITS_ON_ENTERING_TERRITORY;
+import static games.strategy.triplea.Constants.PLAYER_ATTACHMENT_NAME;
 import static games.strategy.triplea.Constants.SUPPORT_ATTACHMENT_PREFIX;
 import static games.strategy.triplea.Constants.UNIT_ATTACHMENT_NAME;
 import static games.strategy.triplea.delegate.battle.steps.MockGameData.givenGameData;
@@ -14,6 +16,7 @@ import games.strategy.engine.data.GameState;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
+import games.strategy.triplea.attachments.PlayerAttachment;
 import games.strategy.triplea.attachments.TerritoryAttachment;
 import games.strategy.triplea.attachments.UnitAttachment;
 import games.strategy.triplea.attachments.UnitSupportAttachment;
@@ -161,6 +164,98 @@ final class MatchesTest {
       territory.getUnitCollection().add(newInfrastructureUnitFor(enemyPlayer));
 
       assertThat(newMatch(), notMatches(territory));
+    }
+  }
+
+  /**
+   * map-room#3698: a fixture for {@link Matches#unitCanBeCapturedOnEnteringThisTerritory}, which
+   * was audited but never tested when its per-unit lookups were hoisted to run once per predicate
+   * (map-room/triplea#162). The seeded battle gate ({@code BattleCalculatorSeededTest}, Germany
+   * defending G40) can never exercise this: G40's Germany has no {@code captureUnitOnEnteringBy}
+   * list, so a wrong hoisted boolean would not move 77/120/3 — the predicate always returns {@code
+   * unit -> false} on that scenario regardless of whether the hoist is correct. This fixture
+   * configures all three independent conditions (unit, territory, owning player) explicitly, so the
+   * hoisted {@code territoryCanHaveUnitsThatCanBeCapturedByPlayer} boolean is actually exercised on
+   * its true branch, not just its always-false one.
+   */
+  @Nested
+  final class UnitCanBeCapturedOnEnteringThisTerritoryTest {
+    private GameData gameData;
+    private GamePlayer attacker;
+    private GamePlayer defender;
+    private Territory territory;
+
+    @BeforeEach
+    void setUp() throws Exception {
+      gameData = TestMapGameData.DELEGATE_TEST.getGameData();
+      gameData.getProperties().set(CAPTURE_UNITS_ON_ENTERING_TERRITORY, true);
+
+      attacker = GameDataTestUtil.germans(gameData);
+      defender = GameDataTestUtil.russians(gameData);
+      territory = gameData.getMap().getTerritoryOrNull("Russia");
+
+      // Unit-level: infantry may be captured by the attacker on entering.
+      GameDataTestUtil.infantry(gameData)
+          .getUnitAttachment()
+          .getPropertyOrThrow("canBeCapturedOnEnteringBy")
+          .setValue(attacker.getName());
+
+      // Player-level: the defender's own units may be given up to the attacker this way.
+      final PlayerAttachment playerAttachment =
+          new PlayerAttachment(PLAYER_ATTACHMENT_NAME, defender, gameData);
+      playerAttachment.getPropertyOrThrow("captureUnitOnEnteringBy").setValue(attacker.getName());
+      defender.addAttachment(PLAYER_ATTACHMENT_NAME, playerAttachment);
+    }
+
+    private Unit capturableUnit() {
+      return GameDataTestUtil.infantry(gameData).create(defender);
+    }
+
+    @Test
+    void capturesWhenTheTerritoryAlsoAllowsIt() throws Exception {
+      final TerritoryAttachment territoryAttachment =
+          new TerritoryAttachment("ta", territory, gameData);
+      territoryAttachment
+          .getPropertyOrThrow("captureUnitOnEnteringBy")
+          .setValue(attacker.getName());
+      TerritoryAttachment.add(territory, territoryAttachment);
+
+      final Predicate<Unit> predicate =
+          Matches.unitCanBeCapturedOnEnteringThisTerritory(attacker, territory);
+
+      assertThat(predicate, matches(capturableUnit()));
+    }
+
+    @Test
+    void doesNotCaptureWhenTheTerritoryDoesNotAllowIt() {
+      // Unit and owner both allow capture by the attacker (same setUp as the positive case), but
+      // this territory's own captureUnitOnEnteringBy is left unset. The hoisted boolean must read
+      // false here even though it is computed once, outside the per-unit loop — this is exactly
+      // the condition #3698's retrospective flagged as never exercised by a test.
+      final TerritoryAttachment territoryAttachment =
+          new TerritoryAttachment("ta", territory, gameData);
+      TerritoryAttachment.add(territory, territoryAttachment);
+
+      final Predicate<Unit> predicate =
+          Matches.unitCanBeCapturedOnEnteringThisTerritory(attacker, territory);
+
+      assertThat(predicate, notMatches(capturableUnit()));
+    }
+
+    @Test
+    void doesNotCaptureWhenTheGamePropertyIsOff() throws Exception {
+      gameData.getProperties().set(CAPTURE_UNITS_ON_ENTERING_TERRITORY, false);
+      final TerritoryAttachment territoryAttachment =
+          new TerritoryAttachment("ta", territory, gameData);
+      territoryAttachment
+          .getPropertyOrThrow("captureUnitOnEnteringBy")
+          .setValue(attacker.getName());
+      TerritoryAttachment.add(territory, territoryAttachment);
+
+      final Predicate<Unit> predicate =
+          Matches.unitCanBeCapturedOnEnteringThisTerritory(attacker, territory);
+
+      assertThat(predicate, notMatches(capturableUnit()));
     }
   }
 
