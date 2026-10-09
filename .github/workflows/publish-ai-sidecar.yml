@@ -29,3 +29,16 @@ jobs:
           tags: |
             ghcr.io/map-room/ai-sidecar:latest
             ghcr.io/map-room/ai-sidecar:${{ github.sha }}
+
+      # map-room/map-room#3702: this workflow runs on: push to main (post-merge,
+      # after every PR already shows green) and nothing alerted on failure —
+      # it went red for 11 weeks before anyone noticed. foxtrot's review of the
+      # first fix (#167) pointed out that opening the alert issue HERE, in
+      # triplea, didn't help: the crew's /crew-init loop only watches
+      # map-room/map-room issues, so a triplea-side issue is exactly as invisible
+      # as a red workflow run. The alert now lives in map-room/map-room instead —
+      # see that repo's scripts/sidecar-publish-alert.ts and
+      # .github/workflows/sidecar-publish-alert.yml, a scheduled poll of this
+      # workflow's run history via the public GitHub API (no cross-repo secret
+      # needed, since triplea is public). This workflow itself is back to being
+      # just build+push.
