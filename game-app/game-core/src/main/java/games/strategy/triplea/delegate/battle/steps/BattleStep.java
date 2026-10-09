@@ -98,6 +98,8 @@ public interface BattleStep extends IExecutable {
   Order getOrder();
 
   static List<BattleStep> getAll(final BattleState battleState, final BattleActions battleActions) {
+    final CheckGeneralBattleEnd checkGeneralBattleEnd =
+        new CheckGeneralBattleEnd(battleState, battleActions);
     return List.of(
         new OffensiveAaFire(battleState, battleActions),
         new DefensiveAaFire(battleState, battleActions),
@@ -121,7 +123,7 @@ public interface BattleStep extends IExecutable {
         new OffensiveGeneralRetreat(battleState, battleActions),
         new ClearGeneralCasualties(battleState, battleActions),
         new RemoveUnprotectedUnitsGeneral(battleState, battleActions),
-        new CheckGeneralBattleEnd(battleState, battleActions),
-        new CheckStalemateBattleEnd(battleState, battleActions));
+        checkGeneralBattleEnd,
+        new CheckStalemateBattleEnd(checkGeneralBattleEnd));
   }
 }

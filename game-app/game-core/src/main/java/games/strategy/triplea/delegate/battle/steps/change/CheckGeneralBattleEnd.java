@@ -2,6 +2,7 @@ package games.strategy.triplea.delegate.battle.steps.change;
 
 import static games.strategy.triplea.delegate.battle.BattleState.Side.DEFENSE;
 import static games.strategy.triplea.delegate.battle.BattleState.Side.OFFENSE;
+import static games.strategy.triplea.delegate.battle.BattleState.UnitBattleFilter.ACTIVE;
 import static games.strategy.triplea.delegate.battle.BattleState.UnitBattleFilter.ALIVE;
 
 import com.google.common.collect.Iterables;
@@ -27,10 +28,8 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-import lombok.AllArgsConstructor;
 import org.triplea.java.collections.CollectionUtils;
 
-@AllArgsConstructor
 public class CheckGeneralBattleEnd implements BattleStep {
   private static final long serialVersionUID = 5172121497955756220L;
 
@@ -38,12 +37,35 @@ public class CheckGeneralBattleEnd implements BattleStep {
 
   private final BattleActions battleActions;
 
+  // map-room#3698: shared (not static) so that a sibling CheckStalemateBattleEnd constructed for
+  // the same round can see this round's cached isStalemate() result instead of recomputing it
+  // from scratch. Not final/Lombok-generated so that old saved games deserializing this class
+  // without the field default it to null, in which case isStalemate() simply skips caching.
+  private final StalemateCache stalemateCache;
+
+  public CheckGeneralBattleEnd(final BattleState battleState, final BattleActions battleActions) {
+    this(battleState, battleActions, new StalemateCache());
+  }
+
+  CheckGeneralBattleEnd(
+      final BattleState battleState,
+      final BattleActions battleActions,
+      final StalemateCache stalemateCache) {
+    this.battleState = battleState;
+    this.battleActions = battleActions;
+    this.stalemateCache = stalemateCache;
+  }
+
   protected BattleActions getBattleActions() {
     return battleActions;
   }
 
   protected BattleState getBattleState() {
     return battleState;
+  }
+
+  StalemateCache getStalemateCache() {
+    return stalemateCache;
   }
 
   @Override
@@ -79,6 +101,38 @@ public class CheckGeneralBattleEnd implements BattleStep {
   }
 
   protected boolean isStalemate() {
+    // map-room#3698: CheckGeneralBattleEnd and CheckStalemateBattleEnd both call isStalemate()
+    // on the same battleState, back-to-back within a round, in the common case where no retreat
+    // happens between GENERAL_BATTLE_END_CHECK and STALEMATE_BATTLE_END_CHECK. Since apply()'s
+    // only inputs that can vary within a battle are the ALIVE/ACTIVE unit sets for both sides
+    // (player, gameData, battleSite, territoryEffects and game Properties are all fixed for the
+    // duration of one battle resolution), a snapshot of those four sets is a complete cache key.
+    final List<Unit> aliveOffense = List.copyOf(battleState.filterUnits(ALIVE, OFFENSE));
+    final List<Unit> activeOffense = List.copyOf(battleState.filterUnits(ACTIVE, OFFENSE));
+    final List<Unit> aliveDefense = List.copyOf(battleState.filterUnits(ALIVE, DEFENSE));
+    final List<Unit> activeDefense = List.copyOf(battleState.filterUnits(ACTIVE, DEFENSE));
+
+    if (stalemateCache != null
+        && stalemateCache.result != null
+        && aliveOffense.equals(stalemateCache.aliveOffense)
+        && activeOffense.equals(stalemateCache.activeOffense)
+        && aliveDefense.equals(stalemateCache.aliveDefense)
+        && activeDefense.equals(stalemateCache.activeDefense)) {
+      return stalemateCache.result;
+    }
+
+    final boolean result = computeIsStalemate();
+    if (stalemateCache != null) {
+      stalemateCache.aliveOffense = aliveOffense;
+      stalemateCache.activeOffense = activeOffense;
+      stalemateCache.aliveDefense = aliveDefense;
+      stalemateCache.activeDefense = activeDefense;
+      stalemateCache.result = result;
+    }
+    return result;
+  }
+
+  private boolean computeIsStalemate() {
     if (battleState.getStatus().isLastRound()) {
       return true;
     }
@@ -98,6 +152,16 @@ public class CheckGeneralBattleEnd implements BattleStep {
         || (hasNoStrengthOrRolls(OFFENSE, attackers, defenders)
             && hasNoStrengthOrRolls(DEFENSE, defenders, attackers))
         || (hasNoTargets(attackerFiringGroups) && hasNoTargets(defendersFiringGroups));
+  }
+
+  /** Mutable holder so a sibling step can share this round's memoized {@link #isStalemate()}. */
+  static final class StalemateCache implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
+    private List<Unit> aliveOffense;
+    private List<Unit> activeOffense;
+    private List<Unit> aliveDefense;
+    private List<Unit> activeDefense;
+    private Boolean result;
   }
 
   private boolean hasNoStrengthOrRolls(

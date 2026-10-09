@@ -15,6 +15,17 @@ public class CheckStalemateBattleEnd extends CheckGeneralBattleEnd {
     super(battleState, battleActions);
   }
 
+  // map-room#3698: shares the sibling CheckGeneralBattleEnd's StalemateCache so that, in the
+  // common case where no retreat happens between GENERAL_BATTLE_END_CHECK and
+  // STALEMATE_BATTLE_END_CHECK, this step's isStalemate() call reuses that round's already-
+  // computed result instead of re-running FiringGroupSplitterGeneral.apply() for both sides.
+  public CheckStalemateBattleEnd(final CheckGeneralBattleEnd checkGeneralBattleEnd) {
+    super(
+        checkGeneralBattleEnd.getBattleState(),
+        checkGeneralBattleEnd.getBattleActions(),
+        checkGeneralBattleEnd.getStalemateCache());
+  }
+
   @Override
   public List<StepDetails> getAllStepDetails() {
     return List.of();
