@@ -235,19 +235,25 @@ public class ProCombatMoveAi {
       if (isFfa == 1 && tuvSwing > 0) {
         tuvSwing *= 0.5;
       }
-      // Strategic empty-island bonus (#2736): amphib raids on undefended zero-IPC islands
-      // (Wake, Midway, Line Islands) still have real value — they deny enemy basing,
-      // extend our air/naval reach, and convert later. Without this additive term the
-      // multiplicative product collapses to 0 because it gates on raw production.
-      final int isAmphibStrategicIsland =
-          (isAmphib == 1 && isEmptyLand == 1 && productionAndIsCapital.production == 0) ? 1 : 0;
+      // Zero-IPC amphib islands (Wake, Marshall, Guam, Midway, Caroline) contribute nothing
+      // through the production product, so a defended one is dropped at the `attackValue < 2`
+      // gate and an empty one is deleted later when a counterattack exists. The additive floor
+      // is outside the amphib-penalty product. Neutrals are excluded (#2745). A production-0
+      // mainland colony such as British Guiana is amphib-reachable too, but it is not an
+      // island — same landMassSize == 1 gate as findLandValue. #2736
+      final boolean zeroIpcAmphibIsland =
+          isAmphib == 1
+              && isLand == 1
+              && isNeutral == 0
+              && productionAndIsCapital.production == 0
+              && ProTerritoryValueUtils.isIsland(player, t);
       final double territoryValue =
           (1 + isLand + isCanHold * (1 + 2.0 * isFfa * isLand))
                   * (1 + isEmptyLand)
                   * (1 + isFactory)
                   * (isIslandPower ? 1.0 : (1 - 0.5 * isAmphib))
                   * productionAndIsCapital.production
-              + 2.0 * isAmphibStrategicIsland;
+              + (zeroIpcAmphibIsland ? ProTerritoryValueUtils.ZERO_IPC_ISLAND_FLOOR : 0.0);
       double attackValue =
           (tuvSwing + territoryValue)
               * (1 + 4.0 * productionAndIsCapital.isCapital)
@@ -1137,7 +1143,7 @@ public class ProCombatMoveAi {
             && optionalTerritoryAttachment.get().isCapital()) {
           capitalValue = ProUtils.getPlayerProduction(t.getOwner(), data);
         }
-        final double territoryValue =
+        double territoryValue =
             (1
                         + isLand
                         - isCantHoldAmphib
@@ -1145,6 +1151,17 @@ public class ProCombatMoveAi {
                         + isCanHold * (1 + 2.0 * isFfa + 1.5 * isFactory + 0.5 * capturableUnits))
                     * production
                 + capitalValue;
+        // Same zero-IPC island floor as prioritizeAttackOptions, including the island gate.
+        // This is the territoryValue written on the attack-result log; at 0 a won amphib is
+        // removed as soon as enemyCounterTuvSwing * 2/3 exceeds 1 + tuvSwing. A coastal
+        // production-0 mainland colony must not receive it. #2736
+        if (isLand == 1
+            && !isNeutral
+            && production == 0
+            && (patd.isNeedAmphibUnits() || !patd.getAmphibAttackMap().isEmpty())
+            && ProTerritoryValueUtils.isIsland(player, t)) {
+          territoryValue += ProTerritoryValueUtils.ZERO_IPC_ISLAND_FLOOR;
+        }
         double tuvSwing = result.getTuvSwing();
         if (isFfa == 1 && tuvSwing > 0) {
           tuvSwing *= 0.5;
