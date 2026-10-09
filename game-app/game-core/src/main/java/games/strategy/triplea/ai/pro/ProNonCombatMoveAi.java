@@ -1618,6 +1618,14 @@ class ProNonCombatMoveAi {
         if (transport.isTransporting(currentTerritory) || moves <= 0) {
           continue;
         }
+        // An unholdable sea zone is a flee, not a loading run. From 101 Sea Zone the
+        // empty transport was chasing Western United States, and the first step was 64
+        // Sea Zone, beside the True Neutrals. Skip the load and let the safest-sea pass
+        // move it. #2745
+        final ProTerritory currentSea = moveMap.get(currentTerritory);
+        if (currentSea == null || !currentSea.isCanHold()) {
+          continue;
+        }
         final List<ProTerritory> priorizitedLoadTerritories = new ArrayList<>();
         for (final Territory t : moveMap.keySet()) {
           final ProTerritory proTerritory = moveMap.get(t);
@@ -1948,7 +1956,10 @@ class ProNonCombatMoveAi {
                 String.format(
                     "%s, value=%s, seaValue=%s, tValue=%s, transports=%s",
                     t, value, proTerritory.getSeaValue(), proTerritory.getValue(), transports));
-            if (value > maxValue) {
+            // findWaterValue below this is decayed factory distance, not a staging target.
+            // 64 Sea Zone was winning that comparison and pulling the US fleet onto the
+            // True Neutral coast. #2745
+            if (proTerritory.getValue() >= 0.05 && value > maxValue) {
               maxValue = value;
               maxValueTerritory = t;
             }
@@ -2379,6 +2390,7 @@ class ProNonCombatMoveAi {
         continue;
       }
       double minStrengthDifference = Double.POSITIVE_INFINITY;
+      double minTerritoryValue = Double.NEGATIVE_INFINITY;
       Territory minTerritory = null;
       for (final Territory t : unitMoveMap.get(u)) {
         final ProTerritory proTerritory = moveMap.get(t);
@@ -2393,10 +2405,16 @@ class ProNonCombatMoveAi {
         defenders.add(u);
         final double strengthDifference =
             ProBattleUtils.estimateStrengthDifference(t, attackers, defenders);
+        final double territoryValue = proTerritory.getValue();
         ProLogger.trace(
             "Unsafe territory: " + t + " with strengthDifference=" + strengthDifference);
-        if (strengthDifference < minStrengthDifference) {
+        // Equal safety used to keep the first territory, Central America, once every
+        // round-1 strength was 0. Prefer the higher strategic value (East Coast factory). #2745
+        if (strengthDifference < minStrengthDifference
+            || (strengthDifference == minStrengthDifference
+                && territoryValue > minTerritoryValue)) {
           minStrengthDifference = strengthDifference;
+          minTerritoryValue = territoryValue;
           minTerritory = t;
         }
       }

@@ -535,8 +535,10 @@ public final class ProTerritoryValueUtils {
       }
       final int distance = optionalRoute.get().numberOfSteps();
       if (distance > 0 && distance <= 3) {
-        if (ProMatches.territoryIsEnemyOrCantBeHeld(player, territoriesThatCantBeHeld)
-            .test(nearbyLandTerritory)) {
+        final boolean attackRelevant =
+            ProMatches.territoryIsEnemyOrCantBeHeld(player, territoriesThatCantBeHeld)
+                .test(nearbyLandTerritory);
+        if (attackRelevant) {
           double value = TerritoryAttachment.getProduction(nearbyLandTerritory);
           if (ProUtils.isNeutralLand(nearbyLandTerritory)) {
             // True Neutrals contribute almost nothing to sea-zone staging value because
@@ -560,7 +562,12 @@ public final class ProTerritoryValueUtils {
                   territoriesToAttack);
           territoryValueMap.put(nearbyLandTerritory, value);
         }
-        nearbyLandValue += territoryValueMap.get(nearbyLandTerritory);
+        // Friendly coasts stay in the value map for land moves. They must not raise the
+        // sea zone: a canal hub such as 64 Sea Zone sees more friendly land within 3 steps
+        // than 101 Sea Zone and was outranking the fleet's current water. #2745
+        if (attackRelevant) {
+          nearbyLandValue += territoryValueMap.get(nearbyLandTerritory);
+        }
       }
     }
 
