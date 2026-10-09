@@ -44,6 +44,18 @@ public final class ProTerritoryValueUtils {
    */
   public static final double NAVAL_BASE_BONUS = 0.0;
 
+  /**
+   * Strategic value of an enemy zero-IPC island (Wake, Marshall, Guam, Midway, Caroline).
+   *
+   * <p>The production floor is {@code production * 0.5}, which is 0 when production is 0, so those
+   * islands never clear the amphib keep-threshold ({@code attackValue < 2}) and the later
+   * attack-result formula deletes a won landing as soon as a counterattack exists. 2.0 matches the
+   * empty-island bonus that already let undefended islands onto the list, and is applied to
+   * defended ones too. True Neutrals are not given this floor (#2745). Friendly islands are not
+   * either (#2747).
+   */
+  public static final double ZERO_IPC_ISLAND_FLOOR = 2.0;
+
   // G40 represents bases as placed units: airfield (isAirBase=true) and harbour (givesMovement).
   // TerritoryAttachment.hasAirBase/hasNavalBase cover maps that use territory-attribute flags
   // instead, so we check both to be game-agnostic.
@@ -341,12 +353,20 @@ public final class ProTerritoryValueUtils {
     // pricing how productive an enemy mainland is if we can't keep it). For island
     // territories (landMassSize == 1) we still emit the raid-value floor — capturing
     // a can't-hold island flips its IPC and can deny enemy basing even if we lose it
-    // back next turn. Without this branch the island production floor at line 391
-    // below is bypassed for any island the AI marks can't-hold (e.g., Guam round 1
-    // against a stacked Japanese garrison), zeroing every Pacific amphib target. #2736
+    // back next turn. Without this branch the island floor below is bypassed for any
+    // island the AI marks can't-hold (e.g., Guam round 1 against a stacked Japanese
+    // garrison). A production*0.5 floor is still 0 for 0-IPC islands, so enemy ones
+    // use ZERO_IPC_ISLAND_FLOOR. #2736
     if (territoriesThatCantBeHeld.contains(t)) {
       if (landMassSize == 1) {
-        return TerritoryAttachment.getProduction(t) * 0.5 + computeBaseBonus(t);
+        final double productionFloor =
+            TerritoryAttachment.getProduction(t) * 0.5 + computeBaseBonus(t);
+        // Enemy 0-IPC islands still have raid value (deny basing, stage the next hop) even
+        // when we cannot garrison them. production*0.5 is 0 for those islands. #2736
+        if (Matches.isTerritoryEnemy(player).test(t) && TerritoryAttachment.getProduction(t) == 0) {
+          return Math.max(productionFloor, ZERO_IPC_ISLAND_FLOOR);
+        }
+        return productionFloor;
       }
       return 0.0;
     }
@@ -411,7 +431,11 @@ public final class ProTerritoryValueUtils {
     // when no enemy target was within range. #2747
     final boolean isAttackCandidate =
         ProMatches.territoryIsEnemyOrCantBeHeld(player, territoriesThatCantBeHeld).test(t);
-    if (landMassSize == 1 && isAttackCandidate) {
+    if (landMassSize == 1
+        && Matches.isTerritoryEnemy(player).test(t)
+        && TerritoryAttachment.getProduction(t) == 0) {
+      value = Math.max(value, ZERO_IPC_ISLAND_FLOOR);
+    } else if (landMassSize == 1 && isAttackCandidate) {
       value = Math.max(value, TerritoryAttachment.getProduction(t) * 0.5);
     }
 
