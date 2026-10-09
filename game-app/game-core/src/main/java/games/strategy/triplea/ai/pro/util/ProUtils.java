@@ -65,20 +65,23 @@ public final class ProUtils {
   /**
    * Returns the players on the opposing team to {@code player} in turn order.
    *
-   * <p>A refinement of {@link #getEnemyPlayersInTurnOrder}: any non-allied player who is also at
-   * war with one of {@code player}'s declared enemies is on the <em>same</em> side — they share a
-   * common enemy — and is therefore excluded from the opposing team.
+   * <p>A refinement of {@link #getEnemyPlayersInTurnOrder}. A non-allied player is dropped from the
+   * threat set when either of these is true and the two are not actually at war:
    *
-   * <p>Example (G40 round 2): Americans at war with Germany. British is also at war with Germany.
-   * British shares Germany as an enemy with Americans → British is excluded from Americans'
-   * opposing team even though politics has not yet made them formally allied.
+   * <ul>
+   *   <li>They share a map alliance ({@code Allies}, {@code Axis}, …). G40 round 1 leaves Americans
+   *       politically neutral with British, so the relationship tracker alone still lists British
+   *       as an enemy. Counting that fleet as attackers made 101 Sea Zone look unsurvivable and
+   *       sent the US transport to 64 Sea Zone, on the True Neutral coast. #2745
+   *   <li>They are at war with one of {@code player}'s declared enemies. Example: Americans at war
+   *       with Germany, and British is already at war with Germany, so British is the same side
+   *       even before politics makes them allied.
+   * </ul>
    *
    * <p>Neutral players (e.g. G40 Pirates, who are at war with everyone) are excluded from the
-   * shared-enemy reference set so they do not poison the team detection and cause all candidates to
-   * be removed.
-   *
-   * <p>When {@code player} has no non-neutral declared enemies the result falls back to the full
-   * non-allied list — without a meaningful common reference point team membership is indeterminate.
+   * shared-enemy reference set so they do not poison that test and wipe the candidate list. A
+   * player {@code player} is actually at war with stays, even if the map lists them in the same
+   * alliance.
    */
   public static List<GamePlayer> getOpposingTeamPlayersInTurnOrder(final GamePlayer player) {
     final var rt = player.getData().getRelationshipTracker();
@@ -87,11 +90,23 @@ public final class ProUtils {
     // presence in myEnemies would cause every candidate to be removed.
     final Set<GamePlayer> myEnemies =
         rt.getEnemies(player).stream().filter(e -> !isNeutralPlayer(e)).collect(Collectors.toSet());
-    if (myEnemies.isEmpty()) {
-      return candidates;
-    }
-    candidates.removeIf(p -> rt.isAtWarWithAnyOfThesePlayers(p, myEnemies));
+    candidates.removeIf(
+        other ->
+            !rt.isAtWar(player, other)
+                && (sharesMapAlliance(player, other)
+                    || (!myEnemies.isEmpty()
+                        && rt.isAtWarWithAnyOfThesePlayers(other, myEnemies))));
     return candidates;
+  }
+
+  /**
+   * True when both players are listed in the same map alliance. A player with no alliance entry is
+   * reported under their own name, which does not match anyone else.
+   */
+  private static boolean sharesMapAlliance(final GamePlayer player, final GamePlayer other) {
+    final var alliances = player.getData().getAllianceTracker();
+    final var mine = alliances.getAlliancesPlayerIsIn(player);
+    return alliances.getAlliancesPlayerIsIn(other).stream().anyMatch(mine::contains);
   }
 
   public static boolean isPlayersTurnFirst(
