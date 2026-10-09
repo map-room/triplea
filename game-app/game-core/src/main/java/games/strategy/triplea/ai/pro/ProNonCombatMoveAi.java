@@ -1618,9 +1618,10 @@ class ProNonCombatMoveAi {
         if (transport.isTransporting(currentTerritory) || moves <= 0) {
           continue;
         }
-        // An unholdable sea zone is a flee, not a loading run. Chasing a factory on the
-        // other ocean from 101 Sea Zone stepped onto 64 Sea Zone, beside the True
-        // Neutrals. The safest-territory pass below keeps that flee next to a factory. #2745
+        // An unholdable sea zone is a flee, not a loading run. From 101 Sea Zone the
+        // empty transport was chasing Western United States, and the first step was 64
+        // Sea Zone, beside the True Neutrals. Skip the load and let the safest-sea pass
+        // move it. #2745
         final ProTerritory currentSea = moveMap.get(currentTerritory);
         if (currentSea == null || !currentSea.isCanHold()) {
           continue;
@@ -1644,16 +1645,9 @@ class ProNonCombatMoveAi {
                   .test(t);
           final boolean hasFactory =
               ProMatches.territoryHasInfraFactoryAndIsOwnedLand(player).test(t);
-          // Lowest load-value is tried first, and empty friendly land plus True Neutrals
-          // score near zero. On a round-1 turn every sea route is safe, so that sort sent
-          // the Atlantic transport toward Central America and the neutral coast (64 Sea
-          // Zone). Only land that can actually load — owned units, or an owned factory —
-          // is a target. #2745
           if (!t.isWater()
               && hasSeaNeighbor
               && distance > 0
-              && (territoryHasTransportableUnits || hasFactory)
-              && !ProUtils.isNeutralLand(t)
               && !(distance == 1 && territoryHasTransportableUnits && !hasFactory)) {
 
             // TODO: add calculation of transports vs units
@@ -1674,12 +1668,9 @@ class ProNonCombatMoveAi {
             if (distance <= moves) {
               numTurnsAway = 0;
             }
-            // Turns dominate territory value. The old 0.5/turn penalty was smaller than the
-            // East-vs-West value gap, so the Atlantic transport treated Western United States
-            // as the best load and stepped through 64 Sea Zone (Panama) to reach it. #2745
             final double value =
                 territoryValue
-                    + 1000.0 * numTurnsAway
+                    + 0.5 * numTurnsAway
                     - 0.1 * numUnitsToLoad
                     - 0.1 * factoryProduction;
             ProLogger.trace(
@@ -1990,26 +1981,8 @@ class ProNonCombatMoveAi {
             alreadyMovedUnits.addAll(t.getUnits());
           }
 
-          // Equal strength used to keep the first sea zone in move order, which was 64
-          // Sea Zone. Prefer the one closer to an owned factory, then the current zone. #2745
-          final Territory currentTerritory = unitTerritoryMap.get(u);
-          Territory nearestFactoryTerritory = null;
-          int nearestFactoryDist = Integer.MAX_VALUE;
-          for (final Territory ft : moveMap.keySet()) {
-            if (!ProMatches.territoryHasInfraFactoryAndIsOwnedLand(player).test(ft)) {
-              continue;
-            }
-            final int dist =
-                data.getMap()
-                    .getDistanceIgnoreEndForCondition(
-                        currentTerritory, ft, Matches.territoryIsWater());
-            if (dist > 0 && dist < nearestFactoryDist) {
-              nearestFactoryDist = dist;
-              nearestFactoryTerritory = ft;
-            }
-          }
+          // Find safest territory
           double minStrengthDifference = Double.POSITIVE_INFINITY;
-          int minDistToFactory = Integer.MAX_VALUE;
           Territory minTerritory = null;
           for (final Territory t : currentUnitMoveMap.get(u)) {
             final ProTerritory proTerritory = moveMap.get(t);
@@ -2019,22 +1992,8 @@ class ProNonCombatMoveAi {
             defenders.addAll(proTerritory.getUnits());
             final double strengthDifference =
                 ProBattleUtils.estimateStrengthDifference(t, attackers, defenders);
-            final int distToFactory =
-                (nearestFactoryTerritory == null)
-                    ? Integer.MAX_VALUE
-                    : data.getMap()
-                        .getDistanceIgnoreEndForCondition(
-                            t, nearestFactoryTerritory, Matches.territoryIsWater());
-            final boolean safer = strengthDifference < minStrengthDifference;
-            final boolean tiedAndCloser =
-                strengthDifference == minStrengthDifference && distToFactory < minDistToFactory;
-            final boolean tiedAndCurrent =
-                strengthDifference == minStrengthDifference
-                    && distToFactory == minDistToFactory
-                    && t.equals(currentTerritory);
-            if (safer || tiedAndCloser || tiedAndCurrent) {
+            if (strengthDifference < minStrengthDifference) {
               minStrengthDifference = strengthDifference;
-              minDistToFactory = distToFactory;
               minTerritory = t;
             }
           }
@@ -2049,6 +2008,7 @@ class ProNonCombatMoveAi {
             moveAlliedCarriedFighters(u, to);
             it.remove();
           } else {
+            final Territory currentTerritory = unitTerritoryMap.get(u);
             ProLogger.trace(
                 u + " added to current territory since no better options at " + currentTerritory);
             moveMap.get(currentTerritory).addTempUnit(u);
