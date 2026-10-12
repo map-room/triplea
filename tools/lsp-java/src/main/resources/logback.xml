@@ -1,0 +1,17 @@
+<!--
+  Spoon's own noClasspath-mode parsing logs a DEBUG line per unresolved symbol (expected noise,
+  see Main.java's buildModel doc). Without this file, logback's fallback config puts those on
+  stdout at DEBUG level, which corrupts JSON output and buries real results. Route everything to
+  stderr at WARN so stdout stays clean for this tool's own Entry output only.
+-->
+<configuration>
+  <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+    <target>System.err</target>
+    <encoder>
+      <pattern>%msg%n</pattern>
+    </encoder>
+  </appender>
+  <root level="WARN">
+    <appender-ref ref="STDERR" />
+  </root>
+</configuration>
