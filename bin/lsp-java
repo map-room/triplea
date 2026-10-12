@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# bin/lsp-java — Semantic Java query CLI (Spoon), mirroring bin/lsp-ts's own interface (#2404).
+# Works from any directory; resolves the repo root relative to this script, same as bin/lsp-ts.
+set -euo pipefail
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DIST="$REPO_ROOT/tools/lsp-java/build/install/lsp-java/bin/lsp-java"
+
+if [ ! -x "$DIST" ]; then
+  echo "lsp-java: not built yet. Run:" >&2
+  echo "  cd $REPO_ROOT && ./gradlew :tools:lsp-java:installDist" >&2
+  exit 1
+fi
+
+cd "$REPO_ROOT"
+exec "$DIST" "$@"

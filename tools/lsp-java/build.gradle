@@ -1,0 +1,21 @@
+plugins {
+    id("triplea-java-library")
+    id("application")
+}
+
+application {
+    mainClass = "org.triplea.tools.lspjava.Main"
+    applicationName = "lsp-java"
+}
+
+dependencies {
+    implementation("fr.inria.gforge.spoon:spoon-core:11.2.2-beta-13")
+}
+
+// This tool's own production code resolves game-app/* source paths relative to the triplea repo
+// root (bin/lsp-java `cd`s there before invoking it — see that script). Tests build the same
+// Spoon model against the same real source tree, so they need the same working directory;
+// Gradle's Test task otherwise defaults to this subproject's own directory.
+tasks.named("test", Test) {
+    workingDir = rootProject.projectDir
+}
