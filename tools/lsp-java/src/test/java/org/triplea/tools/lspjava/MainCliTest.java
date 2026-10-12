@@ -106,6 +106,35 @@ class MainCliTest {
   }
 
   @Test
+  void findRefs_decisionHandler_includesTheClassLiteral_exactlyNineteenResults() throws Exception {
+    // alpha's #174 review: find-refs DecisionHandler returned 18 results, silently missing the
+    // DecisionHandler.class literal (System.getLogger(DecisionHandler.class.getName())) at
+    // DecisionHandler.java:40. Pinned at exactly 19, not merely "more than 18" — the fix must add
+    // the one missing reference without dropping or duplicating any of the 17 already-correct
+    // ones (see ResolverTest's sibling test for why an unconditional deeper walk overshoots this).
+    CliResult r = runCli("find-refs", "DecisionHandler", "--scope=sidecar");
+
+    assertThat(r.exitCode()).isZero();
+    assertThat(r.stdout()).contains("DecisionHandler.java:40:");
+    assertThat(r.stderr()).contains("-> 1 declaration(s), 19 result(s)");
+  }
+
+  @Test
+  void findRefs_decisionHandler_printsTheOccurrenceCoverageLine() throws Exception {
+    // The other half of alpha's #174 finding: reportTypeResolution had no occurrence-coverage
+    // check at all (unlike reportMemberResolution), so a dropped reference had zero stderr
+    // signal. Asserts the coverage line itself appears — not just that the right count of
+    // results came back — so a future regression that silently drops a result AGAIN would still
+    // be caught by the line disappearing, even if nobody re-counts the exact results by hand.
+    CliResult r = runCli("find-refs", "DecisionHandler", "--scope=sidecar");
+
+    assertThat(r.exitCode()).isZero();
+    assertThat(r.stderr())
+        .contains("occurrence(s) of 'DecisionHandler' accounted for")
+        .contains("19 of");
+  }
+
+  @Test
   void helpFlag_exitsZeroWithoutBuildingAModel() throws Exception {
     long start = System.currentTimeMillis();
     CliResult r = runCli("--help");

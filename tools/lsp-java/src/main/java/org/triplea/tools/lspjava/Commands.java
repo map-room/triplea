@@ -37,13 +37,19 @@ public final class Commands {
     List<CtType<?>> types = Resolver.findTypesByName(model, query);
     if (!types.isEmpty()) {
       List<Entry> out = new ArrayList<>();
+      int allOccurrences = 0;
       for (CtType<?> t : types) {
         out.add(entryFor(t, t.isInterface() ? "interface" : "class"));
         for (CtTypeReference<?> ref : Resolver.findTypeReferences(model, t)) {
           out.add(entryFor(ref, "reference"));
         }
+        allOccurrences += Resolver.countAllTypeReferenceOccurrences(model, t);
       }
-      report.reportTypeResolution("find-refs", query, types, out.size());
+      // out.size() includes the declaration entries too (one per matched type), which
+      // countAllTypeReferenceOccurrences doesn't count — add them so a fully-accounted-for
+      // answer doesn't print a spurious "N of M" short by exactly types.size().
+      report.reportTypeResolution(
+          "find-refs", query, types, out.size(), allOccurrences + types.size());
       return out;
     }
 

@@ -60,7 +60,14 @@ public final class ResolutionReport {
     System.exit(EXIT_UNRESOLVED);
   }
 
-  /** Report a successful type resolution: how many types matched, and ambiguity if &gt;1. */
+  /**
+   * Report a successful type resolution with no occurrence-coverage check: how many types matched,
+   * and ambiguity if &gt;1. For commands whose result isn't a count of "references to the name" in
+   * the first place — {@code find-def} (returns declarations, not usages) and {@code find-impls}
+   * (returns subtype count, which has no reason to track how often the name is textually used
+   * elsewhere) — comparing against total occurrences would flag every healthy answer as
+   * "incomplete." Mirrors {@code lsp-ts.ts}'s own {@code checkCoverage: false} for find-def.
+   */
   public void reportTypeResolution(
       String command, String query, List<CtType<?>> matches, int resultCount) {
     note(
@@ -72,6 +79,31 @@ public final class ResolutionReport {
       for (CtType<?> t : matches) {
         note("    " + t.getQualifiedName() + " (" + positionOf(t) + ")");
       }
+    }
+  }
+
+  /**
+   * Report a successful type resolution for a command whose result IS meant to be every occurrence
+   * of the type ({@code find-refs}) — adds the occurrence-coverage line {@link
+   * #reportTypeResolution(String, String, List, int)} deliberately skips, mirroring {@link
+   * #reportMemberResolution}'s role for member queries.
+   *
+   * <p>Added after alpha's #174 review: {@code find-refs DecisionHandler} was silently dropping the
+   * {@code DecisionHandler.class} literal with zero stderr signal — exactly the #3657 failure mode
+   * this report exists to catch, just previously unguarded on the type-query path. Without this
+   * method, a future reference shape {@link Resolver#positionOrParentPosition} still can't resolve
+   * (even with its now-bounded walk) would vanish the same way, again with no trace.
+   */
+  public void reportTypeResolution(
+      String command, String query, List<CtType<?>> matches, int resultCount, int allOccurrences) {
+    reportTypeResolution(command, query, matches, resultCount);
+    if (allOccurrences > resultCount) {
+      note(
+          String.format(
+              "  %d of %d occurrence(s) of '%s' accounted for; the rest could not be resolved to"
+                  + " a position (an unresolvable AST shape, not evidence they don't exist —"
+                  + " cross-check with grep if precision matters).",
+              resultCount, allOccurrences, query));
     }
   }
 

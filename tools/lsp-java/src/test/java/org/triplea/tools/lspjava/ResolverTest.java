@@ -132,4 +132,49 @@ class ResolverTest {
                 assertThat(Resolver.resolvedPosition(ref).getFile().getName())
                     .isEqualTo("WireStateApplier.java"));
   }
+
+  @Test
+  void findTypeReferences_decisionHandler_walksTwoLevelsForTheClassLiteral() {
+    // alpha's #174 review: find-refs DecisionHandler returned 18 results (1 declaration + 17
+    // references), silently missing the DecisionHandler.class literal at
+    // DecisionHandler.java:40 — a System.getLogger(DecisionHandler.class.getName()) call. That
+    // literal's CtTypeReference has no position of its own, and neither does its immediate
+    // parent (a CtTypeAccess) — the value is two levels up, on a synthetic CtFieldRead for the
+    // .class pseudo-field. Pinned at exactly 19 (not 18, and not some other number): the fix
+    // must add the missing reference WITHOUT losing or duplicating any of the 17 already-correct
+    // ones — a naive unconditional 2-level walk was verified, while building this fix, to also
+    // pull in 9 unrelated self-call/self-field-read entries nothing asked for.
+    CtType<?> decisionHandler = Resolver.findTypesByName(model, "DecisionHandler").get(0);
+    List<spoon.reflect.reference.CtTypeReference<?>> refs =
+        Resolver.findTypeReferences(model, decisionHandler);
+
+    assertThat(refs)
+        .as("the .class literal at line 40, previously silently dropped")
+        .anySatisfy(
+            ref -> {
+              var pos = Resolver.resolvedPosition(ref);
+              assertThat(pos.getFile().getName()).isEqualTo("DecisionHandler.java");
+              assertThat(pos.getLine()).isEqualTo(40);
+            });
+    // +1 for the declaration itself (DecisionHandler.java:38), reported separately by
+    // Commands.findRefs, not by findTypeReferences — see the 19-total assertion in
+    // CommandsTest for the full find-refs answer including the declaration.
+    assertThat(refs).hasSize(18);
+  }
+
+  @Test
+  void countAllTypeReferenceOccurrences_exceedsResolvedCount_whenSomeOccurrencesAreUnresolvable() {
+    // The denominator that drives the type-query coverage line (alpha's #174 review: find-refs
+    // had no equivalent of find-callers'/find-def's occurrence-coverage check at all, so a
+    // dropped reference — like the .class literal above — had zero stderr signal). Some
+    // DecisionHandler-named identifiers genuinely can't be resolved to any position within the
+    // bounded walk (verified: this is nonzero for the real sidecar), so the denominator must
+    // exceed the resolved count for the coverage line in ResolutionReportTest to have something
+    // real to report on.
+    CtType<?> decisionHandler = Resolver.findTypesByName(model, "DecisionHandler").get(0);
+    int resolvedCount = Resolver.findTypeReferences(model, decisionHandler).size();
+    int allOccurrences = Resolver.countAllTypeReferenceOccurrences(model, decisionHandler);
+
+    assertThat(allOccurrences).isGreaterThan(resolvedCount);
+  }
 }
