@@ -87,9 +87,9 @@ class BattleCalculatorSeededTest extends AbstractClientSettingTestCase {
 
   /**
    * A second, independent seeded N for the same scenario (map-room#3698's {@code filterUnits}
-   * memoization gate) — 2,000 trials is the N the step-1 isolated-JVM wall-clock measurement
-   * used, not just a bigger instance of the 200-run gate above. Pinned from a run on this branch
-   * before the {@code filterUnits} cache landed.
+   * memoization gate) — 2,000 trials is the N the step-1 isolated-JVM wall-clock measurement used,
+   * not just a bigger instance of the 200-run gate above. Pinned from a run on this branch before
+   * the {@code filterUnits} cache landed.
    */
   @Test
   void seededCalculatorAt2000RunsIsAlsoPinned() {

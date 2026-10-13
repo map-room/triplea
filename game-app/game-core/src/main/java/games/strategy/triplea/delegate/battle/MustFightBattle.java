@@ -63,6 +63,7 @@ import games.strategy.triplea.delegate.move.validation.MoveValidator;
 import games.strategy.triplea.formatter.MyFormatter;
 import games.strategy.triplea.util.TuvUtils;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -344,14 +345,6 @@ public class MustFightBattle extends DependentBattle
     return side == OFFENSE ? getAttacker() : getDefender();
   }
 
-  /**
-   * Cache key for {@link #filterUnits}: a {@link UnitBattleFilter} (one of its four static
-   * singletons — the constructor is package-private, so no other instance can exist, and identity
-   * equality is therefore correct) plus the requested sides as an order-sensitive, value-comparable
-   * list (a raw {@code Side[]} has no {@code equals}/{@code hashCode}).
-   */
-  private record FilterUnitsCacheKey(UnitBattleFilter filter, List<Side> sides) {}
-
   // map-room#3698: filterUnits() was ~324 calls per 200-battle seeded gate, each allocating a
   // fresh ArrayList, even when called repeatedly with the same (filter, sides) against unchanged
   // attackingUnits/defendingUnits/attackingWaitingToDie/defendingWaitingToDie/killed. Cached,
@@ -359,15 +352,29 @@ public class MustFightBattle extends DependentBattle
   // every method in AbstractBattle/DependentBattle/MustFightBattle that mutates any of those five
   // collections bumps it, unconditionally, at the top of the method (safe over-invalidation —
   // the audited list of every bump site is in this PR's description). A generation mismatch
-  // clears the whole cache rather than evicting selectively: simpler to reason about, and cheap
-  // (the cache rarely holds more than the 8-or-so (filter, sides) combinations BattleStep code
-  // actually uses).
+  // clears the cache (just advances the stamp — see below) rather than evicting selectively.
   //
-  // Values are never mutated by any caller (audited: every filterUnits() call site either reads
-  // the result via .stream(), passes it as a read-only argument, or copies it into a new
-  // collection before mutating) — returning Collections.unmodifiableList makes that invariant an
-  // exception on violation rather than silent shared-cache corruption if that ever changes.
-  private final Map<FilterUnitsCacheKey, List<Unit>> filterUnitsCache = new HashMap<>();
+  // Lookup is a plain array index, not a HashMap<record, List>: a first version used a record key
+  // (UnitBattleFilter, List.of(sides)) and measured a small (~5-6%, borderline-separable-from-
+  // noise at n=12) wall-clock REGRESSION despite a real 76% cut in recomputation calls — the
+  // per-call key/List/HashMap-node allocation cost more than the tiny (6-14 unit) loop it was
+  // avoiding. filterUnits is called with only 2 real shapes in production (every call site
+  // audited): one UnitBattleFilter of 4 known singletons (the constructor is package-private, so
+  // no fifth can exist) and at most 2 sides. Both encode into a small, allocation-free int:
+  // filterIndex() identifies the singleton by reference (0-3, -1 if somehow unrecognized —
+  // defensive, skips the cache rather than guessing), sidesCode() packs up to 4 Side values
+  // (also defensive headroom over the observed max of 2) into a base-3 digit string preserving
+  // argument order (DEFENSE, OFFENSE and OFFENSE, DEFENSE produce different results — getUnits()
+  // appends each side's units in call order — so the key must stay order-sensitive). A tiny
+  // (4 x 81 = 324-slot, ~2.6 KB) array, allocated once per battle instance, replaces the HashMap.
+  private static final int SIDES_CODE_BASE = 3;
+  private static final int MAX_SIDES_ENCODED = 4;
+  private static final int SIDES_CODE_SPACE = pow(SIDES_CODE_BASE, MAX_SIDES_ENCODED); // 81
+  private static final int FILTER_COUNT = 4;
+
+  @SuppressWarnings("unchecked")
+  private final List<Unit>[] filterUnitsCache = new List[FILTER_COUNT * SIDES_CODE_SPACE];
+
   private int filterUnitsCacheGeneration = -1;
 
   /**
@@ -376,16 +383,65 @@ public class MustFightBattle extends DependentBattle
    */
   @VisibleForTesting int computeFilterUnitsCallCount = 0;
 
+  private static int pow(final int base, final int exp) {
+    int result = 1;
+    for (int i = 0; i < exp; i++) {
+      result *= base;
+    }
+    return result;
+  }
+
+  /**
+   * 0-3 for the 4 known {@link UnitBattleFilter} singletons; -1 (skip the cache) for anything else.
+   */
+  private static int filterIndex(final UnitBattleFilter filter) {
+    if (filter == UnitBattleFilter.ACTIVE) {
+      return 0;
+    } else if (filter == UnitBattleFilter.ALIVE) {
+      return 1;
+    } else if (filter == UnitBattleFilter.CASUALTY) {
+      return 2;
+    } else if (filter == UnitBattleFilter.REMOVED_CASUALTY) {
+      return 3;
+    }
+    return -1;
+  }
+
+  /**
+   * Order-sensitive, allocation-free encoding of up to {@link #MAX_SIDES_ENCODED} {@link Side}
+   * values; -1 (skip the cache) if there are more than that (never observed in production — every
+   * real call site passes at most 2).
+   */
+  private static int sidesCode(final Side... sides) {
+    if (sides.length > MAX_SIDES_ENCODED) {
+      return -1;
+    }
+    int code = 0;
+    for (final Side side : sides) {
+      code = code * SIDES_CODE_BASE + (side == OFFENSE ? 1 : 2);
+    }
+    return code;
+  }
+
   @Override
   public Collection<Unit> filterUnits(final UnitBattleFilter filter, final Side... sides) {
+    final int fIdx = filterIndex(filter);
+    final int sIdx = sidesCode(sides);
+    if (fIdx < 0 || sIdx < 0) {
+      // Unrecognized shape — correctness over speed: compute fresh, cache nothing.
+      return Collections.unmodifiableList(computeFilterUnits(filter, sides));
+    }
     if (filterUnitsCacheGeneration != unitSetGeneration) {
-      filterUnitsCache.clear();
+      Arrays.fill(filterUnitsCache, null);
       filterUnitsCacheGeneration = unitSetGeneration;
     }
-    return Collections.unmodifiableList(
-        filterUnitsCache.computeIfAbsent(
-            new FilterUnitsCacheKey(filter, List.of(sides)),
-            key -> computeFilterUnits(filter, sides)));
+    final int slot = fIdx * SIDES_CODE_SPACE + sIdx;
+    List<Unit> cached = filterUnitsCache[slot];
+    if (cached == null) {
+      cached = computeFilterUnits(filter, sides);
+      filterUnitsCache[slot] = cached;
+    }
+    return Collections.unmodifiableList(cached);
   }
 
   private List<Unit> computeFilterUnits(final UnitBattleFilter filter, final Side... sides) {

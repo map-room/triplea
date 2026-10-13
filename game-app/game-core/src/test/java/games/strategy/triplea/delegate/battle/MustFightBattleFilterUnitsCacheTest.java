@@ -62,7 +62,7 @@ class MustFightBattleFilterUnitsCacheTest extends AbstractClientSettingTestCase 
   }
 
   @Test
-  void aDifferentFilterOrSideIsNotServedFromTheSameCacheEntry() {
+  void differentFilterOrSideIsNotServedFromTheSameCacheEntry() {
     final MustFightBattle battle = battle(TestMapGameData.GLOBAL1940.getGameData());
 
     battle.filterUnits(ALIVE, OFFENSE);
