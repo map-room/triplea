@@ -59,6 +59,18 @@ abstract class AbstractBattle implements IBattle {
   List<Unit> attackingUnits = new ArrayList<>();
   List<Unit> defendingUnits = new ArrayList<>();
 
+  /**
+   * Bumped by every method in this class and its subclasses that mutates {@link #attackingUnits},
+   * {@link #defendingUnits}, or (in {@link MustFightBattle}) {@code attackingWaitingToDie}, {@code
+   * defendingWaitingToDie}, or {@code killed} (map-room#3698). {@link MustFightBattle#filterUnits}
+   * uses this to invalidate its cache: a result computed at one generation is never reused at a
+   * different one, whether or not the specific method that bumped it actually changed anything this
+   * round — unconditional per-method bumps are a safe over-invalidation, never an
+   * under-invalidation. See that class's cache field comment for the full audited list of bump
+   * sites.
+   */
+  int unitSetGeneration = 0;
+
   @RemoveOnNextMajorRelease("amphibiousLandAttackers is no longer used")
   List<Unit> amphibiousLandAttackers = List.of();
 
@@ -147,6 +159,7 @@ abstract class AbstractBattle implements IBattle {
    * rocket attack, etc).
    */
   protected void removeUnitsThatNoLongerExist() {
+    unitSetGeneration++; // map-room#3698: may retainAll() attackingUnits/defendingUnits below.
     if (headless) {
       return;
     }

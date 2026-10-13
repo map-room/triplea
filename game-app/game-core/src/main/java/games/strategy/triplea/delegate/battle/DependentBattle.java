@@ -39,6 +39,7 @@ public abstract class DependentBattle extends AbstractBattle {
 
   @Override
   public Change removeAttack(final Route route, final Collection<Unit> units) {
+    unitSetGeneration++; // map-room#3698: removeAll() below mutates attackingUnits.
     // Note: This code is also duplicated in FinishedBattle, which is not a subclass.
     attackingUnits.removeAll(units);
     // the route could be null, in the case of a unit in a territory where a sub is submerged.

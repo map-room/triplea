@@ -156,6 +156,7 @@ public class MustFightBattle extends DependentBattle
       final GameData data,
       final BattleTracker battleTracker) {
     super(battleSite, attacker, battleTracker, data);
+    unitSetGeneration++; // map-room#3698: addAll() below mutates defendingUnits.
     defendingUnits.addAll(this.battleSite.getMatches(Matches.enemyUnit(attacker)));
     maxRounds =
         battleSite.isWater()
@@ -164,6 +165,7 @@ public class MustFightBattle extends DependentBattle
   }
 
   void resetDefendingUnits(final GamePlayer attacker) {
+    unitSetGeneration++; // map-room#3698: clear()/addAll() below mutate defendingUnits.
     defendingUnits.clear();
     defendingUnits.addAll(battleSite.getMatches(Matches.enemyUnit(attacker)));
   }
@@ -175,6 +177,7 @@ public class MustFightBattle extends DependentBattle
       final Collection<Unit> bombarding,
       final GamePlayer defender,
       final Collection<TerritoryEffect> territoryEffects) {
+    unitSetGeneration++; // map-room#3698: reassigns defendingUnits/attackingUnits below.
     defendingUnits = new ArrayList<>(defending);
     attackingUnits = new ArrayList<>(attacking);
     bombardingUnits = new ArrayList<>(bombarding);
@@ -198,6 +201,8 @@ public class MustFightBattle extends DependentBattle
             ? CollectionUtils.getMatches(units, ownedBy)
             : units;
     final Territory attackingFrom = route.getTerritoryBeforeEnd();
+    unitSetGeneration++; // map-room#3698: addAll() below (and removeAll() further down) mutate
+    // attackingUnits.
     this.attackingUnits.addAll(attackingUnits);
     attackingFromMap.computeIfAbsent(attackingFrom, k -> new ArrayList<>()).addAll(attackingUnits);
     // are we amphibious
@@ -339,8 +344,52 @@ public class MustFightBattle extends DependentBattle
     return side == OFFENSE ? getAttacker() : getDefender();
   }
 
+  /**
+   * Cache key for {@link #filterUnits}: a {@link UnitBattleFilter} (one of its four static
+   * singletons — the constructor is package-private, so no other instance can exist, and identity
+   * equality is therefore correct) plus the requested sides as an order-sensitive, value-comparable
+   * list (a raw {@code Side[]} has no {@code equals}/{@code hashCode}).
+   */
+  private record FilterUnitsCacheKey(UnitBattleFilter filter, List<Side> sides) {}
+
+  // map-room#3698: filterUnits() was ~324 calls per 200-battle seeded gate, each allocating a
+  // fresh ArrayList, even when called repeatedly with the same (filter, sides) against unchanged
+  // attackingUnits/defendingUnits/attackingWaitingToDie/defendingWaitingToDie/killed. Cached,
+  // invalidated by unitSetGeneration (AbstractBattle) rather than per-field dirty tracking:
+  // every method in AbstractBattle/DependentBattle/MustFightBattle that mutates any of those five
+  // collections bumps it, unconditionally, at the top of the method (safe over-invalidation —
+  // the audited list of every bump site is in this PR's description). A generation mismatch
+  // clears the whole cache rather than evicting selectively: simpler to reason about, and cheap
+  // (the cache rarely holds more than the 8-or-so (filter, sides) combinations BattleStep code
+  // actually uses).
+  //
+  // Values are never mutated by any caller (audited: every filterUnits() call site either reads
+  // the result via .stream(), passes it as a read-only argument, or copies it into a new
+  // collection before mutating) — returning Collections.unmodifiableList makes that invariant an
+  // exception on violation rather than silent shared-cache corruption if that ever changes.
+  private final Map<FilterUnitsCacheKey, List<Unit>> filterUnitsCache = new HashMap<>();
+  private int filterUnitsCacheGeneration = -1;
+
+  /**
+   * Call-count proof hook (map-room#3698), same style as the other {@code @VisibleForTesting}
+   * fields in this class: counts real (cache-miss) recomputations only.
+   */
+  @VisibleForTesting int computeFilterUnitsCallCount = 0;
+
   @Override
   public Collection<Unit> filterUnits(final UnitBattleFilter filter, final Side... sides) {
+    if (filterUnitsCacheGeneration != unitSetGeneration) {
+      filterUnitsCache.clear();
+      filterUnitsCacheGeneration = unitSetGeneration;
+    }
+    return Collections.unmodifiableList(
+        filterUnitsCache.computeIfAbsent(
+            new FilterUnitsCacheKey(filter, List.of(sides)),
+            key -> computeFilterUnits(filter, sides)));
+  }
+
+  private List<Unit> computeFilterUnits(final UnitBattleFilter filter, final Side... sides) {
+    computeFilterUnitsCallCount++;
     final List<Unit> result = new ArrayList<>();
     for (final BattleState.UnitBattleStatus status : filter.getFilter()) {
       result.addAll(getUnits(status, sides));
@@ -415,6 +464,7 @@ public class MustFightBattle extends DependentBattle
   @Override
   public void unitsLostInPrecedingBattle(
       final Collection<Unit> units, final IDelegateBridge bridge, final boolean withdrawn) {
+    unitSetGeneration++; // map-room#3698: removeAll() below mutates attackingUnits.
     Collection<Unit> lost = new ArrayList<>(getDependentUnits(units));
     lost.addAll(CollectionUtils.intersection(units, attackingUnits));
     // if all the amphibious attacking land units are lost, then we are no longer a naval invasion
@@ -502,6 +552,7 @@ public class MustFightBattle extends DependentBattle
   @Override
   public void clearWaitingToDieAndDamagedChangesInto(
       final IDelegateBridge bridge, final BattleState.Side... sides) {
+    unitSetGeneration++; // map-room#3698: clear() below mutates attacking/defendingWaitingToDie.
     for (final Side side : sides) {
       if (side == OFFENSE) {
         Collection<Unit> killed =
@@ -554,6 +605,8 @@ public class MustFightBattle extends DependentBattle
     if (casualties.isEmpty()) {
       return;
     }
+    unitSetGeneration++; // map-room#3698: both branches below mutate attacking/defendingUnits and
+    // -WaitingToDie.
 
     if (side == DEFENSE) {
       defendingWaitingToDie.addAll(casualties);
@@ -591,6 +644,9 @@ public class MustFightBattle extends DependentBattle
       final Side side,
       final Collection<Unit> killedUnits,
       final Collection<Unit> transformedUnits) {
+    // map-room#3698: killed.addAll() below, plus both branches mutating attacking/defendingUnits
+    // and -WaitingToDie.
+    unitSetGeneration++;
     final Collection<IBattle> dependentBattles = battleTracker.getBlocked(this);
     if (!dependentBattles.isEmpty()) {
       // check dependent battles to see if there are dependent units there that need to die
@@ -702,6 +758,7 @@ public class MustFightBattle extends DependentBattle
   }
 
   private void removeDisabledUnits() {
+    unitSetGeneration++; // map-room#3698: reassigns defendingUnits/attackingUnits below.
     defendingUnits = CollectionUtils.getMatches(defendingUnits, Matches.unitIsNotDisabled());
     attackingUnits = CollectionUtils.getMatches(attackingUnits, Matches.unitIsNotDisabled());
   }
@@ -710,6 +767,7 @@ public class MustFightBattle extends DependentBattle
     if (headless) {
       return;
     }
+    unitSetGeneration++; // map-room#3698: removeAll() below mutates attackingUnits.
     // remove any air units that were once in this attack, but have now
     // moved out of the territory this is an inelegant way to handle this bug
     final Predicate<Unit> airNotInTerritory = Matches.unitIsInTerritory(battleSite).negate();
@@ -1248,6 +1306,8 @@ public class MustFightBattle extends DependentBattle
    */
   @Override
   public Collection<Unit> removeNonCombatants(final Side side) {
+    unitSetGeneration++; // map-room#3698: both branches below reassign
+    // defendingUnits/attackingUnits.
     if (side == DEFENSE) {
       final List<Unit> notRemovedDefending =
           removeNonCombatants(defendingUnits, attackingUnits, false, true);

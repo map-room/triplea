@@ -27,6 +27,10 @@ class BattleCalculatorSeededTest extends AbstractClientSettingTestCase {
   private static final int RUNS = 200;
 
   private static AggregateResults run(final GameData gameData) {
+    return run(gameData, RUNS);
+  }
+
+  private static AggregateResults run(final GameData gameData, final int runs) {
     final Territory germany = gameData.getMap().getTerritoryOrNull("Germany");
     final GamePlayer russians = russians(gameData);
     final GamePlayer germans = germans(gameData);
@@ -42,7 +46,7 @@ class BattleCalculatorSeededTest extends AbstractClientSettingTestCase {
         List.of(),
         TerritoryEffectHelper.getEffects(germany),
         false,
-        RUNS);
+        runs);
   }
 
   @Test
@@ -79,5 +83,18 @@ class BattleCalculatorSeededTest extends AbstractClientSettingTestCase {
     assertEquals(5.425, a.getAverageBattleRoundsFought(), 1e-9);
     assertEquals(3.844155844155844, a.getAverageAttackingUnitsLeftWhenAttackerWon(), 1e-9);
     assertEquals(3.2083333333333335, a.getAverageDefendingUnitsLeftWhenDefenderWon(), 1e-9);
+  }
+
+  /**
+   * A second, independent seeded N for the same scenario (map-room#3698's {@code filterUnits}
+   * memoization gate) — 2,000 trials is the N the step-1 isolated-JVM wall-clock measurement
+   * used, not just a bigger instance of the 200-run gate above. Pinned from a run on this branch
+   * before the {@code filterUnits} cache landed.
+   */
+  @Test
+  void seededCalculatorAt2000RunsIsAlsoPinned() {
+    final AggregateResults a = run(TestMapGameData.GLOBAL1940.getGameData(), 2000);
+    assertEquals(0.4065, a.getAttackerWinPercent(), 1e-9);
+    assertEquals(0.5835, a.getDefenderWinPercent(), 1e-9);
   }
 }
