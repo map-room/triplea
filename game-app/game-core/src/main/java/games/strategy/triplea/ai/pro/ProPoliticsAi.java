@@ -4,6 +4,8 @@ import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.RelationshipTracker;
 import games.strategy.engine.data.RelationshipType;
+import games.strategy.engine.data.Territory;
+import games.strategy.engine.data.Unit;
 import games.strategy.triplea.ai.AiPoliticalUtils;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
 import games.strategy.triplea.ai.pro.data.ProTerritoryManager;
@@ -154,12 +156,23 @@ class ProPoliticsAi {
       // (gamestate, seed). The default Collections.shuffle(list) overload uses an unseeded
       // ThreadLocalRandom and would leak process entropy here (map-room/map-room#2376 / #2377).
       Collections.shuffle(options, rng);
+      // Force-concentration signal (map-room/map-room#2749): with no 1-turn-reachable enemy
+      // territory, attackPercentage is 0 for a blue-water power regardless of how much idle
+      // amphib capacity it has massed, so warChance was driven purely by the round ramp. 300 is
+      // a starting tunable, not a derived constant — see #2749 for the calibration repro.
+      final double forceBonus = countIdleSeaTransportCapacity(data, player) / 300.0;
       for (final PoliticalActionAttachment action : options) {
-        final double roundFactor = (round - 1) * .05; // 0, .05, .1, .15, etc
         final double warChance =
-            roundFactor + attackPercentageMap.get(action) * (1 + 10 * roundFactor);
+            computeWarChance(round, attackPercentageMap.get(action), forceBonus);
         final double random = rng.nextDouble();
-        ProLogger.trace(enemyMap.get(action) + ", warChance=" + warChance + ", random=" + random);
+        ProLogger.trace(
+            enemyMap.get(action)
+                + ", warChance="
+                + warChance
+                + ", forceBonus="
+                + forceBonus
+                + ", random="
+                + random);
         if (random <= warChance) {
           results.add(action);
           ProLogger.debug("---Declared war on " + enemyMap.get(action));
@@ -234,6 +247,52 @@ class ProPoliticsAi {
       ProLogger.debug("Performing action: " + action);
       politicsDelegate.attemptAction(action);
     }
+  }
+
+  /**
+   * War-declaration roll probability for one enemy action. Pure function of the round ramp, that
+   * enemy's 1-turn attack reachability, and the player's idle-amphib force-concentration bonus
+   * (map-room/map-room#2749) — extracted so the formula and its calibration are testable without a
+   * live {@link GameData}/{@link ProAi}.
+   */
+  static double computeWarChance(
+      final double round, final double attackPercentage, final double forceBonus) {
+    final double roundFactor = (round - 1) * .05; // 0, .05, .1, .15, etc
+    return roundFactor + attackPercentage * (1 + 10 * roundFactor) + forceBonus;
+  }
+
+  /**
+   * Sum of unused transport capacity the player's idle sea transports could carry right now
+   * (map-room/map-room#2749). A blue-water power with its amphib fleet massed but no 1-turn-
+   * reachable enemy territory gets {@code attackPercentage=0} regardless of how much force it has
+   * concentrated, so this is the signal that pulls {@code warChance} up in that case.
+   *
+   * <p>Uses {@link Matches#unitIsSeaTransportButNotCombatSeaTransport()} rather than a broader "can
+   * transport" check: this ruleset's battleships/cruisers are {@code isCombatTransport} with their
+   * own non-trivial transport capacity, and counting those would inflate the signal with warships
+   * that aren't amphib carriers. A transport already carrying cargo is excluded — its capacity
+   * isn't "idle," it's already committed to a move. Iterates by territory (rather than {@code
+   * data.getUnits()} plus a reverse unit→territory lookup) so {@link
+   * Unit#isTransporting(Territory)} can be used directly instead of the deprecated,
+   * every-territory-scanning no-arg {@link Unit#isTransporting()}.
+   */
+  static double countIdleSeaTransportCapacity(final GameData data, final GamePlayer player) {
+    double capacity = 0;
+    for (final Territory t : data.getMap().getTerritories()) {
+      for (final Unit u : t.getUnits()) {
+        if (!u.getOwner().equals(player)) {
+          continue;
+        }
+        if (!Matches.unitIsSeaTransportButNotCombatSeaTransport().test(u)) {
+          continue;
+        }
+        if (u.isTransporting(t)) {
+          continue;
+        }
+        capacity += u.getUnitAttachment().getTransportCapacity();
+      }
+    }
+    return capacity;
   }
 
   /**
