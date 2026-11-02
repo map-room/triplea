@@ -122,7 +122,7 @@ This lets you correlate sidecar log lines with the ai-bot-worker request that tr
 
 ```bash
 # From repo root
-./gradlew :game-app:ai-sidecar:installDist
+./gradlew :ai-sidecar:installDist
 
 # Run
 game-app/ai-sidecar/build/install/ai-sidecar/bin/ai-sidecar

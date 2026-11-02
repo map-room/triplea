@@ -1,8 +1,6 @@
 package org.triplea.util;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.is;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -17,18 +15,16 @@ class LocalizeHtmlTest {
   @Test
   void testLocalizeHtml() {
     final String testHtml =
-        "<audio src='test-audio'> &lt;img src=&quot;test&quot;&gt;"
-            + "<img useless fill src=\"dir/actual-link\" alt='Alternative Text' > "
-            + "<p>  Placeholder </P> <img\n"
-            + " src='another-link.png'/><img src=\"another-link\"/>";
+"""
+<audio src='test-audio'> &lt;img src=&quot;test&quot;&gt;<img useless fill src="dir/actual-link" alt='Alternative Text' > <p>  Placeholder </P> <img
+ src='another-link.png'/><img src="another-link"/>""";
 
     final String result = LocalizeHtml.localizeImgLinksInHtml(testHtml, path);
 
     final String urlPrefix = FileUtils.toUrl(path).toString();
 
-    assertThat(
-        result,
-        is(
+    assertThat(result)
+        .isEqualTo(
             "<audio src='test-audio'> &lt;img src=&quot;test&quot;&gt;"
                 + "<img useless fill src=\""
                 + urlPrefix
@@ -39,7 +35,7 @@ class LocalizeHtmlTest {
                 + "/doc/images/another-link.png'/>"
                 + "<img src=\""
                 + urlPrefix
-                + "/doc/images/another-link\"/>"));
+                + "/doc/images/another-link\"/>");
   }
 
   @ParameterizedTest
@@ -51,6 +47,6 @@ class LocalizeHtmlTest {
         "<p>Paragraph</p>"
       })
   void testAbsoluteUrl(final String testHtml) {
-    assertThat(LocalizeHtml.localizeImgLinksInHtml(testHtml, path), is(equalTo(testHtml)));
+    assertThat(LocalizeHtml.localizeImgLinksInHtml(testHtml, path)).isEqualTo(testHtml);
   }
 }

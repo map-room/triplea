@@ -7,7 +7,7 @@ DIST="$REPO_ROOT/tools/lsp-java/build/install/lsp-java/bin/lsp-java"
 
 if [ ! -x "$DIST" ]; then
   echo "lsp-java: not built yet. Run:" >&2
-  echo "  cd $REPO_ROOT && ./gradlew :tools:lsp-java:installDist" >&2
+  echo "  cd $REPO_ROOT && ./gradlew :lsp-java:installDist" >&2
   exit 1
 fi
 

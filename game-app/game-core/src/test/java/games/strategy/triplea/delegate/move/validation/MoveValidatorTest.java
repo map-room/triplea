@@ -2,9 +2,8 @@ package games.strategy.triplea.delegate.move.validation;
 
 import static games.strategy.triplea.delegate.GameDataTestUtil.addTo;
 import static games.strategy.triplea.delegate.GameDataTestUtil.territory;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.everyItem;
-import static org.hamcrest.Matchers.in;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -250,6 +249,20 @@ class MoveValidatorTest extends AbstractDelegateTestCase {
   }
 
   @Test
+  void testGetBestRouteDoesNotThrowOnNonMoveStep() {
+    // Regression for #11319: a mouse-hover during a battle step would call
+    // getBestRoute, which in turn called isCombatMove(data) (throwing variant)
+    // and crashed with "Cannot determine combat or not: <stepName>Battle".
+    while (!gameData.getSequence().getStep().getName().equals("britishBattle")) {
+      gameData.getSequence().next();
+    }
+    final Collection<Unit> units = infantry.create(1, british);
+    westCanada.getUnitCollection().addAll(units);
+    assertDoesNotThrow(
+        () -> MoveValidator.getBestRoute(westCanada, eastCanada, gameData, british, units, false));
+  }
+
+  @Test
   void testStackingLimitOnMove() {
     MoveValidator moveValidator = new MoveValidator(gameData, true);
     Route r = new Route(westCanada, eastCanada);
@@ -257,7 +270,7 @@ class MoveValidatorTest extends AbstractDelegateTestCase {
     // 7 infantry can move, no problem.
     Collection<Unit> units = infantry.create(7, british);
     westCanada.getUnitCollection().addAll(units);
-    assertThat(units, everyItem(in(westCanada.getUnitCollection())));
+    assertThat(units).allMatch(westCanada.getUnitCollection()::contains);
     var result = moveValidator.validateMove(new MoveDescription(units, r), british);
     assertTrue(result.isMoveValid());
 

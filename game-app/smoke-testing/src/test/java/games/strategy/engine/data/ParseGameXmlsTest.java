@@ -1,8 +1,7 @@
 package games.strategy.engine.data;
 
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import com.github.npathai.hamcrestopt.OptionalMatchers;
 import games.strategy.engine.data.gameparser.GameParser;
 import games.strategy.engine.data.gameparser.XmlGameElementMapper;
 import java.io.IOException;
@@ -14,17 +13,14 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.triplea.config.product.ProductVersionReader;
 
 class ParseGameXmlsTest {
 
   @ParameterizedTest
   @MethodSource
   void parseGameFiles(final Path xmlFile) {
-    final Optional<GameData> result =
-        GameParser.parse(
-            xmlFile, new XmlGameElementMapper(), ProductVersionReader.getCurrentVersion(), false);
-    assertThat(result, OptionalMatchers.isPresent());
+    final Optional<GameData> result = GameParser.parse(xmlFile, new XmlGameElementMapper(), false);
+    assertThat(result).isPresent();
   }
 
   @SuppressWarnings("unused")

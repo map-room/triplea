@@ -1,8 +1,6 @@
 package games.strategy.engine.lobby.client.ui;
 
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.nullValue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import com.google.common.util.concurrent.Runnables;
@@ -58,12 +56,14 @@ final class LobbyGameTableModelTest {
   @Nested
   final class RemoveAndUpdateGameTest {
     private LobbyGameTableModel testObj;
+    private LobbyGameListingModel listingModel;
     @Mock private PlayerToLobbyConnection playerToLobbyConnection;
 
     @BeforeEach
     void setUp() {
-      testObj = new LobbyGameTableModel(true, playerToLobbyConnection);
-      testObj
+      listingModel = new LobbyGameListingModel(playerToLobbyConnection);
+      testObj = new LobbyGameTableModel(true, listingModel);
+      listingModel
           .getLobbyGameBroadcaster()
           .gameUpdated(
               LobbyGameListing.builder()
@@ -80,15 +80,15 @@ final class LobbyGameTableModelTest {
 
     @Test
     void singleGameInModelAfterSetup() {
-      assertThat("games are loaded on init", testObj.getRowCount(), is(1));
+      assertThat(testObj.getRowCount()).as("games are loaded on init").isEqualTo(1);
     }
 
     @Test
     void updateGame() {
       final int commentColumnIndex = testObj.getColumnIndex(LobbyGameTableModel.Column.Comments);
-      assertThat(testObj.getValueAt(0, commentColumnIndex), nullValue());
+      assertThat(testObj.getValueAt(0, commentColumnIndex)).isNull();
 
-      testObj
+      listingModel
           .getLobbyGameBroadcaster()
           .gameUpdated(
               LobbyGameListing.builder()
@@ -97,13 +97,14 @@ final class LobbyGameTableModelTest {
                   .build());
 
       waitForSwingThreads();
-      assertThat(testObj.getRowCount(), is(1));
-      assertThat(testObj.getValueAt(0, commentColumnIndex), is(gameDescription1.getComment()));
+      assertThat(testObj.getRowCount()).isEqualTo(1);
+      assertThat(testObj.getValueAt(0, commentColumnIndex))
+          .isEqualTo(gameDescription1.getComment());
     }
 
     @Test
     void updateGameAddsIfDoesNotExist() {
-      testObj
+      listingModel
           .getLobbyGameBroadcaster()
           .gameUpdated(
               LobbyGameListing.builder()
@@ -111,21 +112,21 @@ final class LobbyGameTableModelTest {
                   .lobbyGame(gameDescription1.toLobbyGame())
                   .build());
       waitForSwingThreads();
-      assertThat(testObj.getRowCount(), is(2));
+      assertThat(testObj.getRowCount()).isEqualTo(2);
     }
 
     @Test
     void removeGame() {
-      testObj.getLobbyGameBroadcaster().gameRemoved(id0);
+      listingModel.getLobbyGameBroadcaster().gameRemoved(id0);
       waitForSwingThreads();
-      assertThat(testObj.getRowCount(), is(0));
+      assertThat(testObj.getRowCount()).isEqualTo(0);
     }
 
     @Test
     void removeGameThatDoesNotExistIsIgnored() {
-      testObj.getLobbyGameBroadcaster().gameRemoved(id1);
+      listingModel.getLobbyGameBroadcaster().gameRemoved(id1);
       waitForSwingThreads();
-      assertThat(testObj.getRowCount(), is(1));
+      assertThat(testObj.getRowCount()).isEqualTo(1);
     }
   }
 

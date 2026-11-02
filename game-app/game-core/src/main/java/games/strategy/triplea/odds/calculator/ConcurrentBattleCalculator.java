@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import javax.annotation.Nullable;
@@ -52,6 +53,17 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
   // do not let multiple calculations or setting calc data happen at same time
   private final Object mutexCalcIsRunning = new Object();
 
+  private final Function<byte[], BattleCalculator> battleCalculatorFactory;
+
+  public ConcurrentBattleCalculator() {
+    this(BattleCalculator::new);
+  }
+
+  // Visible for testing; lets tests inject a factory that simulates worker construction failures.
+  ConcurrentBattleCalculator(final Function<byte[], BattleCalculator> battleCalculatorFactory) {
+    this.battleCalculatorFactory = battleCalculatorFactory;
+  }
+
   /**
    * Switch the calculator into deterministic single-worker mode (see {@link #seed} javadoc). Must
    * be called before {@link #setGameData} for the next worker construction to pick it up.
@@ -83,7 +95,14 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
     synchronized (mutexCalcIsRunning) {
       cancel();
       cancelCurrentOperation.incrementAndGet();
-      isDataSet = createWorkers(data);
+      // Reset eagerly so a thrown createWorkers leaves isDataSet=false rather than a stale true.
+      isDataSet = false;
+      try {
+        isDataSet = createWorkers(data);
+      } catch (final RuntimeException e) {
+        workers.clear();
+        throw e;
+      }
       return isDataSet;
     }
   }
@@ -105,7 +124,7 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
   // use both time and memory left to determine how many copies to make
   private static int getThreadsToUse(
       final long timeToCopyInMillis, final long memoryUsedBeforeCopy) {
-    if (timeToCopyInMillis > 20000 || MAX_THREADS == 1) {
+    if (timeToCopyInMillis > 20_000 || MAX_THREADS == 1) {
       // just use 1 thread if we took more than 20 seconds to copy
       return 1;
     }
@@ -115,7 +134,7 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
     final long memoryLeftBeforeMax =
         runtime.maxMemory() - Math.max(usedMemoryAfterCopy, memoryUsedBeforeCopy);
     // make sure it is a decent size
-    final long memoryUsedByCopy = Math.max(100000, (usedMemoryAfterCopy - memoryUsedBeforeCopy));
+    final long memoryUsedByCopy = Math.max(100_000, (usedMemoryAfterCopy - memoryUsedBeforeCopy));
     // regardless of how stupid the gc is we leave some memory left over just in case
     final int numberOfTimesWeCanCopyMax =
         Math.max(1, (int) Math.min(Integer.MAX_VALUE, (memoryLeftBeforeMax / memoryUsedByCopy)));
@@ -154,14 +173,14 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
         } else {
           // Create the first battle calc on the current thread to measure the end-to-end copy
           // time.
-          workers.add(new BattleCalculator(serializedData));
+          workers.add(battleCalculatorFactory.apply(serializedData));
           int threadsToUse = getThreadsToUse((System.currentTimeMillis() - startTime), startMemory);
           // Now, create the remaining ones in parallel.
           workers.addAll(
               IntStream.range(1, threadsToUse)
                   .parallel()
                   .filter(j -> cancelCurrentOperation.get() >= 0)
-                  .mapToObj(j -> new BattleCalculator(serializedData))
+                  .mapToObj(j -> battleCalculatorFactory.apply(serializedData))
                   .collect(Collectors.toList()));
         }
       }
@@ -190,12 +209,11 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
       final Collection<Unit> bombarding,
       final Collection<TerritoryEffect> territoryEffects,
       final boolean retreatWhenOnlyAirLeft,
-      final int runCount)
-      throws IllegalStateException {
+      final int runCount) {
     waitForGameDataReady();
     synchronized (mutexCalcIsRunning) {
       final long start = System.currentTimeMillis();
-      if (!isDataSet) {
+      if (!isDataSet || workers.isEmpty()) {
         // we could have attempted to set a new game data, while the old one was still being set,
         // causing it to abort with null data
         return new AggregateResults(0);

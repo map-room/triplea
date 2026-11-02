@@ -604,9 +604,7 @@ public final class ProTerritoryValueUtils {
                 if (distance != currentDistance) {
                   currentDistance = distance;
                   // When we reach a new distance, check if we should end the search.
-                  if (!shouldContinueSearch()) {
-                    return false;
-                  }
+                  return shouldContinueSearch();
                 }
                 return true;
               }

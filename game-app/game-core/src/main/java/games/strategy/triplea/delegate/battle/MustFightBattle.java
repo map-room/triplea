@@ -83,7 +83,6 @@ import org.triplea.java.RemoveOnNextMajorRelease;
 import org.triplea.java.collections.CollectionUtils;
 import org.triplea.java.collections.IntegerMap;
 import org.triplea.sound.SoundPath;
-import org.triplea.sound.SoundUtils;
 
 /** Handles logic for battles in which fighting actually occurs. */
 @Slf4j
@@ -107,7 +106,7 @@ public class MustFightBattle extends DependentBattle
 
   private static final long serialVersionUID = 5879502298361231540L;
 
-  private static final long MAX_ROUNDS = 10000;
+  private static final long MAX_ROUNDS = 10_000;
 
   private final Collection<Unit> attackingWaitingToDie = new ArrayList<>();
 
@@ -814,6 +813,12 @@ public class MustFightBattle extends DependentBattle
   }
 
   @Override
+  public void refreshStepStringsAndNotifyDisplay(final IDelegateBridge bridge) {
+    determineStepStrings();
+    bridge.getDisplayChannelBroadcaster().listBattleSteps(battleId, stepStrings);
+  }
+
+  @Override
   public Collection<Territory> getAttackerRetreatTerritories() {
     // TODO: when attacking with paratroopers (air + carried land), there are several bugs in
     // retreating.
@@ -1305,9 +1310,9 @@ public class MustFightBattle extends DependentBattle
               if (round > MAX_ROUNDS) {
                 // the battle appears to be in an infinite loop
                 throw new IllegalStateException(
-                    "Round 10,000 reached in a battle. Something must be wrong."
-                        + " Please report this to TripleA.\n"
-                        + " Territory: "
+"""
+Round 10,000 reached in a battle. Something must be wrong. Please report this to TripleA.
+ Territory: """
                         + battleSite
                         + " Attacker: "
                         + attacker.getName()

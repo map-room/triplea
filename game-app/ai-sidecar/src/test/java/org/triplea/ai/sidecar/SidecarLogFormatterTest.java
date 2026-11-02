@@ -60,7 +60,7 @@ class SidecarLogFormatterTest {
     final String line = formatter.format(record(Level.INFO, "payload"));
 
     // Verify ordering by checking index positions.
-    final int tsIdx = line.indexOf("T"); // ISO timestamp starts with date "T" separator
+    final int tsIdx = line.indexOf('T'); // ISO timestamp starts with date "T" separator
     final int infoIdx = line.indexOf(" INFO ");
     final int tagIdx = line.indexOf(" [ai-sidecar] ");
     final int matchIdx = line.indexOf(" match=");

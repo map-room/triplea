@@ -336,7 +336,7 @@ public final class ProMatches {
     if (!isAtWarWithAnyAxis(player)) {
       return false;
     }
-    final games.strategy.triplea.attachments.RulesAttachment ra = player.getRulesAttachment();
+    final RulesAttachment ra = player.getRulesAttachment();
     if (ra == null) {
       return false;
     }

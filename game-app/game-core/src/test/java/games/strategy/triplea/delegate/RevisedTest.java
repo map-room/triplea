@@ -11,7 +11,10 @@ import static games.strategy.triplea.delegate.GameDataTestUtil.battleship;
 import static games.strategy.triplea.delegate.GameDataTestUtil.bidPlaceDelegate;
 import static games.strategy.triplea.delegate.GameDataTestUtil.bomber;
 import static games.strategy.triplea.delegate.GameDataTestUtil.british;
+import static games.strategy.triplea.delegate.GameDataTestUtil.carrier;
 import static games.strategy.triplea.delegate.GameDataTestUtil.destroyer;
+import static games.strategy.triplea.delegate.GameDataTestUtil.factory;
+import static games.strategy.triplea.delegate.GameDataTestUtil.fighter;
 import static games.strategy.triplea.delegate.GameDataTestUtil.germans;
 import static games.strategy.triplea.delegate.GameDataTestUtil.getIndex;
 import static games.strategy.triplea.delegate.GameDataTestUtil.infantry;
@@ -79,11 +82,14 @@ import games.strategy.triplea.delegate.move.validation.MoveValidator;
 import games.strategy.triplea.settings.AbstractClientSettingTestCase;
 import games.strategy.triplea.util.TransportUtils;
 import games.strategy.triplea.xml.TestMapGameData;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.stubbing.Answer;
 import org.triplea.java.collections.CollectionUtils;
@@ -855,147 +861,121 @@ class RevisedTest extends AbstractClientSettingTestCase {
     assertEquals(Constants.PLAYER_NAME_AMERICANS, endOwner);
   }
 
-  @Test
-  void testStratBombCasualties() {
-    final Territory germany = gameData.getMap().getTerritoryOrNull("Germany");
-    final Territory uk = gameData.getMap().getTerritoryOrNull("United Kingdom");
-    final GamePlayer germans = germans(gameData);
-    final GamePlayer british = british(gameData);
-    final BattleTracker tracker = new BattleTracker();
-    final IBattle battle = new StrategicBombingRaidBattle(germany, gameData, british, tracker);
-    final List<Unit> bombers = uk.getUnitCollection().getMatches(Matches.unitIsStrategicBomber());
-    addTo(germany, bombers);
-    battle.addAttackChange(
-        gameData.getMap().getRouteOrElseThrow(uk, germany, it -> true), bombers, null);
-    tracker
-        .getBattleRecords()
-        .addBattle(british, battle.getBattleId(), germany, battle.getBattleType());
-    final IDelegateBridge bridge = newDelegateBridge(british);
-    // aa guns rolls 0 and hits
-    whenGetRandom(bridge).thenAnswer(withValues(0));
-    final int pusBeforeRaid =
-        germans
-            .getResources()
-            .getQuantity(gameData.getResourceList().getResourceOrThrow(Constants.PUS));
-    battle.fight(bridge);
-    final int pusAfterRaid =
-        germans
-            .getResources()
-            .getQuantity(gameData.getResourceList().getResourceOrThrow(Constants.PUS));
-    assertEquals(pusBeforeRaid, pusAfterRaid);
-    assertEquals(0, germany.getUnitCollection().getMatches(Matches.unitIsOwnedBy(british)).size());
-    thenGetRandomShouldHaveBeenCalled(bridge, times(1));
-  }
+  @Nested
+  class StrategicBombingRaidTests {
 
-  @Test
-  void testStratBombCasualtiesLowLuck() {
-    makeGameLowLuck(gameData);
-    final Territory germany = gameData.getMap().getTerritoryOrNull("Germany");
-    final Territory uk = gameData.getMap().getTerritoryOrNull("United Kingdom");
-    final GamePlayer germans = GameDataTestUtil.germans(gameData);
-    final GamePlayer british = GameDataTestUtil.british(gameData);
-    final BattleTracker tracker = new BattleTracker();
-    final IBattle battle = new StrategicBombingRaidBattle(germany, gameData, british, tracker);
-    final List<Unit> bombers = bomber(gameData).create(2, british);
-    addTo(germany, bombers);
-    battle.addAttackChange(
-        gameData.getMap().getRouteOrElseThrow(uk, germany, it -> true), bombers, null);
-    tracker
-        .getBattleRecords()
-        .addBattle(british, battle.getBattleId(), germany, battle.getBattleType());
-    final IDelegateBridge bridge = newDelegateBridge(british);
-    // should be exactly 3 rolls total. would be exactly 2 rolls if the number of units being shot
-    // at = max dice side of
-    // the AA gun, because the casualty selection roll would not happen in LL
-    // first 0 is the AA gun rolling 1@2 and getting a 1, which is a hit
-    // second 0 is the LL AA casualty selection randomly picking the first unit to die
-    // third 0 is the single remaining bomber dealing 1 damage to the enemy's PUs
-    whenGetRandom(bridge)
-        .thenAnswer(withValues(0))
-        .thenAnswer(withValues(0))
-        .thenAnswer(withValues(0));
-    final int pusBeforeRaid =
-        germans
-            .getResources()
-            .getQuantity(gameData.getResourceList().getResourceOrThrow(Constants.PUS));
-    battle.fight(bridge);
-    final int pusAfterRaid =
-        germans
-            .getResources()
-            .getQuantity(gameData.getResourceList().getResourceOrThrow(Constants.PUS));
-    assertEquals(pusBeforeRaid - 1, pusAfterRaid);
-    assertEquals(1, germany.getUnitCollection().getMatches(Matches.unitIsOwnedBy(british)).size());
-    thenGetRandomShouldHaveBeenCalled(bridge, times(3));
-  }
+    private Territory germany;
+    private Territory uk;
+    private GamePlayer germans;
+    private GamePlayer british;
+    private BattleTracker tracker;
+    private IBattle battle;
 
-  @Test
-  void testStratBombCasualtiesLowLuckManyBombers() {
-    makeGameLowLuck(gameData);
-    final Territory germany = gameData.getMap().getTerritoryOrNull("Germany");
-    final Territory uk = gameData.getMap().getTerritoryOrNull("United Kingdom");
-    final GamePlayer germans = GameDataTestUtil.germans(gameData);
-    final GamePlayer british = GameDataTestUtil.british(gameData);
-    final BattleTracker tracker = new BattleTracker();
-    final IBattle battle = new StrategicBombingRaidBattle(germany, gameData, british, tracker);
-    final List<Unit> bombers = bomber(gameData).create(7, british);
-    addTo(germany, bombers);
-    battle.addAttackChange(
-        gameData.getMap().getRouteOrElseThrow(uk, germany, it -> true), bombers, null);
-    tracker
-        .getBattleRecords()
-        .addBattle(british, battle.getBattleId(), germany, battle.getBattleType());
-    final IDelegateBridge bridge = newDelegateBridge(british);
-    // aa guns rolls 0 and hits, next 5 dice are for the bombing raid cost for the surviving bombers
-    whenGetRandom(bridge).thenAnswer(withValues(0)).thenAnswer(withValues(0, 0, 0, 0, 0));
-    final int pusBeforeRaid =
-        germans
-            .getResources()
-            .getQuantity(gameData.getResourceList().getResourceOrThrow(Constants.PUS));
-    battle.fight(bridge);
-    final int pusAfterRaid =
-        germans
-            .getResources()
-            .getQuantity(gameData.getResourceList().getResourceOrThrow(Constants.PUS));
-    assertEquals(pusBeforeRaid - 5, pusAfterRaid);
-    // 2 bombers get hit
-    assertEquals(5, germany.getUnitCollection().getMatches(Matches.unitIsOwnedBy(british)).size());
-    thenGetRandomShouldHaveBeenCalled(bridge, times(2));
-  }
+    @BeforeEach
+    void setUp() {
+      germany = gameData.getMap().getTerritoryOrNull("Germany");
+      uk = gameData.getMap().getTerritoryOrNull("United Kingdom");
+      germans = germans(gameData);
+      british = british(gameData);
+      tracker = new BattleTracker();
+      germany.getUnitCollection().clear();
+      addTo(germany, aaGun(gameData).create(1, germans));
+      addTo(germany, factory(gameData).create(1, germans));
+      battle = new StrategicBombingRaidBattle(germany, gameData, british, tracker);
+    }
 
-  @Test
-  void testStratBombRaidWithHeavyBombers() {
-    final Territory germany = gameData.getMap().getTerritoryOrNull("Germany");
-    final Territory uk = gameData.getMap().getTerritoryOrNull("United Kingdom");
-    final GamePlayer germans = GameDataTestUtil.germans(gameData);
-    final GamePlayer british = GameDataTestUtil.british(gameData);
-    final BattleTracker tracker = new BattleTracker();
-    final IBattle battle = new StrategicBombingRaidBattle(germany, gameData, british, tracker);
-    battle.addAttackChange(
-        gameData.getMap().getRouteOrElseThrow(uk, germany, it -> true),
-        uk.getUnitCollection().getMatches(Matches.unitIsStrategicBomber()),
-        null);
-    addTo(germany, uk.getUnitCollection().getMatches(Matches.unitIsStrategicBomber()));
-    tracker
-        .getBattleRecords()
-        .addBattle(british, battle.getBattleId(), germany, battle.getBattleType());
-    final IDelegateBridge bridge = newDelegateBridge(british);
-    TechTracker.addAdvance(
-        british,
-        bridge,
-        TechAdvance.findAdvance(
-            TechAdvance.TECH_PROPERTY_HEAVY_BOMBER, gameData.getTechnologyFrontier(), british));
-    // aa guns rolls 3, misses, bomber rolls 2 dice at 3
-    whenGetRandom(bridge).thenAnswer(withValues(3)).thenAnswer(withValues(2, 2));
-    final int pusBeforeRaid =
-        germans
-            .getResources()
-            .getQuantity(gameData.getResourceList().getResourceOrThrow(Constants.PUS));
-    battle.fight(bridge);
-    final int pusAfterRaid =
-        germans
-            .getResources()
-            .getQuantity(gameData.getResourceList().getResourceOrThrow(Constants.PUS));
-    assertEquals(pusBeforeRaid - 6, pusAfterRaid);
+    @Test
+    void testStratBombCasualties() {
+      final List<Unit> bombers = bomber(gameData).create(1, british);
+      final IDelegateBridge bridge = addBombersAndCreateBridge(bombers);
+      // AA gun rolls 0 and hits
+      whenGetRandom(bridge).thenAnswer(withValues(0));
+      final int pusBeforeRaid = getGermanPUs();
+      battle.fight(bridge);
+      final int pusAfterRaid = getGermanPUs();
+      assertEquals(pusBeforeRaid, pusAfterRaid);
+      assertEquals(0, getBritishBombersInGermany());
+      thenGetRandomShouldHaveBeenCalled(bridge, times(1));
+    }
+
+    @Test
+    void testStratBombCasualtiesLowLuck() {
+      makeGameLowLuck(gameData);
+      final List<Unit> bombers = bomber(gameData).create(2, british);
+      final IDelegateBridge bridge = addBombersAndCreateBridge(bombers);
+      /*
+      First 0 is the AA gun rolling 1@2 and getting a 1, which is a hit.
+      Second 0 is the Low Luck AA casualty selection randomly picking the first unit to die.
+      Third 0 is the single remaining bomber dealing 1 damage to the enemy's PUs.
+      */
+      whenGetRandom(bridge)
+          .thenAnswer(withValues(0))
+          .thenAnswer(withValues(0))
+          .thenAnswer(withValues(0));
+      final int pusBeforeRaid = getGermanPUs();
+      battle.fight(bridge);
+      final int pusAfterRaid = getGermanPUs();
+      assertEquals(pusBeforeRaid - 1, pusAfterRaid);
+      assertEquals(1, getBritishBombersInGermany());
+      thenGetRandomShouldHaveBeenCalled(bridge, times(3));
+    }
+
+    @Test
+    void testStratBombCasualtiesLowLuckManyBombers() {
+      makeGameLowLuck(gameData);
+      final List<Unit> bombers = bomber(gameData).create(7, british);
+      final IDelegateBridge bridge = addBombersAndCreateBridge(bombers);
+      // AA gun rolls 0 and hits, killing two bombers. Next five dice are for the bombing raid cost
+      // for the surviving bombers.
+      whenGetRandom(bridge).thenAnswer(withValues(0)).thenAnswer(withValues(0, 0, 0, 0, 0));
+      final int pusBeforeRaid = getGermanPUs();
+      battle.fight(bridge);
+      final int pusAfterRaid = getGermanPUs();
+      assertEquals(pusBeforeRaid - 5, pusAfterRaid);
+      // two bombers get hit
+      assertEquals(5, getBritishBombersInGermany());
+      thenGetRandomShouldHaveBeenCalled(bridge, times(2));
+    }
+
+    @Test
+    void testStratBombRaidWithHeavyBombers() {
+      final List<Unit> bombers = bomber(gameData).create(1, british);
+      final IDelegateBridge bridge = addBombersAndCreateBridge(bombers);
+      TechTracker.addAdvance(
+          british,
+          bridge,
+          TechAdvance.findAdvance(
+              TechAdvance.TECH_PROPERTY_HEAVY_BOMBER, gameData.getTechnologyFrontier(), british));
+      // This setting ensures the test covers the dice-rolling behavior affected by issue #14914.
+      gameData.getProperties().set(Constants.USE_BOMBING_MAX_DICE_SIDES_AND_BONUS, Boolean.TRUE);
+      // AA gun rolls 3, misses. Heavy bomber rolls two dice: 1 and 4 (i.e. "2" and "5").
+      whenGetRandom(bridge).thenAnswer(withValues(3)).thenAnswer(withValues(1, 4));
+      final int pusBeforeRaid = getGermanPUs();
+      battle.fight(bridge);
+      final int pusAfterRaid = getGermanPUs();
+      // Total PU damage should be: 2 + 5 = 7.
+      assertEquals(pusBeforeRaid - 7, pusAfterRaid);
+    }
+
+    private IDelegateBridge addBombersAndCreateBridge(List<Unit> bombers) {
+      addTo(germany, bombers);
+      battle.addAttackChange(
+          gameData.getMap().getRouteOrElseThrow(uk, germany, it -> true), bombers, null);
+      tracker
+          .getBattleRecords()
+          .addBattle(british, battle.getBattleId(), germany, battle.getBattleType());
+      return newDelegateBridge(british);
+    }
+
+    private int getGermanPUs() {
+      return germans
+          .getResources()
+          .getQuantity(gameData.getResourceList().getResourceOrThrow(Constants.PUS));
+    }
+
+    private int getBritishBombersInGermany() {
+      return germany.getUnitCollection().getMatches(Matches.unitIsOwnedBy(british)).size();
+    }
   }
 
   @Test
@@ -1589,5 +1569,146 @@ class RevisedTest extends AbstractClientSettingTestCase {
   void testTransportIsTransport() {
     assertTrue(Matches.unitIsSeaTransport().test(transport(gameData).create(british(gameData))));
     assertFalse(Matches.unitIsSeaTransport().test(infantry(gameData).create(british(gameData))));
+  }
+
+  /**
+   * Regression test for issue #14372: edit-mode relocating every unit out of a territory that has a
+   * pending battle must not leave the original battle behind. Otherwise, when the battle phase
+   * starts, the stale battle's cached attacker/defender unit lists no longer reflect what's in the
+   * territory and a zombie battle shows up alongside the correct one at the destination.
+   */
+  @Test
+  void testEditModeMovedUnitsDoNotLeaveStaleBattle() {
+    final GamePlayer british = british(gameData);
+    final GamePlayer germans = germans(gameData);
+    final Territory sz7 = territory("7 Sea Zone", gameData);
+    final Territory sz8 = territory("8 Sea Zone", gameData);
+    final Territory sz9 = territory("9 Sea Zone", gameData);
+
+    // British 3 subs in sz7; Germans carrier + fighter in sz8; sz9 cleared.
+    removeFrom(sz7, sz7.getUnits());
+    removeFrom(sz8, sz8.getUnits());
+    removeFrom(sz9, sz9.getUnits());
+    gameData.performChange(ChangeFactory.addUnits(sz7, submarine(gameData).create(3, british)));
+    gameData.performChange(ChangeFactory.addUnits(sz8, carrier(gameData).create(1, germans)));
+    gameData.performChange(ChangeFactory.addUnits(sz8, fighter(gameData).create(1, germans)));
+
+    final IDelegateBridge bridge = newDelegateBridge(british);
+    advanceToStep(bridge, "CombatMove");
+    final MoveDelegate moveDelegate = moveDelegate(gameData);
+    moveDelegate.setDelegateBridgeAndPlayer(bridge);
+    moveDelegate.start();
+
+    // Combat-move the British subs into sz8 — this registers a pending battle there.
+    move(sz7.getUnits(), new Route(sz7, sz8));
+    final BattleTracker tracker = AbstractMoveDelegate.getBattleTracker(gameData);
+    assertNotNull(
+        tracker.getPendingBattle(sz8, BattleType.NORMAL),
+        "combat move should set up a pending battle in sz8");
+
+    // Simulate edit-mode: relocate every unit in sz8 to sz9. EditDelegate.removeUnits/addUnits
+    // apply raw ChangeFactory changes that don't touch the BattleTracker, which is the bug
+    // path in #14372.
+    final Collection<Unit> unitsInSz8 = new ArrayList<>(sz8.getUnits());
+    gameData.performChange(ChangeFactory.removeUnits(sz8, unitsInSz8));
+    gameData.performChange(ChangeFactory.addUnits(sz9, unitsInSz8));
+
+    moveDelegate.end();
+
+    // Run the battle-phase initialization. Going through the full BattleDelegate.start() would
+    // auto-fight the (only) battle and pull dice into the picture; we just want to inspect the
+    // battle-tracker state after setup, so call doInitialize directly.
+    BattleDelegate.doInitialize(tracker, bridge);
+
+    // The stale battle at sz8 must be gone.
+    assertNull(
+        tracker.getPendingBattle(sz8, BattleType.NORMAL),
+        "battle at the original (now empty) site must be cleaned up");
+    // A correctly-sided battle must now exist at sz9.
+    final IBattle battleAtSz9 = tracker.getPendingBattle(sz9, BattleType.NORMAL);
+    assertNotNull(battleAtSz9, "a battle should be set up at the destination");
+    assertEquals(british, battleAtSz9.getAttacker());
+    assertEquals(3, battleAtSz9.getAttackingUnits().size(), "3 British subs as attackers");
+    assertEquals(2, battleAtSz9.getDefendingUnits().size(), "1 carrier + 1 fighter as defenders");
+    assertTrue(
+        battleAtSz9.getAttackingUnits().stream().allMatch(u -> u.getOwner().equals(british)),
+        "attackers are British");
+    assertTrue(
+        battleAtSz9.getDefendingUnits().stream().allMatch(u -> u.getOwner().equals(germans)),
+        "defenders are Germans");
+  }
+
+  /**
+   * Variant of #14372 reproducing what the bug reporter saw with "one unit type at a time" edit
+   * moves and a carrier + transport + fighter defender mix. The carrier and transport are sea units
+   * that get moved as separate edit operations from the fighter (air); we want to be sure the
+   * battle's attacker/defender split stays correct after the unit-by-type relocation.
+   */
+  @Test
+  void testEditModeOneUnitTypeAtATime_mixedSeaAndAirDefenders() {
+    final GamePlayer british = british(gameData);
+    final GamePlayer germans = germans(gameData);
+    final Territory sz7 = territory("7 Sea Zone", gameData);
+    final Territory sz8 = territory("8 Sea Zone", gameData);
+    final Territory sz9 = territory("9 Sea Zone", gameData);
+
+    removeFrom(sz7, sz7.getUnits());
+    removeFrom(sz8, sz8.getUnits());
+    removeFrom(sz9, sz9.getUnits());
+    gameData.performChange(ChangeFactory.addUnits(sz7, submarine(gameData).create(3, british)));
+    gameData.performChange(ChangeFactory.addUnits(sz8, carrier(gameData).create(1, germans)));
+    gameData.performChange(ChangeFactory.addUnits(sz8, transport(gameData).create(1, germans)));
+    gameData.performChange(ChangeFactory.addUnits(sz8, fighter(gameData).create(1, germans)));
+
+    final IDelegateBridge bridge = newDelegateBridge(british);
+    advanceToStep(bridge, "CombatMove");
+    final MoveDelegate moveDelegate = moveDelegate(gameData);
+    moveDelegate.setDelegateBridgeAndPlayer(bridge);
+    moveDelegate.start();
+
+    move(sz7.getUnits(), new Route(sz7, sz8));
+    final BattleTracker tracker = AbstractMoveDelegate.getBattleTracker(gameData);
+    assertNotNull(tracker.getPendingBattle(sz8, BattleType.NORMAL));
+
+    // Edit-move one unit type at a time, sz8 -> sz9. Each operation is a separate
+    // remove + add (mirroring what EditDelegate would emit).
+    final Collection<Unit> subs =
+        new ArrayList<>(sz8.getUnitCollection().getMatches(Matches.unitIsOwnedBy(british)));
+    gameData.performChange(ChangeFactory.removeUnits(sz8, subs));
+    gameData.performChange(ChangeFactory.addUnits(sz9, subs));
+
+    final Collection<Unit> carriers =
+        new ArrayList<>(sz8.getUnitCollection().getMatches(Matches.unitIsCarrier()));
+    gameData.performChange(ChangeFactory.removeUnits(sz8, carriers));
+    gameData.performChange(ChangeFactory.addUnits(sz9, carriers));
+
+    final Collection<Unit> transports =
+        new ArrayList<>(sz8.getUnitCollection().getMatches(Matches.unitIsSeaTransport()));
+    gameData.performChange(ChangeFactory.removeUnits(sz8, transports));
+    gameData.performChange(ChangeFactory.addUnits(sz9, transports));
+
+    final Collection<Unit> fighters =
+        new ArrayList<>(sz8.getUnitCollection().getMatches(Matches.unitIsAir()));
+    gameData.performChange(ChangeFactory.removeUnits(sz8, fighters));
+    gameData.performChange(ChangeFactory.addUnits(sz9, fighters));
+
+    moveDelegate.end();
+    BattleDelegate.doInitialize(tracker, bridge);
+
+    assertNull(tracker.getPendingBattle(sz8, BattleType.NORMAL));
+    final IBattle battleAtSz9 = tracker.getPendingBattle(sz9, BattleType.NORMAL);
+    assertNotNull(battleAtSz9);
+    assertEquals(british, battleAtSz9.getAttacker());
+    assertEquals(3, battleAtSz9.getAttackingUnits().size(), "3 British subs as attackers");
+    assertEquals(
+        3,
+        battleAtSz9.getDefendingUnits().size(),
+        "carrier + transport + fighter all as defenders");
+    assertTrue(
+        battleAtSz9.getAttackingUnits().stream().allMatch(u -> u.getOwner().equals(british)),
+        "attackers are British");
+    assertTrue(
+        battleAtSz9.getDefendingUnits().stream().allMatch(u -> u.getOwner().equals(germans)),
+        "defenders are Germans");
   }
 }

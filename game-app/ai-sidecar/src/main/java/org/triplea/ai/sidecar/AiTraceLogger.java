@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -125,7 +126,7 @@ public final class AiTraceLogger {
       final boolean isBombing,
       final Map<UUID, String> uuidToWireId) {
     final Collection<Unit> allUnits = move.getUnits();
-    // Air units dispatched from carriers yield route.isUnload() == true on the TripleA side, but
+    // Air units dispatched from carriers yield route.isSeaUnload() == true on the TripleA side, but
     // the bot-worker translates them to plain moveUnit calls (not unloadFromTransport). Label the
     // sidecar trace as "air-move" so the sidecar → bot-worker correspondence reads cleanly.
     final boolean allAir =
@@ -133,9 +134,9 @@ public final class AiTraceLogger {
     final String kind;
     if (isBombing) {
       kind = "sbr";
-    } else if (move.getRoute().isLoad()) {
+    } else if (move.getRoute().isSeaLoad()) {
       kind = "load";
-    } else if (move.getRoute().isUnload()) {
+    } else if (move.getRoute().isSeaUnload()) {
       kind = allAir ? "air-move" : "unload";
     } else {
       kind = "move";
@@ -485,18 +486,18 @@ public final class AiTraceLogger {
 
   private static String resolveTransportId(
       final MoveDescription move, final Map<UUID, String> uuidToWireId) {
-    if (move.getRoute().isLoad()) {
+    if (move.getRoute().isSeaLoad()) {
       return move.getUnitsToSeaTransports().values().stream()
           .findFirst()
           .map(t -> uuidToWireId.get(t.getId()))
           .map(id -> id == null ? "null" : id)
           .orElse("null");
     }
-    if (move.getRoute().isUnload()) {
+    if (move.getRoute().isSeaUnload()) {
       return move.getUnits().stream()
           .filter(u -> u.getUnitAttachment().getTransportCapacity() > 0)
           .map(u -> uuidToWireId.get(u.getId()))
-          .filter(id -> id != null)
+          .filter(Objects::nonNull)
           .findFirst()
           .orElse("null");
     }

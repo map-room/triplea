@@ -17,6 +17,7 @@ import games.strategy.triplea.delegate.battle.BattleActions;
 import games.strategy.triplea.delegate.battle.BattleState;
 import games.strategy.triplea.delegate.battle.IBattle;
 import games.strategy.triplea.delegate.battle.MustFightBattle;
+import games.strategy.triplea.delegate.battle.SoundUtils;
 import games.strategy.triplea.delegate.battle.steps.BattleStep;
 import games.strategy.triplea.delegate.battle.steps.RetreatChecks;
 import games.strategy.triplea.settings.ClientSetting;
@@ -25,7 +26,6 @@ import java.util.List;
 import java.util.Optional;
 import lombok.AllArgsConstructor;
 import org.triplea.java.RemoveOnNextMajorRelease;
-import org.triplea.sound.SoundUtils;
 
 @AllArgsConstructor
 public class OffensiveGeneralRetreat implements BattleStep {
@@ -126,6 +126,11 @@ public class OffensiveGeneralRetreat implements BattleStep {
       final Collection<Unit> retreatUnits = retreater.getRetreatUnits();
       final Collection<Territory> possibleRetreatSites =
           retreater.getPossibleRetreatSites(retreatUnits);
+      // The retreat territories of the battle can all be unusable for the units that would
+      // retreat (e.g. land territories for sea units, or blocked by a territory effect).
+      if (possibleRetreatSites.isEmpty()) {
+        return;
+      }
       battleActions
           .queryRetreatTerritory(
               battleState,

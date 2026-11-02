@@ -130,7 +130,7 @@ public abstract class AbstractProAi extends AbstractAi {
     calc.stop();
   }
 
-  private void initializeData() {
+  public void initializeData() {
     proData.initialize(this);
   }
 
@@ -434,9 +434,7 @@ public abstract class AbstractProAi extends AbstractAi {
    * stored map — exactly the same path taken in a normal in-process turn.
    */
   public void invokeCombatMoveForSidecar(
-      final games.strategy.triplea.delegate.remote.IMoveDelegate delegate,
-      final GameData data,
-      final GamePlayer player) {
+      final IMoveDelegate delegate, final GameData data, final GamePlayer player) {
     move(/* nonCombat= */ false, delegate, data, player);
   }
 
@@ -483,9 +481,7 @@ public abstract class AbstractProAi extends AbstractAi {
    * intentionally preserved for the subsequent place phase.
    */
   public void invokeNonCombatMoveForSidecar(
-      final games.strategy.triplea.delegate.remote.IMoveDelegate delegate,
-      final GameData data,
-      final GamePlayer player) {
+      final IMoveDelegate delegate, final GameData data, final GamePlayer player) {
     move(/* nonCombat= */ true, delegate, data, player);
   }
 
@@ -912,36 +908,42 @@ public abstract class AbstractProAi extends AbstractAi {
       final BattleDelegate delegate = data.getBattleDelegate();
       final IBattle battle = delegate.getBattleTracker().getPendingBattle(battleId);
 
-      // If defender and could lose battle then don't consider unit cost as just trying to survive
-      boolean needToCheck = true;
-      final boolean isAttacker = player.equals(battle.getAttacker());
-      if (!isAttacker) {
-        final Collection<Unit> attackers = battle.getAttackingUnits();
-        final Collection<Unit> defenders = new ArrayList<>(battle.getDefendingUnits());
-        defenders.removeAll(defaultCasualties.getKilled());
-        final double strengthDifference =
-            ProBattleUtils.estimateStrengthDifference(battleSite, attackers, defenders);
-        int minStrengthDifference = 60;
-        if (!Properties.getLowLuck(data.getProperties())) {
-          minStrengthDifference = 55;
+      // AA fire during movement has no associated pending battle; fall back to
+      // simple cost-based sorting since no attacker/defender context is available.
+      if (battle == null) {
+        selectFromSorted.sort(ProPurchaseUtils.getCostComparator(proData));
+      } else {
+        // If defender and could lose battle then don't consider unit cost as just trying to survive
+        boolean needToCheck = true;
+        final boolean isAttacker = player.equals(battle.getAttacker());
+        if (!isAttacker) {
+          final Collection<Unit> attackers = battle.getAttackingUnits();
+          final Collection<Unit> defenders = new ArrayList<>(battle.getDefendingUnits());
+          defenders.removeAll(defaultCasualties.getKilled());
+          final double strengthDifference =
+              ProBattleUtils.estimateStrengthDifference(battleSite, attackers, defenders);
+          int minStrengthDifference = 60;
+          if (!Properties.getLowLuck(data.getProperties())) {
+            minStrengthDifference = 55;
+          }
+          if (strengthDifference > minStrengthDifference) {
+            needToCheck = false;
+          }
         }
-        if (strengthDifference > minStrengthDifference) {
-          needToCheck = false;
-        }
-      }
 
-      // Use bubble sort to save expensive units
-      while (needToCheck) {
-        needToCheck = false;
-        for (int i = 0; i < selectFromSorted.size() - 1; i++) {
-          final Unit unit1 = selectFromSorted.get(i);
-          final Unit unit2 = selectFromSorted.get(i + 1);
-          final double unitCost1 = ProPurchaseUtils.getCost(proData, unit1);
-          final double unitCost2 = ProPurchaseUtils.getCost(proData, unit2);
-          if (unitCost1 > 1.5 * unitCost2) {
-            selectFromSorted.set(i, unit2);
-            selectFromSorted.set(i + 1, unit1);
-            needToCheck = true;
+        // Use bubble sort to save expensive units
+        while (needToCheck) {
+          needToCheck = false;
+          for (int i = 0; i < selectFromSorted.size() - 1; i++) {
+            final Unit unit1 = selectFromSorted.get(i);
+            final Unit unit2 = selectFromSorted.get(i + 1);
+            final double unitCost1 = ProPurchaseUtils.getCost(proData, unit1);
+            final double unitCost2 = ProPurchaseUtils.getCost(proData, unit2);
+            if (unitCost1 > 1.5 * unitCost2) {
+              selectFromSorted.set(i, unit2);
+              selectFromSorted.set(i + 1, unit1);
+              needToCheck = true;
+            }
           }
         }
       }

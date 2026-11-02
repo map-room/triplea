@@ -147,11 +147,15 @@ public class MapPanel extends ImageScrollerLargeView {
                   .getUnitIconProperties()
                   .testIfConditionsHaveChanged(gameData)) {
             tileManager.resetTiles(gameData, uiContext.getMapData());
-            SwingUtilities.invokeLater(
-                () -> {
-                  recreateTiles(gameData, uiContext);
-                  repaint();
-                });
+            if (ClientSetting.doNotRedrawMap.getValue().orElse(false)) {
+              SwingUtilities.invokeLater(MapPanel.this::repaint);
+            } else {
+              SwingUtilities.invokeLater(
+                  () -> {
+                    recreateTiles(gameData, uiContext);
+                    repaint();
+                  });
+            }
           }
         }
 
@@ -501,19 +505,19 @@ public class MapPanel extends ImageScrollerLargeView {
   }
 
   private void notifyTerritorySelected(final Territory t, final MouseDetails me) {
-    for (final MapSelectionListener msl : mapSelectionListeners) {
+    for (final MapSelectionListener msl : new ArrayList<>(mapSelectionListeners)) {
       msl.territorySelected(t, me);
     }
   }
 
   private void notifyMouseMoved(final Territory t, final MouseDetails me) {
-    for (final MapSelectionListener msl : mapSelectionListeners) {
+    for (final MapSelectionListener msl : new ArrayList<>(mapSelectionListeners)) {
       msl.mouseMoved(t, me);
     }
   }
 
   private void notifyMouseEntered(final Territory t) {
-    for (final MapSelectionListener msl : mapSelectionListeners) {
+    for (final MapSelectionListener msl : new ArrayList<>(mapSelectionListeners)) {
       msl.mouseEntered(t);
     }
   }
@@ -528,13 +532,13 @@ public class MapPanel extends ImageScrollerLargeView {
 
   private void notifyUnitSelected(
       final List<Unit> units, @Nullable final Territory territory, final MouseDetails me) {
-    for (final UnitSelectionListener listener : unitSelectionListeners) {
+    for (final UnitSelectionListener listener : new ArrayList<>(unitSelectionListeners)) {
       listener.unitsSelected(units, territory, me);
     }
   }
 
   private void notifyMouseEnterUnit(final List<Unit> units, final Territory t) {
-    for (final MouseOverUnitListener listener : mouseOverUnitsListeners) {
+    for (final MouseOverUnitListener listener : new ArrayList<>(mouseOverUnitsListeners)) {
       listener.mouseEnter(units, t);
     }
   }
@@ -673,7 +677,10 @@ public class MapPanel extends ImageScrollerLargeView {
       final Collection<Tile> tileList = tileManager.getTiles(bounds);
       for (final Tile tile : tileList) {
         tile.drawImage(gameData, uiContext.getMapData());
-        g2d.drawImage(tile.getImage(), tile.getBounds().x, tile.getBounds().y, this);
+        final Image tileImage = tile.getImage();
+        if (tileImage != null) {
+          g2d.drawImage(tileImage, tile.getBounds().x, tile.getBounds().y, this);
+        }
       }
     }
   }
@@ -835,7 +842,10 @@ public class MapPanel extends ImageScrollerLargeView {
       } else {
         images.add(tile);
       }
-      g.drawImage(tile.getImage(), tile.getBounds().x, tile.getBounds().y, this);
+      final Image tileImage = tile.getImage();
+      if (tileImage != null) {
+        g.drawImage(tileImage, tile.getBounds().x, tile.getBounds().y, this);
+      }
     }
     g.translate(bounds.getX(), bounds.getY());
   }
@@ -936,7 +946,7 @@ public class MapPanel extends ImageScrollerLargeView {
    * specified collection of units.
    */
   private static Range<BigDecimal> getMinAndMaxMovementLeft(final Collection<Unit> units) {
-    BigDecimal min = new BigDecimal(100000);
+    BigDecimal min = new BigDecimal(100_000);
     BigDecimal max = BigDecimal.ZERO;
     for (final Unit unit : units) {
       final BigDecimal left = unit.getMovementLeft();

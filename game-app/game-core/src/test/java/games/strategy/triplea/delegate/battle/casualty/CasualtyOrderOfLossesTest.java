@@ -2,9 +2,7 @@ package games.strategy.triplea.delegate.battle.casualty;
 
 import static games.strategy.triplea.Constants.UNIT_ATTACHMENT_NAME;
 import static games.strategy.triplea.delegate.battle.steps.MockGameData.givenGameData;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.not;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -47,7 +45,7 @@ class CasualtyOrderOfLossesTest {
     final UnitType typeVeteranFootmen = new UnitType("Veteran-Footmen", gameData);
     typeVeteranFootmen.addAttachment(UNIT_ATTACHMENT_NAME, unitAttachment);
 
-    final String key1 =
+    final CasualtyOrderOfLosses.OolCacheKey key1 =
         CasualtyOrderOfLosses.computeOolCacheKey(
             withFakeParameters(),
             List.of(
@@ -55,7 +53,7 @@ class CasualtyOrderOfLossesTest {
                 CasualtyOrderOfLosses.AmphibType.of(
                     typeVeteranFootmen.createTemp(1, player).get(0))));
 
-    final String key2 =
+    final CasualtyOrderOfLosses.OolCacheKey key2 =
         CasualtyOrderOfLosses.computeOolCacheKey(
             withFakeParameters(),
             List.of(
@@ -63,7 +61,7 @@ class CasualtyOrderOfLossesTest {
                 CasualtyOrderOfLosses.AmphibType.of(
                     typeVeteranPikemen.createTemp(1, player).get(0))));
 
-    assertThat(key1, is(not(key2)));
+    assertThat(key1).isNotEqualTo(key2);
   }
 
   private CasualtyOrderOfLosses.Parameters withFakeParameters() {

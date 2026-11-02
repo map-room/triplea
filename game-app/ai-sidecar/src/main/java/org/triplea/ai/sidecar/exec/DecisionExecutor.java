@@ -19,6 +19,6 @@ import org.triplea.ai.sidecar.dto.DecisionRequest;
  * (gamestate, seed) → wire-response mapping is therefore a pure function. Replay semantics are
  * proved by the determinism harness (see {@code StatelessReplayDeterminismTest}).
  */
-public interface DecisionExecutor<REQ extends DecisionRequest, PLAN extends DecisionPlan> {
-  PLAN execute(CanonicalGameData canonical, REQ request);
+public interface DecisionExecutor<RequestT extends DecisionRequest, PlanT extends DecisionPlan> {
+  PlanT execute(CanonicalGameData canonical, RequestT request);
 }

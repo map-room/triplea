@@ -51,12 +51,8 @@ class EconomyPanel extends JPanel implements GameDataChangeListener {
       table.getColumnModel().getColumn(i).setHeaderRenderer(new DefaultTableCellRenderer());
       final JLabel label = (JLabel) table.getColumnModel().getColumn(i).getHeaderRenderer();
       final Resource resource = resourceStats.get(i - 1).resource;
-      try {
-        label.setIcon(uiContext.getResourceImageFactory().getIcon(resource.getName()));
-        label.setToolTipText(resource.getName());
-      } catch (final IllegalStateException e) {
-        // ignore missing resource image
-      }
+      label.setIcon(uiContext.getResourceImageFactory().getIcon(resource.getName()));
+      label.setToolTipText(resource.getName());
     }
     final JScrollPane scroll = new JScrollPane(table);
     add(scroll);
@@ -110,7 +106,7 @@ class EconomyPanel extends JPanel implements GameDataChangeListener {
       // copy so that the object doesn't change underneath us
       final GameData gameData = EconomyPanel.this.gameData;
       try (GameData.Unlocker ignored = gameData.acquireReadLock()) {
-        final List<GamePlayer> players = gameData.getPlayerList().getSortedPlayers();
+        final List<GamePlayer> players = gameData.getPlayerList().getPlayers();
         final List<String> alliances = getAlliancesToShow(gameData.getAllianceTracker());
         collectedData = new String[players.size() + alliances.size()][resourceStats.size() + 1];
         int row = 0;
@@ -120,24 +116,24 @@ class EconomyPanel extends JPanel implements GameDataChangeListener {
           final IntegerMap<Resource> resourceIncomes =
               AbstractEndTurnDelegate.findEstimatedIncome(player, gameData);
           resourceIncomeMap.put(player, resourceIncomes);
-          for (int i = 0; i < resourceStats.size(); i++) {
-            final ResourceStat resourceStat = resourceStats.get(i);
+          int column = 1;
+          for (final ResourceStat resourceStat : resourceStats) {
             final double amount = resourceStat.getValue(player, gameData, uiContext.getMapData());
             final int income = resourceIncomes.getInt(resourceStat.resource);
-            collectedData[row][i + 1] = getResourceAmountAndIncome(amount, income);
+            collectedData[row][column++] = getResourceAmountAndIncome(amount, income);
           }
           row++;
         }
         for (final String alliance : alliances) {
           collectedData[row][0] = "<html><b>" + alliance;
-          for (int i = 0; i < resourceStats.size(); i++) {
-            final ResourceStat resourceStat = resourceStats.get(i);
+          int column = 1;
+          for (final ResourceStat resourceStat : resourceStats) {
             final double amount = resourceStat.getValue(alliance, gameData, uiContext.getMapData());
             final int income =
                 gameData.getAllianceTracker().getPlayersInAlliance(alliance).stream()
                     .mapToInt(p -> resourceIncomeMap.get(p).getInt(resourceStat.resource))
                     .sum();
-            collectedData[row][i + 1] = getResourceAmountAndIncome(amount, income);
+            collectedData[row][column++] = getResourceAmountAndIncome(amount, income);
           }
           row++;
         }
