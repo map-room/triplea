@@ -44,29 +44,24 @@ import org.sonatype.goodies.prefs.memory.MemoryPreferences;
  *   <li>{@link games.strategy.triplea.ai.pro.util.ProMatches#territoryIsNotConqueredOwnedLand} —
  *       reads {@code BattleTracker} via {@code
  *       AbstractMoveDelegate.getBattleTracker(player.getData())}. {@code simulateBattles} correctly
- *       marks just-conquered territories on {@code dataCopy.battleTracker.conquered}, but the read
- *       site lands on the session's empty tracker. Result: {@code ProAi} reports just-captured
- *       territories as not-conquered, plans factory placements there, and the engine rejects them
- *       at place-dispatch time (Map Room: {@code placement-validator.ts:137-138}).
+ *       marks just-conquered territories on {@code dataCopy.battleTracker.conquered}, but a read
+ *       through {@code player.getData()} lands on the session's empty tracker.
  * </ul>
  *
- * <p>The fix is surgical: in {@link ProPurchaseAi#purchase} (the only call site where this matters
- * for #2368), look up the {@code dataCopy}-rooted player and pass that to {@link
- * ProPurchaseUtils#findPurchaseTerritories} so its {@code wasConquered} probe queries the
- * simulation's tracker. Leaving {@code proData.getPlayer()} as the session player keeps downstream
- * code unchanged — important because changing the proData rooting in the place-step branch surfaces
- * a separate latent issue where stale {@code dataCopy} unit references leak across purchase calls
- * (broke {@code AiGameTest::testAiGame} with a {@code TechTracker} NPE on the simulated combat
- * path; out of scope for this PR).
+ * <p>map-room#2368 fixed that by passing the {@code dataCopy}-rooted player into {@link
+ * ProPurchaseUtils#findPurchaseTerritories}. Upstream #15144 fixed the same read: {@code
+ * territoryIsNotConqueredUnlessPlacementCapturedAllowed} uses {@code t.getData()}, so a capture on
+ * the simulation copy is excluded even when the session player is passed. The dataCopy-rooted
+ * player argument stays, for any remaining {@code player.getData()} reads. {@code
+ * proData.getPlayer()} stays the session player — changing that rooting surfaced a {@code
+ * TechTracker} NPE in {@code AiGameTest}.
  *
  * <p>Tests:
  *
  * <ul>
- *   <li>{@link #findPurchaseTerritoriesUsesPlayerGetDataAsBattleTrackerSource} — pins the {@code
- *       wasConquered}-via-{@code player.getData()} contract: a {@code dataCopy}-rooted player sees
- *       its own simulated captures; a session-rooted player does not. RED on origin /main if {@link
- *       ProPurchaseAi#purchase} still hands the session player to {@code findPurchaseTerritories};
- *       GREEN after the surgical fix routes a {@code dataCopy}-rooted player.
+ *   <li>{@link #findPurchaseTerritoriesUsesPlayerGetDataAsBattleTrackerSource} — a simulated
+ *       capture is excluded for both the session player and the dataCopy player, because #15144
+ *       reads the battle tracker from the territory's own data.
  *   <li>{@link #purchaseSimulationCompletesWithoutThrowing} — smoke test that the surgical fix
  *       integrates with the full {@link AbstractProAi#purchase} simulation loop (would catch any
  *       interaction bug like the {@code dataCopy}-rooted-proData NPE described above).
@@ -94,12 +89,13 @@ class ProAiPurchaseSimulationDataRootingTest {
    * Constructs the simulation state the place-step branch sees: a cloned {@code dataCopy} where
    * Germans simulated capturing Southern France (ownership transferred + entry in {@code
    * BattleTracker.conquered}). Verifies that {@link ProPurchaseUtils#findPurchaseTerritories}
-   * excludes Southern France iff the player it's called with is rooted in {@code dataCopy}; the
-   * original session player still includes it (because the session's {@code BattleTracker} is empty
-   * and {@code wasConquered} is read via {@code player.getData()}).
+   * excludes Southern France for both the session player and the dataCopy player.
    *
-   * <p>The surgical fix in {@link ProPurchaseAi#purchase} routes a {@code dataCopy}-rooted player
-   * to this call site; this test pins that contract.
+   * <p>Upstream #15144 ({@code territoryIsNotConqueredUnlessPlacementCapturedAllowed}) reads
+   * conquests from {@code t.getData()} rather than {@code player.getData()}, so the session player
+   * no longer leaks a capture that exists only on the simulation copy. That is the same bug as
+   * map-room#2368. {@link ProPurchaseAi#purchase} still passes the dataCopy-rooted player, which
+   * keeps any remaining {@code player.getData()} reads on the simulation.
    */
   @Test
   void findPurchaseTerritoriesUsesPlayerGetDataAsBattleTrackerSource() {
@@ -134,21 +130,18 @@ class ProAiPurchaseSimulationDataRootingTest {
     proAi.initialize(playerBridgeMock, germans);
     proAi.getProData().initializeSimulation(proAi, dataCopy, germans);
 
-    // The buggy probe (origin/main): findPurchaseTerritories called with the session player.
-    // player.getData() resolves to the session, whose BattleTracker is empty. Southern France
-    // appears as a purchase territory because wasConquered returns false.
+    // Upstream #15144: conquest is read from the territory's GameData. Southern France is a
+    // dataCopy territory, so both the session player and the dataCopy player exclude it.
     final Map<Territory, ProPurchaseTerritory> withSessionPlayer =
         ProPurchaseUtils.findPurchaseTerritories(proAi.getProData(), germans);
     assertThat(
-        "BUG SHAPE: with the session player, the simulation's just-captured territory leaks "
-            + "into the purchase plan because wasConquered queries the un-simulated session "
-            + "BattleTracker (#2368)",
+        "Upstream #15144 reads wasConquered from the territory's data, so a capture that "
+            + "exists only on the simulation copy is excluded even for the session player "
+            + "(same bug as map-room#2368)",
         withSessionPlayer,
-        hasKey(cloneSouthernFrance));
+        not(hasKey(cloneSouthernFrance)));
 
-    // The fixed probe: findPurchaseTerritories called with a dataCopy-rooted player. Now
-    // player.getData() returns dataCopy, whose BattleTracker has Southern France in conquered.
-    // Southern France is correctly excluded.
+    // The dataCopy-rooted player, which ProPurchaseAi.purchase still passes, excludes it too.
     final Map<Territory, ProPurchaseTerritory> withDataCopyPlayer =
         ProPurchaseUtils.findPurchaseTerritories(proAi.getProData(), copyGermans);
     assertThat(

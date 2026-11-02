@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
+import games.strategy.engine.data.TerritoryEffect;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.triplea.ai.pro.util.ProBattleUtils;
@@ -22,6 +23,7 @@ import games.strategy.triplea.util.TuvUtils;
 import games.strategy.triplea.xml.TestMapGameData;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -187,14 +189,23 @@ class ProTransportAirExposureTest {
 
   /** A no-op IBattleCalculator that returns empty results; used when calc is never invoked. */
   private static IBattleCalculator noOpCalculator() {
-    return (attacker,
-        defender,
-        location,
-        attacking,
-        defending,
-        bombarding,
-        territoryEffects,
-        retreatWhenOnlyAirLeft,
-        runCount) -> new AggregateResults(0);
+    return new IBattleCalculator() {
+      @Override
+      public AggregateResults calculate(
+          final GamePlayer attacker,
+          final GamePlayer defender,
+          final Territory location,
+          final Collection<Unit> attacking,
+          final Collection<Unit> defending,
+          final Collection<Unit> bombarding,
+          final Collection<TerritoryEffect> territoryEffects,
+          final boolean retreatWhenOnlyAirLeft,
+          final int runCount) {
+        return new AggregateResults(0);
+      }
+
+      @Override
+      public void setRetreatAfterRound(final int value) {}
+    };
   }
 }
