@@ -33,7 +33,7 @@ import org.sonatype.goodies.prefs.memory.MemoryPreferences;
  * <ul>
  *   <li>Large buy (40 PU Germany R1) → ≥2 distinct land factories receive units.
  *   <li>Small buy (3 PU) → ≤2 factories (no scattering of tiny buys).
- *   <li>{@link ProPurchaseAi#PLACEMENT_SPREAD_FACTOR} = 0 via direct call to {@code
+ *   <li>{@link ProPurchaseAi#placementSpreadFactor} = 0 via direct call to {@code
  *       redistributeLandPlacementUnits} → all units concentrate at the top-priority factory.
  * </ul>
  */
@@ -47,8 +47,8 @@ class ProPurchaseAiPlacementSpreadTest {
 
   @BeforeEach
   void setUp() {
-    savedSpreadFactor = ProPurchaseAi.PLACEMENT_SPREAD_FACTOR;
-    ProPurchaseAi.PLACEMENT_SPREAD_FACTOR = 0.5;
+    savedSpreadFactor = ProPurchaseAi.placementSpreadFactor;
+    ProPurchaseAi.placementSpreadFactor = 0.5;
     ClientSetting.setPreferences(new MemoryPreferences());
     gameData = TestMapGameData.GLOBAL1940.getGameData();
     german = gameData.getPlayerList().getPlayerId("Germans");
@@ -64,7 +64,7 @@ class ProPurchaseAiPlacementSpreadTest {
 
   @AfterEach
   void restoreSpreadFactor() {
-    ProPurchaseAi.PLACEMENT_SPREAD_FACTOR = savedSpreadFactor;
+    ProPurchaseAi.placementSpreadFactor = savedSpreadFactor;
   }
 
   @Test
@@ -119,7 +119,7 @@ class ProPurchaseAiPlacementSpreadTest {
     // at the highest-priority territory (the original concentrated behaviour is restored when the
     // knob is turned off). Tests the knob in isolation — the full purchase() flow is not used here
     // because purchaseDefenders() places defenders independently of the redistribution logic.
-    ProPurchaseAi.PLACEMENT_SPREAD_FACTOR = 0;
+    ProPurchaseAi.placementSpreadFactor = 0;
     final ProPurchaseAi purchaseAi = proAi.getPurchaseAi();
 
     final Territory germany = gameData.getMap().getTerritoryOrThrow("Germany");

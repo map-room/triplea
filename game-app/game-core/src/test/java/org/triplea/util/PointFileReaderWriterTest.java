@@ -1,9 +1,6 @@
 package org.triplea.util;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.aMapWithSize;
-import static org.hamcrest.Matchers.hasKey;
-import static org.hamcrest.Matchers.is;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -60,7 +57,7 @@ final class PointFileReaderWriterTest {
     @Test
     void shouldReturnEmptyMapWhenStreamIsEmpty() throws Exception {
       final Path path = pathToVirtualTextFile("");
-      assertThat(PointFileReaderWriter.readOneToOne(path), is(Map.of()));
+      assertThat(PointFileReaderWriter.readOneToOne(path)).isEqualTo(Map.of());
     }
 
     @Test
@@ -76,14 +73,13 @@ final class PointFileReaderWriterTest {
       final Map<String, Point> pointsByName =
           PointFileReaderWriter.readOneToOne(pathToVirtualTextFile(content));
 
-      assertThat(
-          pointsByName,
-          is(
+      assertThat(pointsByName)
+          .isEqualTo(
               Map.of(
                   "United Kingdom", new Point(1011, 1021),
                   "Germany", new Point(2011, 2021),
                   "Eastern United States", new Point(3011, 3021),
-                  "", new Point(321, 456))));
+                  "", new Point(321, 456)));
     }
 
     @Test
@@ -116,7 +112,10 @@ final class PointFileReaderWriterTest {
 
     @Test
     void shouldErrorOnDuplicateKey() {
-      final String content1 = "" + "54 Sea Zone  (1011,1021)\n" + "54 Sea Zone  (1011,1021)";
+      final String content1 =
+"""
+54 Sea Zone  (1011,1021)
+54 Sea Zone  (1011,1021)""";
 
       final Exception e1 =
           assertThrows(
@@ -125,7 +124,9 @@ final class PointFileReaderWriterTest {
       assertTrue(e1.getMessage().contains("54 Sea Zone"));
 
       final String content2 =
-          "" + "54 Sea Zone  (1011,1021)\n" + "54 Sea Zone  (      1011  , 1021    )   ";
+"""
+54 Sea Zone  (1011,1021)
+54 Sea Zone  (      1011  , 1021    )   """;
 
       final Exception e2 =
           assertThrows(
@@ -133,7 +134,10 @@ final class PointFileReaderWriterTest {
               () -> PointFileReaderWriter.readOneToOne(pathToVirtualTextFile(content2)));
       assertTrue(e2.getMessage().contains("54 Sea Zone"));
 
-      final String content3 = "" + "54 Sea Zone  (1011,1021)\n" + "54 Sea Zone  (1021,1011)";
+      final String content3 =
+"""
+54 Sea Zone  (1011,1021)
+54 Sea Zone  (1021,1011)""";
 
       final Exception e3 =
           assertThrows(
@@ -145,21 +149,20 @@ final class PointFileReaderWriterTest {
     @Test
     void shouldSupportNegativeValues() throws Exception {
       final String content =
-          ""
-              + "United Kingdom (-1011,1021)\n"
-              + "Germany (1234, -12424)\n"
-              + "Eastern United States (-123, -456)";
+"""
+United Kingdom (-1011,1021)
+Germany (1234, -12424)
+Eastern United States (-123, -456)""";
 
       final Map<String, Point> pointsByName =
           PointFileReaderWriter.readOneToOne(pathToVirtualTextFile(content));
 
-      assertThat(
-          pointsByName,
-          is(
+      assertThat(pointsByName)
+          .isEqualTo(
               Map.of(
                   "United Kingdom", new Point(-1011, 1021),
-                  "Germany", new Point(1234, -12424),
-                  "Eastern United States", new Point(-123, -456))));
+                  "Germany", new Point(1234, -12_424),
+                  "Eastern United States", new Point(-123, -456)));
     }
   }
 
@@ -167,33 +170,37 @@ final class PointFileReaderWriterTest {
   final class ReadOneToManyTest {
     @Test
     void shouldReturnEmptyMapWhenStreamIsEmpty() throws Exception {
-      assertThat(PointFileReaderWriter.readOneToMany(pathToVirtualTextFile("")), is(Map.of()));
+      assertThat(PointFileReaderWriter.readOneToMany(pathToVirtualTextFile("")))
+          .isEqualTo(Map.of());
     }
 
     @Test
     void shouldReadMultiplePointsPerName() throws Exception {
       final String content =
-          ""
-              + "Belarus  (1011,1021)  (1012,1022)  (1013,1023)\n"
-              + "54 Sea Zone  (2011,2021)  (2012,2022)\n"
-              + "Philippines (3011,3021)\n";
+"""
+Belarus  (1011,1021)  (1012,1022)  (1013,1023)
+54 Sea Zone  (2011,2021)  (2012,2022)
+Philippines (3011,3021)
+""";
 
       final Map<String, List<Point>> pointListsByName =
           PointFileReaderWriter.readOneToMany(pathToVirtualTextFile(content));
 
-      assertThat(
-          pointListsByName,
-          is(
+      assertThat(pointListsByName)
+          .isEqualTo(
               Map.of(
                   "Belarus",
                       List.of(new Point(1011, 1021), new Point(1012, 1022), new Point(1013, 1023)),
                   "54 Sea Zone", List.of(new Point(2011, 2021), new Point(2012, 2022)),
-                  "Philippines", List.of(new Point(3011, 3021)))));
+                  "Philippines", List.of(new Point(3011, 3021))));
     }
 
     @Test
     void shouldErrorOnDuplicateKey() {
-      final String content1 = "" + "54 Sea Zone  (1011,1021)\n" + "54 Sea Zone  (1011,1021)";
+      final String content1 =
+"""
+54 Sea Zone  (1011,1021)
+54 Sea Zone  (1011,1021)""";
 
       final Exception e1 =
           assertThrows(
@@ -202,7 +209,9 @@ final class PointFileReaderWriterTest {
       assertTrue(e1.getMessage().contains("54 Sea Zone"));
 
       final String content2 =
-          "" + "54 Sea Zone  (1011,1021)\n" + "54 Sea Zone  (      1011  , 1021    )   ";
+"""
+54 Sea Zone  (1011,1021)
+54 Sea Zone  (      1011  , 1021    )   """;
 
       final Exception e2 =
           assertThrows(
@@ -211,9 +220,9 @@ final class PointFileReaderWriterTest {
       assertTrue(e2.getMessage().contains("54 Sea Zone"));
 
       final String content3 =
-          ""
-              + "54 Sea Zone  (1011,1021)  (1012,1022)  (1013,1023)\n"
-              + "54 Sea Zone  (2011,2021)  (2012,2022)";
+"""
+54 Sea Zone  (1011,1021)  (1012,1022)  (1013,1023)
+54 Sea Zone  (2011,2021)  (2012,2022)""";
 
       final Exception e3 =
           assertThrows(
@@ -229,13 +238,12 @@ final class PointFileReaderWriterTest {
       final Map<String, List<Point>> pointListsByName =
           PointFileReaderWriter.readOneToMany(pathToVirtualTextFile(content));
 
-      assertThat(
-          pointListsByName,
-          is(
+      assertThat(pointListsByName)
+          .isEqualTo(
               Map.of(
                   "United Kingdom",
                   List.of(
-                      new Point(-1011, 1021), new Point(1234, -12424), new Point(-123, -456)))));
+                      new Point(-1011, 1021), new Point(1234, -12_424), new Point(-123, -456))));
     }
   }
 
@@ -243,26 +251,26 @@ final class PointFileReaderWriterTest {
   final class ReadOneToManyPlacementsTest {
     @Test
     void shouldReturnEmptyMapWhenStreamIsEmpty() throws Exception {
-      assertThat(
-          PointFileReaderWriter.readOneToManyPlacements(pathToVirtualTextFile("")), is(Map.of()));
+      assertThat(PointFileReaderWriter.readOneToManyPlacements(pathToVirtualTextFile("")))
+          .isEqualTo(Map.of());
     }
 
     @Test
     void shouldReadMultiplePlacementsPerName() throws Exception {
       final String content =
-          ""
-              + "Belarus  (1011,1021)  (1012,1022)  (1013,1023)  | overflowToLeft=false\n"
-              + "54 Sea Zone  (2011,2021)  (2012,2022)     | overflowToLeft=true\n"
-              + "Philippines (3011,3021)     | weird other thing =true \n"
-              + "East America (4011,4021)\n"
-              + "East Africa (5011,5021) | overflowToLeft=not a boolean\n";
+"""
+Belarus  (1011,1021)  (1012,1022)  (1013,1023)  | overflowToLeft=false
+54 Sea Zone  (2011,2021)  (2012,2022)     | overflowToLeft=true
+Philippines (3011,3021)     | weird other thing =true\s
+East America (4011,4021)
+East Africa (5011,5021) | overflowToLeft=not a boolean
+""";
 
       final Map<String, Tuple<List<Point>, Boolean>> pointListsByName =
           PointFileReaderWriter.readOneToManyPlacements(pathToVirtualTextFile(content));
 
-      assertThat(
-          pointListsByName,
-          is(
+      assertThat(pointListsByName)
+          .isEqualTo(
               Map.of(
                   "Belarus",
                   Tuple.of(
@@ -276,15 +284,15 @@ final class PointFileReaderWriterTest {
                   "East America",
                   Tuple.of(List.of(new Point(4011, 4021)), false),
                   "East Africa",
-                  Tuple.of(List.of(new Point(5011, 5021)), false))));
+                  Tuple.of(List.of(new Point(5011, 5021)), false)));
     }
 
     @Test
     void shouldErrorOnDuplicateKey() {
       final String content1 =
-          ""
-              + "54 Sea Zone  (1011,1021)  | overflowToLeft=false\n"
-              + "54 Sea Zone  (1011,1021)  | overflowToLeft=false";
+"""
+54 Sea Zone  (1011,1021)  | overflowToLeft=false
+54 Sea Zone  (1011,1021)  | overflowToLeft=false""";
 
       final Exception e1 =
           assertThrows(
@@ -293,9 +301,9 @@ final class PointFileReaderWriterTest {
       assertTrue(e1.getMessage().contains("54 Sea Zone"));
 
       final String content2 =
-          ""
-              + "54 Sea Zone  (1011,1021)  | overflowToLeft=true\n"
-              + "54 Sea Zone  (      1011  , 1021    )    | overflowToLeft=true";
+"""
+54 Sea Zone  (1011,1021)  | overflowToLeft=true
+54 Sea Zone  (      1011  , 1021    )    | overflowToLeft=true""";
 
       final Exception e2 =
           assertThrows(
@@ -304,9 +312,9 @@ final class PointFileReaderWriterTest {
       assertTrue(e2.getMessage().contains("54 Sea Zone"));
 
       final String content3 =
-          ""
-              + "54 Sea Zone  (1011,1021)  (1012,1022)  (1013,1023)  | qwertz =false\n"
-              + "54 Sea Zone  (2011,2021)  (2012,2022)  | overflowToLeft=true";
+"""
+54 Sea Zone  (1011,1021)  (1012,1022)  (1013,1023)  | qwertz =false
+54 Sea Zone  (2011,2021)  (2012,2022)  | overflowToLeft=true""";
 
       final Exception e3 =
           assertThrows(
@@ -322,15 +330,14 @@ final class PointFileReaderWriterTest {
       final Map<String, Tuple<List<Point>, Boolean>> pointListsByName =
           PointFileReaderWriter.readOneToManyPlacements(pathToVirtualTextFile(content));
 
-      assertThat(
-          pointListsByName,
-          is(
+      assertThat(pointListsByName)
+          .isEqualTo(
               Map.of(
                   "United Kingdom",
                   Tuple.of(
                       List.of(
-                          new Point(-1011, 1021), new Point(1234, -12424), new Point(-123, -456)),
-                      Boolean.FALSE))));
+                          new Point(-1011, 1021), new Point(1234, -12_424), new Point(-123, -456)),
+                      Boolean.FALSE)));
     }
   }
 
@@ -338,52 +345,65 @@ final class PointFileReaderWriterTest {
   final class ReadOneToManyPolygonsTest {
     @Test
     void shouldReturnEmptyMapWhenStreamIsEmpty() throws Exception {
-      assertThat(
-          PointFileReaderWriter.readOneToManyPolygons(pathToVirtualTextFile("")), is(Map.of()));
+      assertThat(PointFileReaderWriter.readOneToManyPolygons(pathToVirtualTextFile("")))
+          .isEqualTo(Map.of());
     }
 
     @Test
     void shouldReadMultiplePolygonsPerName() throws Exception {
       final String content =
-          "Belarus  <  (1011,1021) (1012,1022) (1013,1023) >\n"
-              + "54 Sea Zone  <  (2011,2021) (2012,2022) (2013,2023) >  <  "
-              + "(2111,2121) (2112,2122) (2113,2123) >\n"
-              + "Philippines  <  (3011,3021) (3012,3022) (3013,3023) >  <  "
-              + "(3111,3121) (3112,3122) >  <  (3211,3221) >\n";
+"""
+Belarus  <  (1011,1021) (1012,1022) (1013,1023) >
+54 Sea Zone  <  (2011,2021) (2012,2022) (2013,2023) >  <  (2111,2121) (2112,2122) (2113,2123) >
+Philippines  <  (3011,3021) (3012,3022) (3013,3023) >  <  (3111,3121) (3112,3122) >  <  (3211,3221) >
+""";
 
       final Map<String, List<Polygon>> polygonListsByName =
           PointFileReaderWriter.readOneToManyPolygons(pathToVirtualTextFile(content));
 
-      assertThat(polygonListsByName, is(aMapWithSize(3)));
-      assertThat(polygonListsByName, hasKey("Belarus"));
-      assertThat(
-          points(polygonListsByName.get("Belarus")),
-          is(
+      assertThat(polygonListsByName).hasSize(3);
+      assertThat(polygonListsByName).containsKey("Belarus");
+      assertThat(points(polygonListsByName.get("Belarus")))
+          .isEqualTo(
               List.of(
-                  List.of(new Point(1011, 1021), new Point(1012, 1022), new Point(1013, 1023)))));
-      assertThat(polygonListsByName, hasKey("54 Sea Zone"));
-      assertThat(
-          points(polygonListsByName.get("54 Sea Zone")),
-          is(
+                  List.of(new Point(1011, 1021), new Point(1012, 1022), new Point(1013, 1023))));
+      assertThat(polygonListsByName).containsKey("54 Sea Zone");
+      assertThat(points(polygonListsByName.get("54 Sea Zone")))
+          .isEqualTo(
               List.of(
                   List.of(new Point(2011, 2021), new Point(2012, 2022), new Point(2013, 2023)),
-                  List.of(new Point(2111, 2121), new Point(2112, 2122), new Point(2113, 2123)))));
-      assertThat(polygonListsByName, hasKey("Philippines"));
-      assertThat(
-          points(polygonListsByName.get("Philippines")),
-          is(
+                  List.of(new Point(2111, 2121), new Point(2112, 2122), new Point(2113, 2123))));
+      assertThat(polygonListsByName).containsKey("Philippines");
+      assertThat(points(polygonListsByName.get("Philippines")))
+          .isEqualTo(
               List.of(
                   List.of(new Point(3011, 3021), new Point(3012, 3022), new Point(3013, 3023)),
                   List.of(new Point(3111, 3121), new Point(3112, 3122)),
-                  List.of(new Point(3211, 3221)))));
+                  List.of(new Point(3211, 3221))));
+    }
+
+    @Test
+    void shouldRejectTerritoryWithoutPolygons() throws Exception {
+      final String content =
+          """
+              East Compass Sea Zone  <
+              """;
+
+      final IOException exception =
+          assertThrows(
+              IOException.class,
+              () -> PointFileReaderWriter.readOneToManyPolygons(pathToVirtualTextFile(content)));
+
+      assertThat(exception.getCause().getClass()).isEqualTo(IllegalArgumentException.class);
+      assertTrue(exception.getMessage().contains("East Compass Sea Zone"));
     }
 
     @Test
     void shouldErrorOnDuplicateKey() {
       final String content1 =
-          ""
-              + "54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >\n"
-              + "54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >";
+"""
+54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >
+54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >""";
 
       final Exception e1 =
           assertThrows(
@@ -392,9 +412,9 @@ final class PointFileReaderWriterTest {
       assertTrue(e1.getMessage().contains("54 Sea Zone"));
 
       final String content2 =
-          "54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >\n"
-              + "54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >  <  "
-              + "(2111,2121) (2112,2122) (2113,2123) >";
+"""
+54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >
+54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >  <  (2111,2121) (2112,2122) (2113,2123) >""";
       final Exception e2 =
           assertThrows(
               IOException.class,
@@ -402,9 +422,9 @@ final class PointFileReaderWriterTest {
       assertTrue(e2.getMessage().contains("54 Sea Zone"));
 
       final String content3 =
-          "54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >\n"
-              + "54 Sea Zone  <  (2011 , 2021) (2012 , 2022 ) ( 2013,21023) >  <  "
-              + "(2111,2121) (2112,2122) (2113,2123) >";
+"""
+54 Sea Zone  <  (1011,1021) (1012,1022) (1013,1023) >
+54 Sea Zone  <  (2011 , 2021) (2012 , 2022 ) ( 2013,21023) >  <  (2111,2121) (2112,2122) (2113,2123) >""";
       final Exception e3 =
           assertThrows(
               IOException.class,
@@ -431,12 +451,11 @@ final class PointFileReaderWriterTest {
       final Map<String, List<Polygon>> polygonListsByName =
           PointFileReaderWriter.readOneToManyPolygons(pathToVirtualTextFile(content));
 
-      assertThat(
-          points(polygonListsByName.get("United Kingdom")),
-          is(
+      assertThat(points(polygonListsByName.get("United Kingdom")))
+          .isEqualTo(
               List.of(
                   List.of(
-                      new Point(-1011, 1021), new Point(1234, -12424), new Point(-123, -456)))));
+                      new Point(-1011, 1021), new Point(1234, -12_424), new Point(-123, -456))));
     }
   }
 
@@ -454,13 +473,12 @@ final class PointFileReaderWriterTest {
       final String content =
           writeToString(os -> PointFileReaderWriter.writeOneToOne(os, pointsByName));
 
-      assertThat(
-          content,
-          is(
+      assertThat(content)
+          .isEqualTo(
               ""
                   + "United Kingdom  (1011,1021) \r\n"
                   + "Germany  (2011,2021) \r\n"
-                  + "Eastern United States  (3011,3021) "));
+                  + "Eastern United States  (3011,3021) ");
     }
   }
 
@@ -479,13 +497,12 @@ final class PointFileReaderWriterTest {
       final String content =
           writeToString(os -> PointFileReaderWriter.writeOneToMany(os, pointListsByName));
 
-      assertThat(
-          content,
-          is(
+      assertThat(content)
+          .isEqualTo(
               ""
                   + "Belarus  (1011,1021)  (1012,1022)  (1013,1023) \r\n"
                   + "54 Sea Zone  (2011,2021)  (2012,2022) \r\n"
-                  + "Philippines  (3011,3021) "));
+                  + "Philippines  (3011,3021) ");
     }
   }
 
@@ -513,13 +530,12 @@ final class PointFileReaderWriterTest {
           writeToString(
               os -> PointFileReaderWriter.writeOneToManyPlacements(os, polygonListsByName));
 
-      assertThat(
-          content,
-          is(
+      assertThat(content)
+          .isEqualTo(
               ""
                   + "Belarus  (1011,1021)  (1012,1022)  (1013,1023)  | overflowToLeft=true\r\n"
                   + "54 Sea Zone  (2011,2021)  (2012,2022)  (2013,2023)  | overflowToLeft=false\r\n"
-                  + "Philippines  (3011,3021)  (3012,3022)  (3013,3023)  | overflowToLeft=true"));
+                  + "Philippines  (3011,3021)  (3012,3022)  (3013,3023)  | overflowToLeft=true");
     }
   }
 
@@ -545,15 +561,14 @@ final class PointFileReaderWriterTest {
       final String content =
           writeToString(os -> PointFileReaderWriter.writeOneToManyPolygons(os, polygonListsByName));
 
-      assertThat(
-          content,
-          is(
+      assertThat(content)
+          .isEqualTo(
               ""
                   + "Belarus  <  (1011,1021)  (1012,1022)  (1013,1023)  > \r\n"
                   + "54 Sea Zone  <  (2011,2021)  (2012,2022)  (2013,2023)  > "
                   + " <  (2111,2121)  (2112,2122)  (2113,2123)  > \r\n"
                   + "Philippines  <  (3011,3021)  (3012,3022)  (3013,3023)  > "
-                  + " <  (3111,3121)  (3112,3122)  >  <  (3211,3221)  > "));
+                  + " <  (3111,3121)  (3112,3122)  >  <  (3211,3221)  > ");
     }
 
     private Polygon polygon(final Point... points) {

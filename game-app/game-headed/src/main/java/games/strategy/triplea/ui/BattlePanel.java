@@ -11,13 +11,12 @@ import games.strategy.triplea.delegate.data.BattleListing;
 import games.strategy.triplea.delegate.data.CasualtyDetails;
 import games.strategy.triplea.delegate.data.CasualtyList;
 import games.strategy.triplea.delegate.data.FightBattleDetails;
+import games.strategy.triplea.image.UnitImageFactory;
 import games.strategy.triplea.settings.ClientSetting;
 import games.strategy.triplea.ui.panels.map.MapPanel;
 import games.strategy.ui.Util;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +37,7 @@ import org.triplea.swing.EventThreadJOptionPane.ConfirmDialogType;
 import org.triplea.swing.JButtonBuilder;
 import org.triplea.swing.SwingAction;
 import org.triplea.swing.SwingComponents;
+import org.triplea.swing.WindowAdapterFactory;
 import org.triplea.swing.jpanel.JPanelBuilder;
 
 /** UI for fighting battles. */
@@ -45,12 +45,16 @@ import org.triplea.swing.jpanel.JPanelBuilder;
 public final class BattlePanel extends ActionPanel {
   private static final long serialVersionUID = 5304208569738042592L;
 
+  private static final long ENSURE_BATTLE_DISPLAYED_TIMEOUT_MS = 45_000;
+  static final int MINIMUM_BATTLE_WINDOW_DEFAULT_WIDTH = 800;
+  static final int MINIMUM_BATTLE_WINDOW_DEFAULT_HEIGHT = 600;
+
   private FightBattleDetails fightBattleMessage;
   private volatile BattleDisplay battleDisplay;
-  // if we are showing a battle, then this will be set to the currently displayed battle. This will
-  // only be set after
-  // the display is shown on the screen
-  private volatile UUID currentBattleDisplayed;
+  // Guarded by battleDisplayedLock. Set at the end of showBattle()'s EDT task, after the battle
+  // window content is in place; threads in ensureBattleIsDisplayed() wait until it matches.
+  private UUID currentBattleDisplayed;
+  private final Object battleDisplayedLock = new Object();
   private final JDialog battleWindow;
   private BattleListing battleListing;
 
@@ -59,20 +63,49 @@ public final class BattlePanel extends ActionPanel {
     battleWindow = new JDialog(frame);
     battleWindow.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
     battleWindow.addWindowListener(
-        new WindowAdapter() {
-          @Override
-          public void windowActivated(final WindowEvent e) {
-            SwingUtilities.invokeLater(
-                () -> Optional.ofNullable(battleDisplay).ifPresent(BattleDisplay::takeFocus));
-          }
-        });
+        WindowAdapterFactory.activatedAndClosed(
+            () -> Optional.ofNullable(battleDisplay).ifPresent(BattleDisplay::takeFocus), null));
+  }
+
+  /**
+   * Sizes the battle window based on the map's dice sides and unit icon size, capped to fit on
+   * screen. Grows the window if it is currently smaller than required, but never shrinks a window
+   * the user has already enlarged.
+   */
+  private void resizeBattleWindowToFitContent() {
+    final UnitImageFactory unitImageFactory = getMap().getUiContext().getUnitImageFactory();
+    final int unitIconWidth = unitImageFactory.getUnitImageWidth();
+    final int unitIconHeight = unitImageFactory.getUnitImageHeight();
+    final int diceSides = getData().getDiceSides();
+
+    // Each cell in the BattleTable shows a unit icon plus an "xN" count label.
+    final int columnWidth = unitIconWidth + 35;
+    // Per side: 1 unit-icon column + (diceSides + 1) dice-strength columns.
+    final int tableWidth = (diceSides + 2) * columnWidth;
+    // Two tables side-by-side, plus the territory image (~100px) and frame insets.
+    final int desiredWidth = 2 * tableWidth + 180;
+
+    // Height needs room for the steps panel (which grows with AA / first-strike / sneak attack
+    // steps), the dice panel, the action button, and several rows of unit icons.
+    final int desiredHeight = Math.max(900, 6 * (unitIconHeight + 5) + 500);
+
     final Dimension screenSize = Util.getScreenSize(battleWindow);
-    if (screenSize.width > 1024 && screenSize.height > 768) {
-      battleWindow.setMinimumSize(new Dimension(1024, 768));
-    } else {
-      battleWindow.setMinimumSize(new Dimension(800, 600));
+    final int targetWidth = Math.min(desiredWidth, (int) (screenSize.width * 0.95));
+    final int targetHeight = Math.min(desiredHeight, (int) (screenSize.height * 0.95));
+
+    battleWindow.setMinimumSize(
+        getMinimumBattleWindowSize(new Dimension(targetWidth, targetHeight)));
+    final Dimension currentSize = battleWindow.getSize();
+    if (currentSize.width < targetWidth || currentSize.height < targetHeight) {
+      battleWindow.setSize(
+          Math.max(currentSize.width, targetWidth), Math.max(currentSize.height, targetHeight));
     }
-    getMap().getUiContext().addShutdownWindow(battleWindow);
+  }
+
+  static Dimension getMinimumBattleWindowSize(final Dimension contentFitSize) {
+    return new Dimension(
+        Math.min(MINIMUM_BATTLE_WINDOW_DEFAULT_WIDTH, contentFitSize.width),
+        Math.min(MINIMUM_BATTLE_WINDOW_DEFAULT_HEIGHT, contentFitSize.height));
   }
 
   void setBattlesAndBombing(final BattleListing battleListing) {
@@ -174,7 +207,9 @@ public final class BattlePanel extends ActionPanel {
 
   private void cleanUpBattleWindow() {
     if (battleDisplay != null) {
-      currentBattleDisplayed = null;
+      synchronized (battleDisplayedLock) {
+        currentBattleDisplayed = null;
+      }
       battleDisplay.cleanUp();
       battleWindow.getContentPane().removeAll();
       battleDisplay = null;
@@ -183,21 +218,25 @@ public final class BattlePanel extends ActionPanel {
 
   private boolean ensureBattleIsDisplayed(final UUID battleId) {
     Util.ensureNotOnEventDispatchThread();
-    UUID displayed = currentBattleDisplayed;
-    int count = 0;
-    while (!battleId.equals(displayed)) {
-      count++;
-      Interruptibles.sleep(count);
-      // something is wrong, we shouldn't have to wait this long
-      if (count > 200) {
-        log.error(
-            "battle not displayed, looking for: "
-                + battleId
-                + " showing: "
-                + currentBattleDisplayed);
-        return false;
+    final long deadline = System.currentTimeMillis() + ENSURE_BATTLE_DISPLAYED_TIMEOUT_MS;
+    synchronized (battleDisplayedLock) {
+      while (!battleId.equals(currentBattleDisplayed)) {
+        final long remaining = deadline - System.currentTimeMillis();
+        if (remaining <= 0) {
+          log.error(
+              "battle not displayed after {}ms, looking for: {} showing: {}",
+              ENSURE_BATTLE_DISPLAYED_TIMEOUT_MS,
+              battleId,
+              currentBattleDisplayed);
+          return false;
+        }
+        try {
+          battleDisplayedLock.wait(remaining);
+        } catch (final InterruptedException e) {
+          Thread.currentThread().interrupt();
+          return false;
+        }
       }
-      displayed = currentBattleDisplayed;
     }
     return true;
   }
@@ -256,6 +295,7 @@ public final class BattlePanel extends ActionPanel {
                   battleType);
           battleWindow.setTitle(battleDisplay.getDescription());
           battleWindow.getContentPane().add(battleDisplay);
+          resizeBattleWindowToFitContent();
 
           final var localPlayers = getMap().getUiContext().getLocalPlayers();
           if (ClientSetting.showBattlesWhenObserving.getValueOrThrow()
@@ -268,7 +308,10 @@ public final class BattlePanel extends ActionPanel {
           } else {
             battleWindow.setVisible(false);
           }
-          currentBattleDisplayed = battleId;
+          synchronized (battleDisplayedLock) {
+            currentBattleDisplayed = battleId;
+            battleDisplayedLock.notifyAll();
+          }
         });
   }
 

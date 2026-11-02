@@ -9,42 +9,45 @@
 Approximate time to complete: 10 - 30 minutes
 
 ### Open Project
+
 - In IDEA, `File > Open...`  and select the build.gradle file that is located at
-  the top level of the project and run it. (**Tip** by selecting gradle file, IDEA will
-  preconfigure the project as a gradle project)
-- Ensure to have the right project settings for the SDK (`File > Project Structure...` and `Project Settings > Project` ) and the bytecode version (`File > Settings...` and `Build, Execution, Deployment > Compiler > Java Compiler`)
+  the top level of the project (Windows example `\\wsl.localhost\Ubuntu\home\<your user>\triplea`) and run it. (**Tip** by
+  selecting Gradle file, IDEA will
+  preconfigure the project as a Gradle project)
+- Ensure to have the right project settings for the Java SDK (`File > Project Structure...` and
+  `Project Settings > Project` ) and the bytecode version (`File > Settings...` and
+  `Build, Execution, Deployment > Compiler > Java Compiler`)
+- Ensure to have the same SDK selected in the settings as Gradle JVM (`File > Settings...` and
+  `Build, Execution, Deployment > Build Tools > Gradle`)
+- Note that the JVM version used for the Gradle command (you can view in the terminal via `./gradlew -version`) is using
+  the operating system's JVM and therefore the environment variable `JAVA_HOME`. Hence, make sure the version to which
+  this points match the selected JDK.
 
 ### Plugins:
 
-Note: **Settings** menu is accessible via, `File > Settings...`  or (on Mac OS): `IntelliJ IDEA > Preferences`
+Note: **Settings** menu is accessible via, `File > Settings...`  or (on macOS): `IntelliJ IDEA > Preferences`
 
-Plugin installation can be initiated from the JetBrains Marketplace web page, by clicking "Install to IDE" link from each plugin's page.
-  1. *google-java-format* [plugin](https://plugins.jetbrains.com/plugin/8527-google-java-format)
-        1. **Settings* > google-java-format Settings**
-        1.  Check 'enable'
-      ![Screenshot from 2019-08-08 17-35-52
-      ](https://user-images.githubusercontent.com/12397753/62746114-07cc2b80-ba03-11e9-9ac0-0b1e6e1e8788.png)*
-        1.  Check [Intellij JRE config from google-java-format]([url](https://github.com/google/google-java-format/blob/master/README.md#intellij-jre-config)) or do it manually as below.
-  1. *checkstyle-IDEA* [plugin](https://github.com/jshiell/checkstyle-idea)
-        1. after install finish configuration in: **Other Settings > Checkstyle**
-            1. load checkstyle file by clicking on the "plus" and navigating to the file
-            `.\IdeaProjects\triplea\config\checkstyle` (If you can't find it, you can download it from
-             [the repository](https://github.com/triplea-game/triplea/blob/master/.build/checkstyle.xml))
-            1. set checkstyle version
-            1. set to scan all sources
-      ![Screenshot from 2020-10-18 19-18-46
-      ](setupcheckstyle.png)
-  1. *Lombok*
-        1. **Settings > Annotation Processors**
-        1. Turn on annotation processing.
-        ![annotationprocessing2](https://user-images.githubusercontent.com/54828470/95939758-6da00a00-0da2-11eb-9c7a-823040578c4e.png)
-  1. *PlantUML Integration*
-        1. GraphViz also needs to be installed: <https://graphviz.org/download/>
+Plugin installation can be initiated from the JetBrains Marketplace web page, by clicking "Install to IDE" link from
+each plugin's page.
+
+1. *google-java-format* [plugin](https://plugins.jetbrains.com/plugin/8527-google-java-format)
+    1. **Settings* > google-java-format Settings**
+    2. Check 'enable'
+      <img src="https://user-images.githubusercontent.com/12397753/62746114-07cc2b80-ba03-11e9-9ac0-0b1e6e1e8788.png" alt="Screenshot" height="200">
+    4.
+   Check [IntelliJ JRE config from google-java-format](https://github.com/google/google-java-format/blob/master/README.md#intellij-jre-config)
+   or do it manually as below.
+2. *Lombok*
+    1. **Settings > Annotation Processors**
+    2. Turn on annotation processing.
+       ![annotationprocessing2](https://user-images.githubusercontent.com/54828470/95939758-6da00a00-0da2-11eb-9c7a-823040578c4e.png)
+3. *PlantUML Integration*
+    1. GraphViz also needs to be installed: <https://graphviz.org/download/>
 
 ## Download and import IDEA settings file
 
 Import IDEA settings file via `File > Manage IDE Settings > Import Settings...`.
-TODO: Identify file to be imported!
+*TODO: Identify file to be imported!*
 
 ## google-java-format Plugin Fix (if above settings do not work)
 
@@ -62,4 +65,38 @@ Add the following to your vmoptions file:
 --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED
 --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
 ```
+
+### Further IDEA settings
+
+Note: **Settings** menu is accessible via, `File > Settings...`  or (on macOS): `IntelliJ IDEA > Preferences`
+
+1. No `*` imports and import order
+Path: `Editor > Code Style > Java`  in  tab `Imports`
+<img width="560" height="705" alt="image" src="https://github.com/user-attachments/assets/f646ec0a-4a33-42ee-a001-57844c62dea6" />
+
+2. Default annotations `@NotNull` / `@Nullable`
+Path: `Editor > Inspections > Revert changes`  in  tree entry `Java > Probably bugs > Nullability problems > @NotNull / @Nullable problems`
+Button: `Configure Annotations ...`
+- Nullable
+<img width="656" height="201" alt="image" src="https://github.com/user-attachments/assets/9334e3b8-1e84-43e0-be89-a369b5c2d720" />
+
+- NotNull
+<img width="656" height="197" alt="image" src="https://github.com/user-attachments/assets/5227f499-39c4-444c-8d0f-24c5ea02bde1" />
+
+
+### Further  Windows + WSL setup steps
+For a Windows + WSL setup the following additional settings seem to be requiered to avoid audio exceptions:
+1. Install alsa-utils and libasound2-plugins via command in WSL `sudo apt install alsa-utils, libasound2-plugins`
+2. Configure ALSA to use PulseAudio as its default device via command in WSL `nano ~/.asoundrc` and enter
+```bash
+pcm.!default {
+    type pulse
+}
+
+ctl.!default {
+    type pulse
+}
+```
+3. Add to gradle task `:game-headed:run` the environment variables `DISPLAY=:0;PULSE_SERVER=unix:/mnt/wslg/PulseServer;WAYLAND_DISPLAY=wayland-0;HOME=/home/<your user>` (by right click on the task and select `Modify Run Configuration...`
+<img width="630" height="348" alt="image" src="https://github.com/user-attachments/assets/d1007d35-cade-4d20-a6cf-c4557f94fcc0" />
 

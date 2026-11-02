@@ -10,13 +10,15 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+import javax.annotation.Nonnull;
 import lombok.AccessLevel;
 import lombok.Getter;
-import org.triplea.domain.data.ChatParticipant;
 import org.triplea.domain.data.UserName;
+import org.triplea.http.client.lobby.web.socket.messages.envelopes.chat.ChatParticipant;
 
 /**
  * chat logic.
@@ -69,7 +71,7 @@ public class Chat implements ChatClient {
   private void updateConnections() {
     final List<ChatParticipant> playerNames =
         chatters.stream()
-            .sorted(Comparator.comparing(c -> c.getUserName().getValue()))
+            .sorted(Comparator.comparing(ChatParticipant::getUserName))
             .collect(Collectors.toList());
 
     chatPlayerListeners.forEach(listener -> listener.updatePlayerList(playerNames));
@@ -105,9 +107,7 @@ public class Chat implements ChatClient {
 
   @Override
   public void participantRemoved(final UserName userName) {
-    chatters.stream()
-        .filter(chatter -> chatter.getUserName().equals(userName))
-        .findAny()
+    getAnyUserNameFromChatters(userName)
         .ifPresent(
             node -> {
               chatters.remove(node);
@@ -117,6 +117,12 @@ public class Chat implements ChatClient {
             });
   }
 
+  private @Nonnull Optional<ChatParticipant> getAnyUserNameFromChatters(UserName userName) {
+    return chatters.stream()
+        .filter(chatter -> chatter.getUserName().equals(userName.getValue()))
+        .findAny();
+  }
+
   @Override
   public void slappedBy(final UserName from) {
     chatMessageListeners.forEach(listener -> listener.slapped(from));
@@ -124,9 +130,7 @@ public class Chat implements ChatClient {
 
   @Override
   public void statusUpdated(final UserName userName, final String status) {
-    chatters.stream()
-        .filter(chatter -> chatter.getUserName().equals(userName))
-        .findAny()
+    getAnyUserNameFromChatters(userName)
         .ifPresent(
             node -> {
               node.setStatus(status);
@@ -139,11 +143,7 @@ public class Chat implements ChatClient {
   }
 
   String getStatus(final UserName userName) {
-    return chatters.stream()
-        .filter(chatter -> chatter.getUserName().equals(userName))
-        .findAny()
-        .map(ChatParticipant::getStatus)
-        .orElse("");
+    return getAnyUserNameFromChatters(userName).map(ChatParticipant::getStatus).orElse("");
   }
 
   void addChatListener(final ChatPlayerListener listener) {
@@ -186,7 +186,10 @@ public class Chat implements ChatClient {
   }
 
   Collection<UserName> getOnlinePlayers() {
-    return chatters.stream().map(ChatParticipant::getUserName).collect(Collectors.toSet());
+    return chatters.stream()
+        .map(ChatParticipant::getUserName)
+        .map(UserName::of)
+        .collect(Collectors.toSet());
   }
 
   public Messengers getMessengers() {

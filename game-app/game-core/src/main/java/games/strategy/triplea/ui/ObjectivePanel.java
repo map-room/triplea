@@ -413,6 +413,8 @@ class ObjectivePanel extends JPanel implements GameDataChangeListener {
       final JEditorPane textArea = new JEditorPane();
       textArea.setEditable(false);
       textArea.setContentType("text/html");
+      // Render CSS lengths per W3C spec instead of Swing's legacy ~1.33x inflation. Issue #6157.
+      textArea.putClientProperty(JEditorPane.W3C_LENGTH_UNITS, Boolean.TRUE);
       final JScrollPane scrollPane = new JScrollPane(textArea);
       scrollPane.setBorder(null);
       editorComponent = scrollPane;
@@ -443,6 +445,8 @@ class ObjectivePanel extends JPanel implements GameDataChangeListener {
     EditorPaneTableCellRenderer() {
       setEditable(false);
       setContentType("text/html");
+      // Render CSS lengths per W3C spec instead of Swing's legacy ~1.33x inflation. Issue #6157.
+      putClientProperty(JEditorPane.W3C_LENGTH_UNITS, Boolean.TRUE);
     }
 
     @Override
@@ -462,7 +466,7 @@ class ObjectivePanel extends JPanel implements GameDataChangeListener {
       setText(adaptee.getText());
       // This line was very important to get it working with JDK1.4
       final TableColumnModel columnModel = table.getColumnModel();
-      setSize(columnModel.getColumn(column).getWidth(), 100000);
+      setSize(columnModel.getColumn(column).getWidth(), 100_000);
       int heightWanted = (int) getPreferredSize().getHeight();
       addSize(table, row, column, heightWanted);
       heightWanted = findTotalMaximumRowSize(table, row);

@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -16,7 +15,7 @@ import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Singular;
-import org.triplea.http.client.maps.listing.MapDownloadItem;
+import org.triplea.http.client.lobby.maps.listing.MapDownloadItem;
 import org.triplea.io.FileUtils;
 import org.triplea.map.description.file.MapDescriptionYaml;
 
@@ -58,6 +57,10 @@ public class InstalledMapsListing {
         .map(Optional::get)
         .map(InstalledMap::new)
         .collect(Collectors.toList());
+  }
+
+  public void deleteInstalledMapByName(final String mapName) {
+    installedMaps.removeIf(installedMap -> installedMap.getMapName().equals(mapName));
   }
 
   /** Returns the list of all installed game names. */
@@ -115,7 +118,7 @@ public class InstalledMapsListing {
         .flatMap(InstalledMap::findContentRoot);
   }
 
-  private static String normalizeName(final String mapName) {
+  public static String normalizeName(final String mapName) {
     return mapName.toLowerCase(Locale.ROOT).replaceAll("[_ -]", "");
   }
 
@@ -180,39 +183,5 @@ public class InstalledMapsListing {
           .ifPresent(installedMap -> outOfDate.put(download, installedMap));
     }
     return outOfDate;
-  }
-
-  /**
-   * Given a map download set, return the set of map-downloads that are installed on the file
-   * system.
-   *
-   * @return Map of input 'MapDownload' items mapped to the corresponding 'installed map'
-   */
-  public Map<MapDownloadItem, InstalledMap> findInstalledMapsFromDownloadList(
-      final Collection<MapDownloadItem> downloads) {
-    final Map<MapDownloadItem, InstalledMap> installed = new HashMap<>();
-
-    for (final MapDownloadItem download : downloads) {
-      findInstalledMapByName(download.getMapName())
-          .ifPresent(installedMap -> installed.put(download, installedMap));
-    }
-
-    return installed;
-  }
-
-  /**
-   * Given a set of map-downloads, returns the set of map-downloads that are not already installed
-   * on the file system.
-   */
-  public Collection<MapDownloadItem> findNotInstalledMapsFromDownloadList(
-      final Collection<MapDownloadItem> downloads) {
-    final Collection<MapDownloadItem> notInstalled = new HashSet<>();
-
-    for (final MapDownloadItem download : downloads) {
-      if (findInstalledMapByName(download.getMapName()).isEmpty()) {
-        notInstalled.add(download);
-      }
-    }
-    return notInstalled;
   }
 }

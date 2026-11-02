@@ -2,6 +2,7 @@ package org.triplea.game.server;
 
 import com.google.common.base.Preconditions;
 import games.strategy.engine.framework.AutoSaveFileUtils;
+import games.strategy.engine.framework.map.file.system.loader.InstalledMapsListing;
 import games.strategy.engine.framework.message.PlayerListing;
 import games.strategy.engine.framework.startup.mc.IServerStartupRemote;
 import games.strategy.net.INode;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.triplea.io.IoUtils;
+import org.triplea.performance.PerfTimer;
 
 @Slf4j
 public class HeadlessServerStartupRemote implements IServerStartupRemote {
@@ -66,9 +68,12 @@ public class HeadlessServerStartupRemote implements IServerStartupRemote {
 
   @Override
   public List<String> getAvailableGames() {
-    // Copy available games collection into a serializable collection
-    // so it can be sent over network.
-    List<String> availableGames = new ArrayList<>(headlessGameServer.getAvailableGames());
+    // The bot's autosaves are appended so they appear as selectable entries in the connecting
+    // client's game-selection list, letting a client load one of the bot's own autosaves.
+    final List<String> availableGames =
+        new ArrayList<>(
+            PerfTimer.time(
+                "loading maps", () -> InstalledMapsListing.parseMapFiles().getSortedGameList()));
     availableGames.addAll(AutoSaveFileUtils.getAutoSaveFiles());
     return availableGames;
   }

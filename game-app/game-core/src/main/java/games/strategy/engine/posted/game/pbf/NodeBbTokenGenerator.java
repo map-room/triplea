@@ -18,7 +18,6 @@ import org.apache.http.client.methods.HttpDelete;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.triplea.yaml.YamlReader;
@@ -57,8 +56,7 @@ public class NodeBbTokenGenerator {
     Preconditions.checkNotNull(username);
     Preconditions.checkNotNull(password);
 
-    try (CloseableHttpClient client =
-        HttpClients.custom().disableCookieManagement().disableDefaultUserAgent().build()) {
+    try (CloseableHttpClient client = NodeBbHttpClients.builder().build()) {
       final int userId = getUserId(client, username);
       return new TokenInfo(getToken(client, userId, password, otp), userId);
     } catch (final IOException e) {
@@ -73,8 +71,7 @@ public class NodeBbTokenGenerator {
    * @param userId The userId that the token was issued for.
    */
   public void revokeToken(final String token, final int userId) {
-    try (CloseableHttpClient client =
-        HttpClients.custom().disableCookieManagement().disableDefaultUserAgent().build()) {
+    try (CloseableHttpClient client = NodeBbHttpClients.builder().bearerToken(token).build()) {
       deleteToken(client, userId, token);
     } catch (final IOException e) {
       throw new RuntimeException("Failed to revoke login token", e);
@@ -86,7 +83,6 @@ public class NodeBbTokenGenerator {
     final HttpDelete httpDelete =
         new HttpDelete(forumUrl + "/api/v2/users/" + userId + "/tokens/" + token);
     HttpProxy.addProxy(httpDelete);
-    httpDelete.addHeader("Authorization", "Bearer " + token);
     client.execute(httpDelete).close(); // ignore errors, execute and then close
   }
 
@@ -99,7 +95,13 @@ public class NodeBbTokenGenerator {
 
   private void checkUser(final Map<?, ?> jsonObject, final String username) {
     if (!jsonObject.containsKey("uid")) {
-      throw new IllegalStateException(String.format("User %s doesn't exist.", username));
+      throw new IllegalStateException(
+          String.format(
+              "Couldn't find an account with the username %s in the selected forum. Please double-check:"
+                  + "\n1) The selected forum"
+                  + "\n2) The spelling of your username"
+                  + "\n3) If your account is correctly registered at the selected forum",
+              username));
     }
     Object banned = jsonObject.get("banned");
     if (banned instanceof Integer ? (Integer) banned == 1 : (Boolean) banned) {
@@ -116,7 +118,15 @@ public class NodeBbTokenGenerator {
     final HttpGet get = new HttpGet(forumUrl + "/api/user/username/" + encodedUsername);
     HttpProxy.addProxy(get);
     try (CloseableHttpResponse response = client.execute(get)) {
-      return YamlReader.readMap(EntityUtils.toString(response.getEntity()));
+      final String rawJson = EntityUtils.toString(response.getEntity());
+      if (rawJson == null || rawJson.isBlank()) {
+        throw new IllegalStateException(
+            "Forum returned an empty response when looking up user '"
+                + username
+                + "'. The forum may be unreachable. HTTP status: "
+                + response.getStatusLine());
+      }
+      return YamlReader.readMap(rawJson);
     }
   }
 
@@ -136,6 +146,12 @@ public class NodeBbTokenGenerator {
     HttpProxy.addProxy(post);
     try (CloseableHttpResponse response = client.execute(post)) {
       final String rawJson = EntityUtils.toString(response.getEntity());
+      if (rawJson == null || rawJson.isBlank()) {
+        throw new IllegalStateException(
+            "Forum returned an empty response when requesting a login token. "
+                + "The forum may be unreachable. HTTP status: "
+                + response.getStatusLine());
+      }
       final Map<String, Object> jsonObject = YamlReader.readMap(rawJson);
       if (jsonObject.containsKey("code")) {
         final String code = (String) Preconditions.checkNotNull(jsonObject.get("code"));
@@ -144,7 +160,8 @@ public class NodeBbTokenGenerator {
               Preconditions.checkNotNull((Map<?, ?>) jsonObject.get("payload")).get("token");
         }
         throw new IllegalStateException(
-            "Incorrect password or server error.\nReturn Code: "
+            "Incorrect password or server error. Please double-check your entered password"
+                + "\nReturn Code: "
                 + code
                 + "\nMessage from server: "
                 + jsonObject.get("message"));

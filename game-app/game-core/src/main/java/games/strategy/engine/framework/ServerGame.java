@@ -240,13 +240,17 @@ public class ServerGame extends AbstractGame {
           () -> {
             try {
               blockingObserver.joinGame(bytes, playerManager.getPlayerMapping());
-              waitOnObserver.countDown();
             } catch (final Exception e) {
               if (e.getCause() instanceof ConnectionLostException) {
                 log.error("Connection lost to observer while joining: " + newNode.getName(), e);
               } else {
                 log.error("Failed to join game", e);
               }
+            } finally {
+              // Always release the awaiter so the host doesn't sit on the delegate
+              // write lock for serverObserverJoinWaitTime (default 180s) when a join
+              // aborts mid-flight.
+              waitOnObserver.countDown();
             }
           });
       try {
@@ -360,6 +364,7 @@ public class ServerGame extends AbstractGame {
     }
 
     isGameOver = true;
+    GameData.setCurrent(null);
     delegateExecutionStoppedLatch.countDown();
     // tell the players (especially the AI's) that the game is stopping, so stop doing stuff.
     for (final Player player : gamePlayers.values()) {
@@ -369,10 +374,10 @@ public class ServerGame extends AbstractGame {
     }
     // block delegate execution to prevent outbound messages to the players while we shut down.
     try {
-      if (!delegateExecutionManager.blockDelegateExecution(16000)) {
+      if (!delegateExecutionManager.blockDelegateExecution(16_000)) {
         log.warn("Could not stop delegate execution.");
         // Try one more time
-        if (!delegateExecutionManager.blockDelegateExecution(16000)) {
+        if (!delegateExecutionManager.blockDelegateExecution(16_000)) {
           log.error("Exiting...");
           ExitStatus.FAILURE.exit();
         }

@@ -77,7 +77,7 @@ class BattleCalculatorSeededTest extends AbstractClientSettingTestCase {
     assertEquals(
         a.getAverageDefendingUnitsRemaining().size(), b.getAverageDefendingUnitsRemaining().size());
     assertEquals(5.425, a.getAverageBattleRoundsFought(), 1e-9);
-    assertEquals(3.844155844155844, a.getAverageAttackingUnitsLeftWhenAttackerWon(), 1e-9);
-    assertEquals(3.2083333333333335, a.getAverageDefendingUnitsLeftWhenDefenderWon(), 1e-9);
+    assertEquals(3.844_155_844_155_844, a.getAverageAttackingUnitsLeftWhenAttackerWon(), 1e-9);
+    assertEquals(3.208_333_333_333_333_5, a.getAverageDefendingUnitsLeftWhenDefenderWon(), 1e-9);
   }
 }

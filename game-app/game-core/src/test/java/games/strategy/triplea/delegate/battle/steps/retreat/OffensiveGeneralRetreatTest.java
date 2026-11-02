@@ -1,5 +1,7 @@
 package games.strategy.triplea.delegate.battle.steps.retreat;
 
+import static games.strategy.triplea.Constants.TERRITORYEFFECT_ATTACHMENT_NAME;
+import static games.strategy.triplea.Constants.TERRITORY_ATTACHMENT_NAME;
 import static games.strategy.triplea.Constants.UNIT_ATTACHMENT_NAME;
 import static games.strategy.triplea.delegate.battle.BattleState.Side.OFFENSE;
 import static games.strategy.triplea.delegate.battle.FakeBattleState.givenBattleStateBuilder;
@@ -8,13 +10,11 @@ import static games.strategy.triplea.delegate.battle.steps.BattleStepsTest.given
 import static games.strategy.triplea.delegate.battle.steps.BattleStepsTest.givenUnitSeaTransport;
 import static games.strategy.triplea.delegate.battle.steps.BattleStepsTest.givenUnitWasAmphibious;
 import static games.strategy.triplea.delegate.battle.steps.MockGameData.givenGameData;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.is;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -23,11 +23,14 @@ import static org.mockito.Mockito.when;
 
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
+import games.strategy.engine.data.TerritoryEffect;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitCollection;
 import games.strategy.engine.delegate.IDelegateBridge;
 import games.strategy.engine.display.IDisplay;
 import games.strategy.engine.history.IDelegateHistoryWriter;
+import games.strategy.triplea.attachments.TerritoryAttachment;
+import games.strategy.triplea.attachments.TerritoryEffectAttachment;
 import games.strategy.triplea.attachments.UnitAttachment;
 import games.strategy.triplea.delegate.ExecutionStack;
 import games.strategy.triplea.delegate.battle.BattleActions;
@@ -53,6 +56,38 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
   @Mock BattleActions battleActions;
   @Mock Territory battleSite;
 
+  // Production land territories always carry a TerritoryAttachment; mock retreat sites
+  // need one stubbed so territory-effect lookups during retreat don't throw.
+  private static Territory givenLandRetreatSite() {
+    final Territory retreatSite = mock(Territory.class);
+    final UnitCollection collection = mock(UnitCollection.class);
+    when(retreatSite.getUnitCollection()).thenReturn(collection);
+    when(collection.getHolder()).thenReturn(retreatSite);
+    final TerritoryAttachment territoryAttachment = mock(TerritoryAttachment.class);
+    when(territoryAttachment.getTerritoryEffect()).thenReturn(List.of());
+    when(retreatSite.getAttachment(TERRITORY_ATTACHMENT_NAME)).thenReturn(territoryAttachment);
+    return retreatSite;
+  }
+
+  // Land retreat site whose territory effect blocks the given unit's type from entering.
+  // The site is filtered out before retreat executes, so collection stubs are not exercised.
+  private static Territory givenLandRetreatSiteBlockedFor(final Unit unit) {
+    final Territory retreatSite = mock(Territory.class);
+    final TerritoryEffect effect = mock(TerritoryEffect.class);
+    final TerritoryEffectAttachment effectAttachment = mock(TerritoryEffectAttachment.class);
+    lenient().doReturn(List.of(unit.getType())).when(effectAttachment).getUnitsNotAllowed();
+    lenient()
+        .doReturn(effectAttachment)
+        .when(effect)
+        .getAttachment(TERRITORYEFFECT_ATTACHMENT_NAME);
+    final TerritoryAttachment territoryAttachment = mock(TerritoryAttachment.class);
+    lenient().when(territoryAttachment.getTerritoryEffect()).thenReturn(List.of(effect));
+    lenient()
+        .when(retreatSite.getAttachment(TERRITORY_ATTACHMENT_NAME))
+        .thenReturn(territoryAttachment);
+    return retreatSite;
+  }
+
   @Nested
   class GetNames {
 
@@ -71,7 +106,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), is(empty()));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).isEmpty();
         final UnitAttachment unitAttachment =
             (UnitAttachment) unit.getType().getAttachment(UNIT_ATTACHMENT_NAME);
         // ensure it didn't even try to check if there are planes
@@ -90,7 +125,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), hasSize(1));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).hasSize(1);
         final UnitAttachment unitAttachment =
             (UnitAttachment) unit.getType().getAttachment(UNIT_ATTACHMENT_NAME);
         verify(unitAttachment).isAir();
@@ -112,7 +147,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), hasSize(1));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).hasSize(1);
       }
 
       @Test
@@ -127,7 +162,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), hasSize(1));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).hasSize(1);
       }
 
       @Test
@@ -141,7 +176,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), is(empty()));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).isEmpty();
       }
 
       @Test
@@ -160,7 +195,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), is(empty()));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).isEmpty();
       }
     }
 
@@ -180,7 +215,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), hasSize(1));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).hasSize(1);
       }
 
       @Test
@@ -195,7 +230,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), is(empty()));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).isEmpty();
       }
 
       @Test
@@ -210,7 +245,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), is(empty()));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).isEmpty();
         // ensure that it doesn't even check for amphibious units
         verify(amphibiousUnit, never()).getWasAmphibious();
       }
@@ -228,7 +263,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
       final OffensiveGeneralRetreat offensiveGeneralRetreat =
           new OffensiveGeneralRetreat(battleState, battleActions);
-      assertThat(offensiveGeneralRetreat.getAllStepDetails(), hasSize(1));
+      assertThat(offensiveGeneralRetreat.getAllStepDetails()).hasSize(1);
     }
 
     @Nested
@@ -244,7 +279,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), is(empty()));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).isEmpty();
       }
 
       @Test
@@ -257,7 +292,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), hasSize(1));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).hasSize(1);
       }
 
       @Test
@@ -271,7 +306,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), is(empty()));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).isEmpty();
       }
 
       @Test
@@ -285,7 +320,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
 
         final OffensiveGeneralRetreat offensiveGeneralRetreat =
             new OffensiveGeneralRetreat(battleState, battleActions);
-        assertThat(offensiveGeneralRetreat.getAllStepDetails(), hasSize(1));
+        assertThat(offensiveGeneralRetreat.getAllStepDetails()).hasSize(1);
       }
     }
   }
@@ -436,10 +471,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
         final Unit nonAmphibiousUnit = givenAnyUnit();
         when(nonAmphibiousUnit.getOwner()).thenReturn(attacker);
         final Collection<Unit> retreatingUnits = Set.of(nonAmphibiousUnit);
-        final Territory retreatSite = mock(Territory.class);
-        final UnitCollection retreatSiteCollection = mock(UnitCollection.class);
-        when(retreatSite.getUnitCollection()).thenReturn(retreatSiteCollection);
-        when(retreatSiteCollection.getHolder()).thenReturn(retreatSite);
+        final Territory retreatSite = givenLandRetreatSite();
         final BattleState battleState =
             spy(
                 givenBattleStateBuilder()
@@ -566,10 +598,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
         final Unit unit = givenAnyUnit();
         when(unit.getOwner()).thenReturn(attacker);
         final Collection<Unit> retreatingUnits = Set.of(unit);
-        final Territory retreatSite = mock(Territory.class);
-        final UnitCollection retreatSiteCollection = mock(UnitCollection.class);
-        when(retreatSite.getUnitCollection()).thenReturn(retreatSiteCollection);
-        when(retreatSiteCollection.getHolder()).thenReturn(retreatSite);
+        final Territory retreatSite = givenLandRetreatSite();
         final BattleState battleState =
             spy(
                 givenBattleStateBuilder()
@@ -595,10 +624,7 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
         final Unit unit = givenAnyUnit();
         when(unit.getOwner()).thenReturn(attacker);
         final Collection<Unit> retreatingUnits = Set.of(unit);
-        final Territory retreatSite = mock(Territory.class);
-        final UnitCollection retreatSiteCollection = mock(UnitCollection.class);
-        when(retreatSite.getUnitCollection()).thenReturn(retreatSiteCollection);
-        when(retreatSiteCollection.getHolder()).thenReturn(retreatSite);
+        final Territory retreatSite = givenLandRetreatSite();
         final BattleState battleState =
             spy(
                 givenBattleStateBuilder()
@@ -622,6 +648,36 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
         offensiveGeneralRetreat.execute(executionStack, delegateBridge);
         verify(battleState).retreatUnits(OFFENSE, retreatingUnits);
       }
+
+      @Test
+      void territoryEffectBlocksRetreatToRestrictedSite() {
+        // Regression test for https://github.com/triplea-game/triplea/issues/9480.
+        // A retreat target whose territory effect bars the retreating unit's type
+        // must be filtered out of the offered retreat sites.
+        final Unit unit = givenAnyUnit();
+        when(unit.getOwner()).thenReturn(attacker);
+        final Collection<Unit> retreatingUnits = Set.of(unit);
+        final Territory allowedSite = givenLandRetreatSite();
+        final Territory blockedSite = givenLandRetreatSiteBlockedFor(unit);
+        final BattleState battleState =
+            spy(
+                givenBattleStateBuilder()
+                    .battleSite(battleSite)
+                    .attacker(attacker)
+                    .attackingUnits(retreatingUnits)
+                    .attackerRetreatTerritories(List.of(allowedSite, blockedSite))
+                    .gameData(givenGameData().build())
+                    .build());
+
+        when(battleActions.queryRetreatTerritory(
+                battleState, delegateBridge, attacker, List.of(allowedSite), "attacker retreat?"))
+            .thenReturn(Optional.of(allowedSite));
+
+        final OffensiveGeneralRetreat offensiveGeneralRetreat =
+            new OffensiveGeneralRetreat(battleState, battleActions);
+        offensiveGeneralRetreat.execute(executionStack, delegateBridge);
+        verify(battleState).retreatUnits(OFFENSE, retreatingUnits);
+      }
     }
 
     @Nested
@@ -634,6 +690,28 @@ class OffensiveGeneralRetreatTest extends AbstractClientSettingTestCase {
                 .battleSite(battleSite)
                 .attacker(attacker)
                 .attackerRetreatTerritories(List.of())
+                .gameData(givenGameData().build())
+                .build();
+
+        final OffensiveGeneralRetreat offensiveGeneralRetreat =
+            new OffensiveGeneralRetreat(battleState, battleActions);
+        offensiveGeneralRetreat.execute(executionStack, delegateBridge);
+        verify(battleActions, never())
+            .queryRetreatTerritory(any(), any(), any(), anyCollection(), anyString());
+      }
+
+      @Test
+      void noIfAllRetreatTerritoriesAreBlockedForTheRetreatingUnits() {
+        // Regression test for https://github.com/triplea-game/triplea/issues/15056.
+        // The player must not be asked to retreat when no retreat site is left to choose from.
+        final Unit unit = givenAnyUnit();
+        when(battleSite.getUnitCollection()).thenReturn(battleSiteCollection);
+        final BattleState battleState =
+            givenBattleStateBuilder()
+                .battleSite(battleSite)
+                .attacker(attacker)
+                .attackingUnits(Set.of(unit))
+                .attackerRetreatTerritories(List.of(givenLandRetreatSiteBlockedFor(unit)))
                 .gameData(givenGameData().build())
                 .build();
 

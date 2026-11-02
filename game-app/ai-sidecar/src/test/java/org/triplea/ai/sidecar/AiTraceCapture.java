@@ -93,6 +93,6 @@ public final class AiTraceCapture {
     public void flush() {}
 
     @Override
-    public void close() throws SecurityException {}
+    public void close() {}
   }
 }

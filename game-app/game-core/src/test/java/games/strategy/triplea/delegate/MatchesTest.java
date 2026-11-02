@@ -5,8 +5,7 @@ import static games.strategy.triplea.Constants.PLAYER_ATTACHMENT_NAME;
 import static games.strategy.triplea.Constants.SUPPORT_ATTACHMENT_PREFIX;
 import static games.strategy.triplea.Constants.UNIT_ATTACHMENT_NAME;
 import static games.strategy.triplea.delegate.battle.steps.MockGameData.givenGameData;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -24,10 +23,6 @@ import games.strategy.triplea.xml.TestMapGameData;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
-import javax.annotation.Nullable;
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-import org.hamcrest.TypeSafeDiagnosingMatcher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -37,42 +32,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 final class MatchesTest {
-
-  private static <T> Matcher<Predicate<T>> matches(final @Nullable T value) {
-    return new TypeSafeDiagnosingMatcher<>() {
-      @Override
-      public void describeTo(final Description description) {
-        description.appendText("matcher matches using ").appendValue(value);
-      }
-
-      @Override
-      public boolean matchesSafely(final Predicate<T> match, final Description description) {
-        if (!match.test(value)) {
-          description.appendText("it does not match");
-          return false;
-        }
-        return true;
-      }
-    };
-  }
-
-  private static <T> Matcher<Predicate<T>> notMatches(final @Nullable T value) {
-    return new TypeSafeDiagnosingMatcher<>() {
-      @Override
-      public void describeTo(final Description description) {
-        description.appendText("matcher does not match using ").appendValue(value);
-      }
-
-      @Override
-      public boolean matchesSafely(final Predicate<T> match, final Description description) {
-        if (match.test(value)) {
-          description.appendText("it matches");
-          return false;
-        }
-        return true;
-      }
-    };
-  }
 
   @Nested
   final class TerritoryHasEnemyUnitsThatCanCaptureItAndIsOwnedByTheirEnemyTest {
@@ -108,9 +67,9 @@ final class MatchesTest {
 
       player = GameDataTestUtil.germans(gameData);
       alliedPlayer = GameDataTestUtil.japanese(gameData);
-      assertThat(player.isAtWar(alliedPlayer), is(false));
+      assertThat(player.isAtWar(alliedPlayer)).isFalse();
       enemyPlayer = GameDataTestUtil.russians(gameData);
-      assertThat(player.isAtWar(enemyPlayer), is(true));
+      assertThat(player.isAtWar(enemyPlayer)).isTrue();
 
       territory = gameData.getMap().getTerritoryOrNull("Germany");
       territory.setOwner(player);
@@ -121,7 +80,7 @@ final class MatchesTest {
     void shouldNotMatchWhenTerritoryContainsOnlyAlliedLandUnits() {
       territory.getUnitCollection().add(newLandUnitFor(alliedPlayer));
 
-      assertThat(newMatch(), notMatches(territory));
+      assertThat(newMatch().test(territory)).isFalse();
     }
 
     @Test
@@ -135,7 +94,7 @@ final class MatchesTest {
                   newAirUnitFor(enemyPlayer),
                   newInfrastructureUnitFor(enemyPlayer)));
 
-      assertThat(newMatch(), matches(territory));
+      assertThat(newMatch().test(territory)).isTrue();
     }
 
     @Test
@@ -149,21 +108,21 @@ final class MatchesTest {
                   newAirUnitFor(enemyPlayer),
                   newInfrastructureUnitFor(enemyPlayer)));
 
-      assertThat(newMatch(), matches(territory));
+      assertThat(newMatch().test(territory)).isTrue();
     }
 
     @Test
     void shouldNotMatchWhenTerritoryContainsOnlyEnemyAirUnits() {
       territory.getUnitCollection().add(newAirUnitFor(enemyPlayer));
 
-      assertThat(newMatch(), notMatches(territory));
+      assertThat(newMatch().test(territory)).isFalse();
     }
 
     @Test
     void shouldNotMatchWhenTerritoryContainsOnlyEnemyInfrastructureUnits() {
       territory.getUnitCollection().add(newInfrastructureUnitFor(enemyPlayer));
 
-      assertThat(newMatch(), notMatches(territory));
+      assertThat(newMatch().test(territory)).isFalse();
     }
   }
 
@@ -223,7 +182,7 @@ final class MatchesTest {
       final Predicate<Unit> predicate =
           Matches.unitCanBeCapturedOnEnteringThisTerritory(attacker, territory);
 
-      assertThat(predicate, matches(capturableUnit()));
+      assertThat(predicate.test(capturableUnit())).isTrue();
     }
 
     @Test
@@ -239,7 +198,7 @@ final class MatchesTest {
       final Predicate<Unit> predicate =
           Matches.unitCanBeCapturedOnEnteringThisTerritory(attacker, territory);
 
-      assertThat(predicate, notMatches(capturableUnit()));
+      assertThat(predicate.test(capturableUnit())).isFalse();
     }
 
     @Test
@@ -255,7 +214,7 @@ final class MatchesTest {
       final Predicate<Unit> predicate =
           Matches.unitCanBeCapturedOnEnteringThisTerritory(attacker, territory);
 
-      assertThat(predicate, notMatches(capturableUnit()));
+      assertThat(predicate.test(capturableUnit())).isFalse();
     }
   }
 
@@ -290,21 +249,21 @@ final class MatchesTest {
 
     @Test
     void shouldMatchWhenLandTerritoryIsOwnedAndHasTerritoryAttachment() {
-      assertThat(newMatch(), matches(landTerritory));
+      assertThat(newMatch().test(landTerritory)).isTrue();
     }
 
     @Test
     void shouldMatchWhenLandTerritoryIsOwnedAndDoesNotHaveTerritoryAttachment() {
       TerritoryAttachment.remove(landTerritory);
 
-      assertThat(newMatch(), matches(landTerritory));
+      assertThat(newMatch().test(landTerritory)).isTrue();
     }
 
     @Test
     void shouldMatchWhenLandTerritoryIsUnownedAndHasTerritoryAttachment() {
       landTerritory.setOwner(gameData.getPlayerList().getNullPlayer());
 
-      assertThat(newMatch(), matches(landTerritory));
+      assertThat(newMatch().test(landTerritory)).isTrue();
     }
 
     @Test
@@ -312,26 +271,26 @@ final class MatchesTest {
       landTerritory.setOwner(gameData.getPlayerList().getNullPlayer());
       TerritoryAttachment.remove(landTerritory);
 
-      assertThat(newMatch(), matches(landTerritory));
+      assertThat(newMatch().test(landTerritory)).isTrue();
     }
 
     @Test
     void shouldMatchWhenSeaTerritoryIsOwnedAndHasTerritoryAttachment() {
-      assertThat(newMatch(), matches(seaTerritory));
+      assertThat(newMatch().test(seaTerritory)).isTrue();
     }
 
     @Test
     void shouldMatchWhenSeaTerritoryIsOwnedAndDoesNotHaveTerritoryAttachment() {
       TerritoryAttachment.remove(seaTerritory);
 
-      assertThat(newMatch(), matches(seaTerritory));
+      assertThat(newMatch().test(seaTerritory)).isTrue();
     }
 
     @Test
     void shouldMatchWhenSeaTerritoryIsUnownedAndHasTerritoryAttachment() {
       seaTerritory.setOwner(gameData.getPlayerList().getNullPlayer());
 
-      assertThat(newMatch(), matches(seaTerritory));
+      assertThat(newMatch().test(seaTerritory)).isTrue();
     }
 
     @Test
@@ -339,7 +298,7 @@ final class MatchesTest {
       seaTerritory.setOwner(gameData.getPlayerList().getNullPlayer());
       TerritoryAttachment.remove(seaTerritory);
 
-      assertThat(newMatch(), notMatches(seaTerritory));
+      assertThat(newMatch().test(seaTerritory)).isFalse();
     }
   }
 
@@ -365,10 +324,9 @@ final class MatchesTest {
       unitType.addAttachment(UNIT_ATTACHMENT_NAME, unitAttachment);
       final Unit unit = unitType.createTemp(1, player).get(0);
 
-      assertThat(
-          "An infrastructure unit normally can not be in battle",
-          Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit),
-          is(false));
+      assertThat(Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit))
+          .as("An infrastructure unit normally can not be in battle")
+          .isFalse();
     }
 
     @Test
@@ -382,10 +340,9 @@ final class MatchesTest {
       unitType.addAttachment(UNIT_ATTACHMENT_NAME, unitAttachment);
       final Unit unit = unitType.createTemp(1, player).get(0);
 
-      assertThat(
-          "An infrastructure unit with attack can be in battle when it is attacking",
-          Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit),
-          is(true));
+      assertThat(Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit))
+          .as("An infrastructure unit with attack can be in battle when it is attacking")
+          .isTrue();
     }
 
     @Test
@@ -399,10 +356,9 @@ final class MatchesTest {
       unitType.addAttachment(UNIT_ATTACHMENT_NAME, unitAttachment);
       final Unit unit = unitType.createTemp(1, player).get(0);
 
-      assertThat(
-          "An infrastructure unit with attack can not be in battle when it is attacking",
-          Matches.unitCanBeInBattle(false, true, 1, false, List.of()).test(unit),
-          is(false));
+      assertThat(Matches.unitCanBeInBattle(false, true, 1, false, List.of()).test(unit))
+          .as("An infrastructure unit with attack can not be in battle when it is attacking")
+          .isFalse();
     }
 
     @Test
@@ -416,10 +372,9 @@ final class MatchesTest {
       unitType.addAttachment(UNIT_ATTACHMENT_NAME, unitAttachment);
       final Unit unit = unitType.createTemp(1, player).get(0);
 
-      assertThat(
-          "An infrastructure unit with defense can be in battle when it is defending",
-          Matches.unitCanBeInBattle(false, true, 1, false, List.of()).test(unit),
-          is(true));
+      assertThat(Matches.unitCanBeInBattle(false, true, 1, false, List.of()).test(unit))
+          .as("An infrastructure unit with defense can be in battle when it is defending")
+          .isTrue();
     }
 
     @Test
@@ -433,10 +388,9 @@ final class MatchesTest {
       unitType.addAttachment(UNIT_ATTACHMENT_NAME, unitAttachment);
       final Unit unit = unitType.createTemp(1, player).get(0);
 
-      assertThat(
-          "An infrastructure unit with defense can not be in battle when it is attacking",
-          Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit),
-          is(false));
+      assertThat(Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit))
+          .as("An infrastructure unit with defense can not be in battle when it is attacking")
+          .isFalse();
     }
 
     @Test
@@ -451,10 +405,9 @@ final class MatchesTest {
       unitType.addAttachment(SUPPORT_ATTACHMENT_PREFIX, unitSupportAttachment);
       final Unit unit = unitType.createTemp(1, player).get(0);
 
-      assertThat(
-          "An infrastructure unit that gives some support can be in battle",
-          Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit),
-          is(true));
+      assertThat(Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit))
+          .as("An infrastructure unit that gives some support can be in battle")
+          .isTrue();
     }
 
     @Test
@@ -468,11 +421,11 @@ final class MatchesTest {
       unitType.addAttachment(UNIT_ATTACHMENT_NAME, unitAttachment);
       final Unit unit = unitType.createTemp(1, player).get(0);
 
-      assertThat(
-          "An infrastructure unit that is combat AA and can fire in the round can be "
-              + "in battle",
-          Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit),
-          is(true));
+      assertThat(Matches.unitCanBeInBattle(true, true, 1, false, List.of()).test(unit))
+          .as(
+              "An infrastructure unit that is combat AA and can fire in the round can be "
+                  + "in battle")
+          .isTrue();
     }
 
     @Test
@@ -486,11 +439,11 @@ final class MatchesTest {
       unitType.addAttachment(UNIT_ATTACHMENT_NAME, unitAttachment);
       final Unit unit = unitType.createTemp(1, player).get(0);
 
-      assertThat(
-          "An infrastructure unit that is combat AA but can only fire in round 1 and "
-              + "it is round 2 can not be in battle",
-          Matches.unitCanBeInBattle(true, true, 2, false, List.of()).test(unit),
-          is(false));
+      assertThat(Matches.unitCanBeInBattle(true, true, 2, false, List.of()).test(unit))
+          .as(
+              "An infrastructure unit that is combat AA but can only fire in round 1 and "
+                  + "it is round 2 can not be in battle")
+          .isFalse();
     }
 
     @Test
@@ -511,10 +464,11 @@ final class MatchesTest {
       firingUnitType.addAttachment(UNIT_ATTACHMENT_NAME, firingUnitAttachment);
 
       assertThat(
-          "An infrastructure unit that is combat AA but can only fire in round 1 and "
-              + "it is round 2 can not be in battle",
-          Matches.unitCanBeInBattle(true, true, 1, false, List.of(firingUnitType)).test(unit),
-          is(true));
+              Matches.unitCanBeInBattle(true, true, 1, false, List.of(firingUnitType)).test(unit))
+          .as(
+              "An infrastructure unit that is combat AA but can only fire in round 1 and "
+                  + "it is round 2 can not be in battle")
+          .isTrue();
     }
   }
 }

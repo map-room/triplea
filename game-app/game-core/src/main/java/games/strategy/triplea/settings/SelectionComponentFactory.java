@@ -305,9 +305,15 @@ final class SelectionComponentFactory {
           new JButtonBuilder()
               .title("Select")
               .actionListener(
-                  () ->
-                      SwingComponents.showJFileChooser(folderSelectionMode)
-                          .ifPresent(file -> field.setText(file.toAbsolutePath().toString())))
+                  () -> {
+                    final String currentValue = field.getText();
+                    final Optional<Path> selected =
+                        currentValue.isEmpty()
+                            ? SwingComponents.showJFileChooser(folderSelectionMode)
+                            : SwingComponents.showJFileChooser(
+                                folderSelectionMode, Path.of(currentValue));
+                    selected.ifPresent(file -> field.setText(file.toAbsolutePath().toString()));
+                  })
               .build();
 
       @Override
@@ -520,7 +526,7 @@ final class SelectionComponentFactory {
 
       private final JSpinner portSpinner =
           new JSpinner(
-              new SpinnerNumberModel((int) portSetting.getValue().orElse(465), 0, 65535, 1));
+              new SpinnerNumberModel((int) portSetting.getValue().orElse(465), 0, 65_535, 1));
 
       private final JCheckBox tlsCheckBox =
           new JCheckBox("SSL/TLS", tlsSetting.getValue().orElse(true));

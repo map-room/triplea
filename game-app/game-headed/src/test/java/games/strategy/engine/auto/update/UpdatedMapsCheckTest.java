@@ -1,7 +1,6 @@
 package games.strategy.engine.auto.update;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
 import java.time.Instant;
@@ -13,7 +12,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.triplea.http.client.maps.listing.MapDownloadItem;
+import org.triplea.http.client.lobby.maps.listing.MapDownloadItem;
 
 @SuppressWarnings("unused")
 @ExtendWith(MockitoExtension.class)
@@ -31,7 +30,7 @@ final class UpdatedMapsCheckTest {
     final boolean result =
         UpdatedMapsCheck.isMapUpdateCheckRequired(lastCheckEpochMilli, lastCheckSetter);
 
-    assertThat(result, is(true));
+    assertThat(result).isTrue();
 
     verify(lastCheckSetter).run();
   }
@@ -50,7 +49,7 @@ final class UpdatedMapsCheckTest {
     final boolean result =
         UpdatedMapsCheck.isMapUpdateCheckRequired(lastCheckTime, lastCheckSetter);
 
-    assertThat(result, is(false));
+    assertThat(result).isFalse();
 
     verify(lastCheckSetter).run();
   }

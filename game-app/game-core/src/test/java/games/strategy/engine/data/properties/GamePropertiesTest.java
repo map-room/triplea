@@ -1,7 +1,6 @@
 package games.strategy.engine.data.properties;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import games.strategy.engine.data.GameData;
 import java.util.List;
@@ -15,19 +14,19 @@ final class GamePropertiesTest {
     void getReturnsSetValueAndSeesUpdateAfterSet() {
       final GameProperties properties = new GameProperties(new GameData());
       properties.set("IgnoreTransportInMovement", Boolean.TRUE);
-      assertThat(properties.get("IgnoreTransportInMovement", false), is(true));
+      assertThat(properties.get("IgnoreTransportInMovement", false)).isTrue();
       // cache hit
-      assertThat(properties.get("IgnoreTransportInMovement", false), is(true));
+      assertThat(properties.get("IgnoreTransportInMovement", false)).isTrue();
       properties.set("IgnoreTransportInMovement", Boolean.FALSE);
-      assertThat(properties.get("IgnoreTransportInMovement", true), is(false));
+      assertThat(properties.get("IgnoreTransportInMovement", true)).isFalse();
     }
 
     @Test
     void missingKeyUsesDefaultAndCanBeFilledLater() {
       final GameProperties properties = new GameProperties(new GameData());
-      assertThat(properties.get("missing", true), is(true));
+      assertThat(properties.get("missing", true)).isTrue();
       properties.set("missing", Boolean.FALSE);
-      assertThat(properties.get("missing", true), is(false));
+      assertThat(properties.get("missing", true)).isFalse();
     }
   }
 
@@ -44,7 +43,7 @@ final class GamePropertiesTest {
       final byte[] bytes = GameProperties.writeEditableProperties(expected);
       final List<IEditableProperty<?>> actual = GameProperties.readEditableProperties(bytes);
 
-      assertThat(actual, is(expected));
+      assertThat(actual).isEqualTo(expected);
     }
   }
 }

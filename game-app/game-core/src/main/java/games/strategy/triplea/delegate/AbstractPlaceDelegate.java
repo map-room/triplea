@@ -170,6 +170,9 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
   public @Nullable String undoMove(final int moveIndex) {
     if (moveIndex < placements.size() && moveIndex >= 0) {
       final UndoablePlacement undoPlace = placements.get(moveIndex);
+      if (!undoPlace.getCanUndo()) {
+        return undoPlace.getReasonCantUndo();
+      }
       undoPlace.undo(bridge);
       placements.remove(moveIndex);
       updateUndoablePlacementIndexes();
@@ -222,7 +225,7 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
 
     while (!unitsLeftToPlace.isEmpty() && !producers.isEmpty()) {
       // Get next producer territory
-      final Territory producer = producers.remove(0);
+      final Territory producer = producers.removeFirst();
 
       int maxPlaceable = maxPlaceableMap.getInt(producer);
       if (maxPlaceable == 0) {
@@ -250,26 +253,18 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
       }
       final int neededExtra = unitsCanBePlacedByThisProducer.size() - maxForThisProducer;
       if (maxPlaceable > maxForThisProducer) {
-        freePlacementCapacity(producer, neededExtra, unitsCanBePlacedByThisProducer, at, player);
+        freePlacementCapacity(producer, neededExtra, unitsCanBePlacedByThisProducer, player);
         final int newMaxForThisProducer =
             getMaxUnitsToBePlacedFrom(producer, unitsCanBePlacedByThisProducer, at, player);
         if (newMaxForThisProducer != maxPlaceable && neededExtra > newMaxForThisProducer) {
-          throw new IllegalStateException(
-              "getMaxUnitsToBePlaced originally returned: "
-                  + maxPlaceable
-                  + ", \nWhich is not the same as it is returning after using "
-                  + "freePlacementCapacity: "
-                  + newMaxForThisProducer
-                  + ", \nFor territory: "
-                  + at.getName()
-                  + ", Current Producer: "
-                  + producer.getName()
-                  + ", All Producers: "
-                  + producers
-                  + ", \nUnits Total: "
-                  + MyFormatter.unitsToTextNoOwner(units)
-                  + ", Units Left To Place By This Producer: "
-                  + MyFormatter.unitsToTextNoOwner(unitsCanBePlacedByThisProducer));
+          // Speculative count and freePlacementCapacity disagreed (the two algorithms
+          // for computing placements, that there are two different algorithms for the same
+          // thing is a problem in of itself).
+          // Trust the freshly-measured capacity and let any leftover units hit the
+          // "not enough territories" message.
+          if (newMaxForThisProducer != -1) {
+            maxPlaceable = newMaxForThisProducer;
+          }
         }
       }
       final Collection<Unit> placedUnits =
@@ -327,14 +322,26 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
       change.add(OriginalOwnerTracker.addOriginalOwnerChange(factoryAndInfrastructure, player));
     }
     // can we move planes to land there
+    final Collection<Unit> movedFighters = new ArrayList<>();
     final String movedAirTranscriptTextForHistory =
-        moveAirOntoNewCarriers(at, producer, placeableUnits, player, change);
+        moveAirOntoNewCarriers(at, producer, placeableUnits, player, change, movedFighters);
     final Change remove = ChangeFactory.removeUnits(player, placeableUnits);
     final Change place = ChangeFactory.addUnits(at, placeableUnits);
     change.add(remove);
     change.add(place);
     final UndoablePlacement currentPlacement =
         new UndoablePlacement(change, producer, at, placeableUnits);
+    if (!movedFighters.isEmpty()) {
+      // Any prior placement that produced one of the moved fighters now has its placed units
+      // sitting on this carrier. Block undoing those prior placements until this one is undone,
+      // otherwise the inverted change would try to remove a fighter from a territory it has
+      // already left, leaving it duplicated in both the carrier's sea zone and the player's hand.
+      for (final UndoablePlacement prior : placements) {
+        if (!CollectionUtils.intersection(prior.getUnits(), movedFighters).isEmpty()) {
+          prior.addDependent(currentPlacement);
+        }
+      }
+    }
     placements.add(currentPlacement);
     updateUndoablePlacementIndexes();
     final String transcriptText =
@@ -378,7 +385,6 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
       final Territory producer,
       final int freeSize,
       final Collection<Unit> unitsLeftToPlace,
-      final Territory at,
       final GamePlayer player) {
     // placements of the producer that could be redone by other territories
     final List<UndoablePlacement> redoPlacements = new ArrayList<>();
@@ -477,7 +483,14 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
           continue;
         }
         final Territory newProducer = tuple.getSecond();
-        int leftToPlace = getMaxUnitsToBePlacedFrom(newProducer, unitsLeftToPlace, at, player);
+        // Capacity is for the placement being split, not the current placement at `at`.
+        final Territory splitPlaceTerritory = placement.getPlaceTerritory();
+        int leftToPlace =
+            getMaxUnitsToBePlacedFrom(
+                newProducer,
+                unitsPlacedInTerritorySoFar(splitPlaceTerritory),
+                splitPlaceTerritory,
+                player);
         foundSpaceTotal += leftToPlace;
         // divide set of units that get placed
         final Collection<Unit> unitsForOldProducer = new ArrayList<>(placement.getUnits());
@@ -504,7 +517,7 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
       }
     }
     if (foundSpaceTotal < freeSize && unusedSplitPlacements) {
-      freePlacementCapacity(producer, (freeSize - foundSpaceTotal), unitsLeftToPlace, at, player);
+      freePlacementCapacity(producer, (freeSize - foundSpaceTotal), unitsLeftToPlace, player);
     }
   }
 
@@ -514,7 +527,8 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
       final Territory producer,
       final Collection<Unit> units,
       final GamePlayer player,
-      final CompositeChange placeChange) {
+      final CompositeChange placeChange,
+      final Collection<Unit> movedFightersOut) {
     if (!at.isWater()) {
       return null;
     }
@@ -557,6 +571,7 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
     }
     final Change change = ChangeFactory.moveUnits(producer, at, movedFighters);
     placeChange.add(change);
+    movedFightersOut.addAll(movedFighters);
     return MyFormatter.unitsToTextNoOwner(movedFighters)
         + " moved from "
         + producer.getName()
@@ -843,7 +858,7 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
       return Optional.of("Cannot place these units outside of the capital");
     }
     if (to.isWater()) {
-      final Optional<String> canLand = validateNewAirCanLandOnCarriers(to, units);
+      final Optional<String> canLand = validateNewAirCanLandOnCarriers(to, units, player);
       if (canLand.isPresent()) {
         return canLand;
       }
@@ -1320,6 +1335,64 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
   }
 
   /**
+   * Calculates the amount by which the construction cap for {@code constructionType} should be
+   * temporarily increased in a territory, to account for existing constructions that will be
+   * consumed by the units being placed.
+   *
+   * <p>Note: This method can raise the effective limit above maxConstructionsPerTypePerTerr. That's
+   * safe because canUnitsBePlaced() redoes this same calculation using the units actually being
+   * placed, and then cuts the combined per-type total back down to the real cap.
+   * canWeConsumeUnits() double-checks that against the units that existed at the start of the turn,
+   * so the temporary increase can never be exploited. Don't change this method without re-checking
+   * those other two.
+   *
+   * @param constructionType the construction type whose cap is being evaluated
+   * @param existingByType count of each existing unit type already present in the territory
+   * @param existingTypeToConstructionType maps the unit type to the construction type of each unit
+   *     type in {@code existingByType}
+   * @param heldByType count of each unit type the player has in its pool that is placeable
+   * @param heldTypeToConstructionType maps the unit type to the construction type of each unit type
+   *     in {@code heldByType}
+   * @param consumesUnitsByType for each held unit type, the unit types and counts it consumes on
+   *     placement
+   * @return the amount by which the construction cap for {@code constructionType} should be
+   *     increased in this territory
+   */
+  private int getConstructionConsumptionBonus(
+      final String constructionType,
+      final IntegerMap<UnitType> existingByType,
+      final Map<UnitType, String> existingTypeToConstructionType,
+      final IntegerMap<UnitType> heldByType,
+      final Map<UnitType, String> heldTypeToConstructionType,
+      final Map<UnitType, IntegerMap<UnitType>> consumesUnitsByType) {
+    int consumptionBonus = 0;
+    // Filter existing units down to the ones that have the same constructionType we are evaluating
+    for (final UnitType consumedType : existingByType.keySet()) {
+      if (!constructionType.equals(existingTypeToConstructionType.get(consumedType))) {
+        continue;
+      }
+      int potentialConsumption = 0;
+      // Filter held units down to the ones that have the same constructionType we are evaluating
+      for (final UnitType heldType : heldByType.keySet()) {
+        if (!constructionType.equals(heldTypeToConstructionType.get(heldType))) {
+          continue;
+        }
+        final IntegerMap<UnitType> consumesUnits = consumesUnitsByType.get(heldType);
+        if (consumesUnits != null) {
+          // Each held unit of heldType consumes consumesUnits.getInt(consumedType) number of units
+          // of consumedType, so multiply by how many of heldType could be placed
+          potentialConsumption += heldByType.getInt(heldType) * consumesUnits.getInt(consumedType);
+        }
+      }
+      // The bonus from this existing type can't exceed what's actually present
+      // (existingByType.getInt(consumedType)) — you can't consume more than exists —
+      // nor exceed what placement could actually consume (potentialConsumption)
+      consumptionBonus += Math.min(potentialConsumption, existingByType.getInt(consumedType));
+    }
+    return consumptionBonus;
+  }
+
+  /**
    * Calculates how many of each of the specified construction units can be placed in the specified
    * territory.
    *
@@ -1346,6 +1419,11 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
     final IntegerMap<String> unitMapHeld = new IntegerMap<>();
     final IntegerMap<String> unitMapMaxType = new IntegerMap<>();
     final IntegerMap<String> unitMapTypePerTurn = new IntegerMap<>();
+    // per-unit-type breakdown of held units, so we can work out exactly how many
+    // existing units of the same constructionType would be consumed on placement
+    final IntegerMap<UnitType> heldByType = new IntegerMap<>();
+    final Map<UnitType, String> heldTypeToConstructionType = new HashMap<>();
+    final Map<UnitType, IntegerMap<UnitType>> consumesUnitsByType = new HashMap<>();
     final int maxFactory = Properties.getFactoriesPerCountry(getProperties());
     final int territoryProduction = TerritoryAttachment.getProduction(to);
     for (final Unit currentUnit : CollectionUtils.getMatches(units, Matches.unitIsConstruction())) {
@@ -1376,6 +1454,9 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
       } else {
         unitMapMaxType.put(constructionType, ua.getMaxConstructionsPerTypePerTerr());
       }
+      heldByType.add(currentUnit.getType(), 1);
+      heldTypeToConstructionType.put(currentUnit.getType(), constructionType);
+      consumesUnitsByType.put(currentUnit.getType(), ua.getConsumesUnits());
     }
     final boolean moreWithoutFactory =
         Properties.getMoreConstructionsWithoutFactory(getProperties());
@@ -1383,8 +1464,16 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
     final boolean unlimitedConstructions = Properties.getUnlimitedConstructions(getProperties());
     final boolean wasFactoryThereAtStart =
         wasOwnedUnitThatCanProduceUnitsOrIsFactoryInTerritoryAtStartOfStep(to, player);
-    // build an integer map of each construction unit in the territory
+    // build an integer map of each construction unit in the territory, plus a per-unit-type
+    // breakdown (at start of turn) of units that are actually available to be consumed
     final IntegerMap<String> unitMapTo = new IntegerMap<>();
+    final IntegerMap<UnitType> existingByType = new IntegerMap<>();
+    final Map<UnitType, String> existingTypeToConstructionType = new HashMap<>();
+    for (final Unit u :
+        CollectionUtils.getMatches(unitsAtStartOfTurnInTo, Matches.unitIsConstruction())) {
+      existingByType.add(u.getType(), 1);
+      existingTypeToConstructionType.put(u.getType(), u.getUnitAttachment().getConstructionType());
+    }
     final var existingConstruction =
         CollectionUtils.getMatches(to.getUnits(), Matches.unitIsConstruction());
     if (!existingConstruction.isEmpty()) {
@@ -1398,10 +1487,23 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
             && !constructionType.endsWith(Constants.CONSTRUCTION_TYPE_STRUCTURE)) {
           final boolean more = (wasFactoryThereAtStart ? moreWithFactory : moreWithoutFactory);
           final int production = (more ? territoryProduction : 0);
-          unitMax = Math.max(Math.max(unitMax, production), (unlimitedConstructions ? 10000 : 0));
+          unitMax = Math.max(Math.max(unitMax, production), (unlimitedConstructions ? 10_000 : 0));
         }
         final int existingCount = unitMapTo.getInt(constructionType);
-        final int value = Math.min(unitMax - existingCount, unitMapHeld.getInt(constructionType));
+        // consumptionBonus increases the placement cap so that constructions that consume other
+        // constructions can be placed when the cap is reached (Example: factory_upgrade consumes
+        // factory_minor in Global 1940, and maxFactoriesPerTerritory is set to 1). See issue #3359.
+        final int consumptionBonus =
+            getConstructionConsumptionBonus(
+                constructionType,
+                existingByType,
+                existingTypeToConstructionType,
+                heldByType,
+                heldTypeToConstructionType,
+                consumesUnitsByType);
+        final int value =
+            Math.min(
+                unitMax - existingCount + consumptionBonus, unitMapHeld.getInt(constructionType));
         unitMapHeld.put(constructionType, Math.max(0, value));
       }
     }
@@ -1640,16 +1742,13 @@ public abstract class AbstractPlaceDelegate extends BaseTripleADelegate
     return CollectionUtils.getAny(factoryUnits).getOriginalOwner();
   }
 
-  /**
-   * The rule is that new fighters can be produced on new carriers. This does not allow for fighters
-   * to be produced on old carriers. THIS ISN'T CORRECT.
-   */
   private static Optional<@Nls String> validateNewAirCanLandOnCarriers(
-      final Territory to, final Collection<Unit> units) {
-    final int cost = AirMovementValidator.carrierCost(units);
+      final Territory to, final Collection<Unit> units, final GamePlayer player) {
+    int cost = AirMovementValidator.carrierCost(units);
+    cost += AirMovementValidator.carrierCost(to.getMatches(Matches.unitIsOwnedBy(player)));
     int capacity = AirMovementValidator.carrierCapacity(units, to);
-    capacity += AirMovementValidator.carrierCapacity(to.getUnits(), to);
-    // TODO: This method considers existing carriers but not existing air units
+    capacity +=
+        AirMovementValidator.carrierCapacity(to.getMatches(Matches.unitIsOwnedBy(player)), to);
     if (cost > capacity) {
       return Optional.of("Not enough new carriers to land all the fighters");
     }

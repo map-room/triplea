@@ -3,10 +3,8 @@ package games.strategy.triplea.delegate;
 import static games.strategy.triplea.delegate.GameStepPropertiesHelper.getCombinedTurns;
 import static games.strategy.triplea.delegate.GameStepPropertiesHelper.getRepairPlayers;
 import static games.strategy.triplea.delegate.GameStepPropertiesHelper.getTurnSummaryPlayers;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.is;
+import static games.strategy.triplea.delegate.GameStepPropertiesHelper.isResetUnitStateAtEnd;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
@@ -63,7 +61,7 @@ final class GameStepPropertiesHelperTest {
     void shouldReturnArgumentPlayerWhenPropertyNotSet() {
       givenGameStepPropertyNotSet(GameStep.PropertyKeys.COMBINED_TURNS);
 
-      assertThat(getCombinedTurns(gameData, player1), contains(player1));
+      assertThat(getCombinedTurns(gameData, player1)).containsExactly(player1);
     }
 
     @Test
@@ -71,7 +69,8 @@ final class GameStepPropertiesHelperTest {
       givenGameStepProperty(
           GameStep.PropertyKeys.COMBINED_TURNS, joinPlayerNames(player2, player3, player4));
 
-      assertThat(getCombinedTurns(gameData, player1), contains(player1, player2, player3, player4));
+      assertThat(getCombinedTurns(gameData, player1))
+          .containsExactly(player1, player2, player3, player4);
     }
 
     @Test
@@ -79,7 +78,7 @@ final class GameStepPropertiesHelperTest {
       givenGameStepProperty(
           GameStep.PropertyKeys.COMBINED_TURNS, joinPlayerNames(player2, player3, player4));
 
-      assertThat(getCombinedTurns(gameData, null), contains(player2, player3, player4));
+      assertThat(getCombinedTurns(gameData, null)).containsExactly(player2, player3, player4);
     }
 
     @Test
@@ -88,7 +87,7 @@ final class GameStepPropertiesHelperTest {
       givenGameStepProperty(
           GameStep.PropertyKeys.COMBINED_TURNS, joinPlayerNames(unknownPlayer, player2));
 
-      assertThat(getCombinedTurns(gameData, player1), contains(player1, player2));
+      assertThat(getCombinedTurns(gameData, player1)).containsExactly(player1, player2);
     }
   }
 
@@ -98,7 +97,7 @@ final class GameStepPropertiesHelperTest {
     void shouldReturnArgumentPlayerWhenPropertyNotSet() {
       givenGameStepPropertyNotSet(GameStep.PropertyKeys.REPAIR_PLAYERS);
 
-      assertThat(getRepairPlayers(gameData, player1), contains(player1));
+      assertThat(getRepairPlayers(gameData, player1)).containsExactly(player1);
     }
 
     @Test
@@ -106,7 +105,8 @@ final class GameStepPropertiesHelperTest {
       givenGameStepProperty(
           GameStep.PropertyKeys.REPAIR_PLAYERS, joinPlayerNames(player2, player3, player4));
 
-      assertThat(getRepairPlayers(gameData, player1), contains(player1, player2, player3, player4));
+      assertThat(getRepairPlayers(gameData, player1))
+          .containsExactly(player1, player2, player3, player4);
     }
 
     @Test
@@ -114,7 +114,7 @@ final class GameStepPropertiesHelperTest {
       givenGameStepProperty(
           GameStep.PropertyKeys.REPAIR_PLAYERS, joinPlayerNames(player2, player3, player4));
 
-      assertThat(getRepairPlayers(gameData, null), contains(player2, player3, player4));
+      assertThat(getRepairPlayers(gameData, null)).containsExactly(player2, player3, player4);
     }
 
     @Test
@@ -123,7 +123,85 @@ final class GameStepPropertiesHelperTest {
       givenGameStepProperty(
           GameStep.PropertyKeys.REPAIR_PLAYERS, joinPlayerNames(unknownPlayer, player2));
 
-      assertThat(getRepairPlayers(gameData, player1), contains(player1, player2));
+      assertThat(getRepairPlayers(gameData, player1)).containsExactly(player1, player2);
+    }
+  }
+
+  @Nested
+  final class IsResetUnitStateAtEndTest {
+    private final GameData ownGameData = new GameData();
+    private final GamePlayer ownPlayer = new GamePlayer("ownPlayer", ownGameData);
+    private final GamePlayer otherOwnPlayer = new GamePlayer("otherOwnPlayer", ownGameData);
+
+    @BeforeEach
+    void setUp() {
+      ownGameData.getPlayerList().addPlayerId(ownPlayer);
+      ownGameData.getPlayerList().addPlayerId(otherOwnPlayer);
+    }
+
+    private GameStep newStep(final String name, final GamePlayer stepPlayer) {
+      return newStep(name, stepPlayer, new Properties());
+    }
+
+    private GameStep newStep(
+        final String name, final GamePlayer stepPlayer, final Properties stepProperties) {
+      return new GameStep(name, name, stepPlayer, newDelegate(), ownGameData, stepProperties);
+    }
+
+    @Test
+    void resetsAtEndOfNonCombatMoveByDefault() {
+      ownGameData.getSequence().addStep(newStep("playerNonCombatMove", ownPlayer));
+      ownGameData.getSequence().setRoundAndStep(1, "playerNonCombatMove", ownPlayer);
+
+      assertThat(isResetUnitStateAtEnd(ownGameData)).isTrue();
+    }
+
+    @Test
+    void doesNotResetAtEndOfCombatMoveWhenNonCombatMoveFollowsForSamePlayer() {
+      ownGameData.getSequence().addStep(newStep("playerCombatMove", ownPlayer));
+      ownGameData.getSequence().addStep(newStep("playerNonCombatMove", ownPlayer));
+      ownGameData.getSequence().setRoundAndStep(1, "playerCombatMove", ownPlayer);
+
+      assertThat(isResetUnitStateAtEnd(ownGameData)).isFalse();
+    }
+
+    @Test
+    void resetsAtEndOfCombatMoveWhenNoFollowingNonCombatMove() {
+      ownGameData.getSequence().addStep(newStep("playerCombatMove", ownPlayer));
+      ownGameData.getSequence().addStep(newStep("playerPurchase", ownPlayer));
+      ownGameData.getSequence().setRoundAndStep(1, "playerCombatMove", ownPlayer);
+
+      assertThat(isResetUnitStateAtEnd(ownGameData)).isTrue();
+    }
+
+    @Test
+    void resetsAtEndOfCombatMoveWhenFollowingNonCombatMoveIsForOtherPlayer() {
+      ownGameData.getSequence().addStep(newStep("playerCombatMove", ownPlayer));
+      ownGameData.getSequence().addStep(newStep("otherNonCombatMove", otherOwnPlayer));
+      ownGameData.getSequence().setRoundAndStep(1, "playerCombatMove", ownPlayer);
+
+      assertThat(isResetUnitStateAtEnd(ownGameData)).isTrue();
+    }
+
+    @Test
+    void explicitFalsePropertyOverridesDefault() {
+      final Properties props = new Properties();
+      props.setProperty(GameStep.PropertyKeys.RESET_UNIT_STATE_AT_END, "false");
+      ownGameData.getSequence().addStep(newStep("playerCombatMove", ownPlayer, props));
+      ownGameData.getSequence().setRoundAndStep(1, "playerCombatMove", ownPlayer);
+
+      assertThat(isResetUnitStateAtEnd(ownGameData)).isFalse();
+    }
+
+    @Test
+    void explicitTruePropertyOverridesDefault() {
+      final Properties props = new Properties();
+      props.setProperty(GameStep.PropertyKeys.RESET_UNIT_STATE_AT_END, "true");
+      ownGameData.getSequence().addStep(newStep("playerCombatMove", ownPlayer, props));
+      ownGameData.getSequence().addStep(newStep("playerNonCombatMove", ownPlayer));
+      ownGameData.getSequence().setRoundAndStep(1, "playerCombatMove", ownPlayer);
+
+      assertThat(isResetUnitStateAtEnd(ownGameData)).isTrue();
     }
   }
 
@@ -133,7 +211,7 @@ final class GameStepPropertiesHelperTest {
     void shouldReturnEmptyWhenPropertyNotSet() {
       givenGameStepPropertyNotSet(GameStep.PropertyKeys.TURN_SUMMARY_PLAYERS);
 
-      assertThat(getTurnSummaryPlayers(gameData), is(empty()));
+      assertThat(getTurnSummaryPlayers(gameData)).isEmpty();
     }
 
     @Test
@@ -141,7 +219,7 @@ final class GameStepPropertiesHelperTest {
       givenGameStepProperty(
           GameStep.PropertyKeys.TURN_SUMMARY_PLAYERS, joinPlayerNames(player1, player2, player3));
 
-      assertThat(getTurnSummaryPlayers(gameData), contains(player1, player2, player3));
+      assertThat(getTurnSummaryPlayers(gameData)).containsExactly(player1, player2, player3);
     }
 
     @Test
@@ -150,7 +228,7 @@ final class GameStepPropertiesHelperTest {
       givenGameStepProperty(
           GameStep.PropertyKeys.TURN_SUMMARY_PLAYERS, joinPlayerNames(unknownPlayer, player1));
 
-      assertThat(getTurnSummaryPlayers(gameData), contains(player1));
+      assertThat(getTurnSummaryPlayers(gameData)).containsExactly(player1);
     }
   }
 }

@@ -12,7 +12,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
-import org.triplea.http.client.maps.listing.MapDownloadItem;
+import org.triplea.http.client.lobby.maps.listing.MapDownloadItem;
 import org.triplea.io.FileUtils;
 import org.triplea.map.description.file.MapDescriptionYaml;
 import org.triplea.map.description.file.SkinDescriptionYaml;
@@ -79,7 +79,7 @@ public class InstalledMap {
     if (xmlPath.isEmpty() || mapContentRoot.isEmpty()) {
       return Optional.empty();
     } else {
-      return Optional.of(
+      return Optional.ofNullable(
           LocalizeHtml.localizeImgLinksInHtml(
               GameNotes.loadGameNotes(xmlPath.get()), mapContentRoot.get()));
     }
@@ -90,7 +90,12 @@ public class InstalledMap {
    * comparing the last modified date on the map installation folder compared to the last commit
    * date of the map-download.
    */
-  boolean isOutOfDate(final MapDownloadItem download) {
+  public boolean isOutOfDate(final MapDownloadItem download) {
+    final long lastCommitMilli = download.getLastCommitDateEpochMilli();
+    if (lastCommitMilli <= 0L) {
+      return false;
+    }
+
     // we cache lastModifiedDate for two reasons:
     // 1. *primarily* test can inject a value
     // 2. avoid file system access
@@ -101,7 +106,7 @@ public class InstalledMap {
       }
     }
 
-    final Instant lastCommitDate = Instant.ofEpochMilli(download.getLastCommitDateEpochMilli());
+    final Instant lastCommitDate = Instant.ofEpochMilli(lastCommitMilli);
     return lastModifiedDate.isBefore(lastCommitDate);
   }
 

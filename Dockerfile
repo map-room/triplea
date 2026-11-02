@@ -1,24 +1,24 @@
 # syntax=docker/dockerfile:1.6
 # Stage 1: build the fat jar with Gradle
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 # CI passes the commit it's building in directly (this stage has no .git/ dir —
-# see .dockerignore — and eclipse-temurin ships no git binary, so the build.gradle
+# see .dockerignore — and eclipse-temurin ships no git binary, so the build.gradle.kts
 # fallback that shells out to git cannot run here).
 ARG GIT_COMMIT=unknown
 ENV GIT_COMMIT=${GIT_COMMIT}
 WORKDIR /src
 COPY . .
-# --configure-on-demand keeps Gradle from configuring :game-app:game-headed
+# --configure-on-demand keeps Gradle from configuring :game-headed
 # (which runs `git rev-list --count HEAD` at configuration time) since the
 # sidecar doesn't depend on it. BuildKit cache mounts persist Gradle's
 # user home and project cache across builds on the same host.
 RUN --mount=type=cache,target=/root/.gradle \
     --mount=type=cache,target=/src/.gradle \
-    ./gradlew :game-app:ai-sidecar:installDist \
+    ./gradlew :ai-sidecar:installDist \
         --no-daemon --parallel --configure-on-demand
 
 # Stage 2: runtime
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 COPY --from=build /src/game-app/ai-sidecar/build/install/ai-sidecar /app
 ENV SIDECAR_BIND_HOST=0.0.0.0

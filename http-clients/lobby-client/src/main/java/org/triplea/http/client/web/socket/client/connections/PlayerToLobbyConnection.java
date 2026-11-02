@@ -10,23 +10,24 @@ import lombok.Builder;
 import lombok.Getter;
 import org.triplea.domain.data.ApiKey;
 import org.triplea.domain.data.PlayerChatId;
+import org.triplea.domain.data.SystemIdLoader;
 import org.triplea.domain.data.UserName;
-import org.triplea.http.client.LobbyHttpClientConfig;
+import org.triplea.http.client.ClientIdentifiers;
 import org.triplea.http.client.lobby.HttpLobbyClient;
 import org.triplea.http.client.lobby.game.lobby.watcher.GameListingClient;
 import org.triplea.http.client.lobby.game.lobby.watcher.LobbyGameListing;
 import org.triplea.http.client.lobby.moderator.BanPlayerRequest;
 import org.triplea.http.client.lobby.moderator.PlayerSummary;
 import org.triplea.http.client.lobby.moderator.toolbox.ModeratorToolboxClient;
+import org.triplea.http.client.lobby.web.socket.messages.envelopes.chat.ChatSentMessage;
+import org.triplea.http.client.lobby.web.socket.messages.envelopes.chat.ConnectToChatMessage;
+import org.triplea.http.client.lobby.web.socket.messages.envelopes.chat.PlayerSlapSentMessage;
+import org.triplea.http.client.lobby.web.socket.messages.envelopes.chat.PlayerStatusUpdateSentMessage;
 import org.triplea.http.client.web.socket.GenericWebSocketClient;
 import org.triplea.http.client.web.socket.WebSocket;
 import org.triplea.http.client.web.socket.WebsocketPaths;
 import org.triplea.http.client.web.socket.messages.MessageType;
 import org.triplea.http.client.web.socket.messages.WebSocketMessage;
-import org.triplea.http.client.web.socket.messages.envelopes.chat.ChatSentMessage;
-import org.triplea.http.client.web.socket.messages.envelopes.chat.ConnectToChatMessage;
-import org.triplea.http.client.web.socket.messages.envelopes.chat.PlayerSlapSentMessage;
-import org.triplea.http.client.web.socket.messages.envelopes.chat.PlayerStatusUpdateSentMessage;
 
 /**
  * Represents a connection from a player to lobby. A player can do actions like get game listings,
@@ -50,10 +51,10 @@ public class PlayerToLobbyConnection {
             .websocketUri(URI.create(lobbyUri + WebsocketPaths.PLAYER_CONNECTIONS))
             .headers(
                 Map.of(
-                    LobbyHttpClientConfig.VERSION_HEADER,
-                    LobbyHttpClientConfig.getConfig().getClientVersion(),
-                    LobbyHttpClientConfig.SYSTEM_ID_HEADER,
-                    LobbyHttpClientConfig.getConfig().getSystemId()))
+                    ClientIdentifiers.VERSION_HEADER,
+                    ClientIdentifiers.CLIENT_VERSION,
+                    ClientIdentifiers.SYSTEM_ID_HEADER,
+                    SystemIdLoader.load().getValue()))
             .build();
     webSocket.connect();
     gameListingClient = httpLobbyClient.newGameListingClient();
@@ -77,7 +78,7 @@ public class PlayerToLobbyConnection {
   }
 
   public void sendConnectToChatMessage() {
-    webSocket.sendMessage(new ConnectToChatMessage(httpLobbyClient.getApiKey()));
+    webSocket.sendMessage(new ConnectToChatMessage(httpLobbyClient.getApiKey().getValue()));
   }
 
   public void sendChatMessage(final String message) {
@@ -85,7 +86,7 @@ public class PlayerToLobbyConnection {
   }
 
   public void slapPlayer(final UserName userName) {
-    webSocket.sendMessage(new PlayerSlapSentMessage(userName));
+    webSocket.sendMessage(new PlayerSlapSentMessage(userName.getValue()));
   }
 
   public void updateStatus(final String status) {
@@ -141,5 +142,13 @@ public class PlayerToLobbyConnection {
 
   public Collection<String> fetchPlayersInGame(final String gameId) {
     return httpLobbyClient.getPlayerLobbyActionsClient().fetchPlayersInGame(gameId);
+  }
+
+  public void addConnectionResetListener(final Runnable listener) {
+    webSocket.addConnectionResetListener(listener);
+  }
+
+  public void addReconnectionListener(final WebSocket.ReconnectionHandler handler) {
+    webSocket.addReconnectionListener(handler);
   }
 }
