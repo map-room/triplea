@@ -19,6 +19,11 @@ RUN --mount=type=cache,target=/root/.gradle \
 
 # Stage 2: runtime
 FROM eclipse-temurin:25-jre
+# The HEALTHCHECK below shells out to wget, which the temurin 25 JRE image does not ship.
+# Without it the container is permanently unhealthy and `docker compose up --wait` fails.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends wget \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /src/game-app/ai-sidecar/build/install/ai-sidecar /app
 ENV SIDECAR_BIND_HOST=0.0.0.0
