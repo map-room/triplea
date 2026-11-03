@@ -10,6 +10,7 @@ import games.strategy.triplea.delegate.battle.BattleTracker;
 import games.strategy.triplea.delegate.battle.IBattle;
 import java.lang.reflect.Field;
 import java.util.Set;
+import org.triplea.ai.sidecar.dto.AiProfile;
 
 /**
  * Shared plumbing used by decision executors that dispatch into {@code AbstractProAi}.
@@ -44,6 +45,17 @@ final class ExecutorSupport {
   }
 
   private ExecutorSupport() {}
+
+  /**
+   * Builds the per-call {@link ProAi} for a wire {@code profile}. The profile is resolved first, so
+   * an unknown value throws {@link IllegalArgumentException} (a 400 at the handler) before any
+   * ProAi exists. Omitted / {@code "hard"} uses the two-argument constructor ({@code beta=false});
+   * {@code "hard-beta"} uses the three-argument one.
+   */
+  static ProAi newProAi(final String name, final String playerLabel, final String profile) {
+    final boolean beta = AiProfile.isBeta(profile);
+    return beta ? new ProAi(name, playerLabel, true) : new ProAi(name, playerLabel);
+  }
 
   /**
    * Attach a {@link PlayerBridge} + {@link GamePlayer} to the per-call {@link ProAi}. Always called

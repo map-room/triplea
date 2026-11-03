@@ -145,6 +145,11 @@ public abstract class AbstractProAi extends AbstractAi {
     storedStrafingTerritories = strafingTerritories;
   }
 
+  /** The territories the last combat-move plan attacks without retreating. Never null. */
+  public List<Territory> getStoredStrafingTerritories() {
+    return storedStrafingTerritories != null ? storedStrafingTerritories : List.of();
+  }
+
   public List<PoliticalActionAttachment> getStoredPoliticalActions() {
     return storedPoliticalActions;
   }
