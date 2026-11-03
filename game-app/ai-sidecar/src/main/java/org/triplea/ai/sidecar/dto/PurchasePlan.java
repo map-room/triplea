@@ -1,6 +1,7 @@
 package org.triplea.ai.sidecar.dto;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
@@ -15,6 +16,8 @@ import java.util.List;
  * projected non-SBR combat-move plan (land → amphib → bombard); absent or {@code null} in older
  * responses is treated as an empty list on the TS side. {@code sbrMoves} carries the projected
  * strategic-bombing-raid moves; absent or {@code null} is treated as an empty list on the TS side.
+ * {@code strafingTerritories} names the territories the AI planned to attack that it will not
+ * retreat from (ProAi's {@code storedStrafingTerritories}); omitted from the JSON when empty.
  */
 public record PurchasePlan(
     List<PurchaseOrder> buys,
@@ -22,7 +25,8 @@ public record PurchasePlan(
     List<PlacementGroup> placements,
     List<WarDeclaration> politicalActions,
     List<WireMoveDescription> combatMoves,
-    List<WireMoveDescription> sbrMoves)
+    List<WireMoveDescription> sbrMoves,
+    @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> strafingTerritories)
     implements DecisionPlan {
 
   @JsonCreator
@@ -32,13 +36,26 @@ public record PurchasePlan(
       @JsonProperty("placements") final List<PlacementGroup> placements,
       @JsonProperty("politicalActions") final List<WarDeclaration> politicalActions,
       @JsonProperty("combatMoves") final List<WireMoveDescription> combatMoves,
-      @JsonProperty("sbrMoves") final List<WireMoveDescription> sbrMoves) {
+      @JsonProperty("sbrMoves") final List<WireMoveDescription> sbrMoves,
+      @JsonProperty("strafingTerritories") final List<String> strafingTerritories) {
     this.buys = buys;
     this.repairs = repairs;
     this.placements = placements;
     this.politicalActions = politicalActions != null ? politicalActions : List.of();
     this.combatMoves = combatMoves != null ? combatMoves : List.of();
     this.sbrMoves = sbrMoves != null ? sbrMoves : List.of();
+    this.strafingTerritories = strafingTerritories != null ? strafingTerritories : List.of();
+  }
+
+  /** Convenience constructor for callsites that do not populate strafingTerritories. */
+  public PurchasePlan(
+      final List<PurchaseOrder> buys,
+      final List<RepairOrder> repairs,
+      final List<PlacementGroup> placements,
+      final List<WarDeclaration> politicalActions,
+      final List<WireMoveDescription> combatMoves,
+      final List<WireMoveDescription> sbrMoves) {
+    this(buys, repairs, placements, politicalActions, combatMoves, sbrMoves, List.of());
   }
 
   /** Convenience constructor for callsites that do not populate sbrMoves. */

@@ -117,4 +117,25 @@ class DecisionHandlerPurchaseTest {
     assertEquals(0, plan.path("buys").size(), "empty buys must still be an array");
     assertEquals(0, plan.path("repairs").size(), "empty repairs must still be an array");
   }
+
+  // -------------------------------------------------------------------------
+  // Unknown profile: real executor, 400 bad-request, before any ProAi is constructed
+  // -------------------------------------------------------------------------
+
+  @Test
+  void purchase_unknownProfile_returns400() throws Exception {
+    final DecisionHandler h =
+        new DecisionHandler(
+            registry,
+            new org.triplea.ai.sidecar.exec.PurchaseExecutor(),
+            (canonical, req) -> new NoncombatMovePlan(List.of()));
+    final String body =
+        "{\"kind\":\"purchase\"," + EMPTY_STATE + ",\"seed\":42,\"profile\":\"beta\"}";
+
+    final FakeHttpExchange ex = new FakeHttpExchange("POST", "/decision", body);
+    h.handle(ex);
+
+    assertEquals(400, ex.responseCode(), "unknown profile must be a 400, not a stock fallback");
+    assertEquals("bad-request", MAPPER.readTree(ex.responseBodyString()).path("error").asText());
+  }
 }

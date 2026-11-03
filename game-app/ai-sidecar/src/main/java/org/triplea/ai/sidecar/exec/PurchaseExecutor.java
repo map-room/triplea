@@ -117,7 +117,10 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     }
 
     final ProAi proAi =
-        new ProAi("sidecar-stateless-" + request.state().currentPlayer(), player.getName());
+        ExecutorSupport.newProAi(
+            "sidecar-stateless-" + request.state().currentPlayer(),
+            player.getName(),
+            request.profile());
     ExecutorSupport.initializeProAi(proAi, data, player);
     // ProPurchaseAi.repair -> ProMatches.territoryIsNotConqueredOwnedLand reads the
     // BattleTracker via GameData.getBattleDelegate(); the clone's internal GameDataUtils copy
@@ -255,8 +258,24 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
             .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
             .toList();
 
+    // Read after the projection: doCombatMove (run by the purchase simulation or by the
+    // projection itself) records the list, and neither path clears it. Names, not Territory
+    // references: the simulation GameData is discarded with this call.
+    final List<String> strafingTerritories = strafingTerritoryNames(proAi);
+
     return new PurchasePlan(
-        buys, repairs, placements, politicalActions, nonBombingMoves, bombingMoves);
+        buys,
+        repairs,
+        placements,
+        politicalActions,
+        nonBombingMoves,
+        bombingMoves,
+        strafingTerritories);
+  }
+
+  /** Names of the territories ProAi recorded as strafing attacks; empty when none. */
+  static List<String> strafingTerritoryNames(final ProAi proAi) {
+    return proAi.getStoredStrafingTerritories().stream().map(Territory::getName).toList();
   }
 
   /**

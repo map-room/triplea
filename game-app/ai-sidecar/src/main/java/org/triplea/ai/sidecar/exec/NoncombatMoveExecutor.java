@@ -74,7 +74,10 @@ public final class NoncombatMoveExecutor
     }
 
     final ProAi proAi =
-        new ProAi("sidecar-stateless-" + request.state().currentPlayer(), player.getName());
+        ExecutorSupport.newProAi(
+            "sidecar-stateless-" + request.state().currentPlayer(),
+            player.getName(),
+            request.profile());
     ExecutorSupport.initializeProAi(proAi, data, player);
     ExecutorSupport.ensureBattleDelegate(data);
     // findMaxPurchaseDefenders (the null-storedPurchaseTerritories fallback inside
