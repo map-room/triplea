@@ -479,7 +479,7 @@ public final class ProMatches {
     return territoryIsNotConqueredOwnedLand(player).and(territoryHasFactoryAndIsOwnedLand(player));
   }
 
-  private static Predicate<Territory> territoryHasFactoryAndIsOwnedLand(final GamePlayer player) {
+  public static Predicate<Territory> territoryHasFactoryAndIsOwnedLand(final GamePlayer player) {
     final Predicate<Unit> factoryMatch =
         Matches.unitIsOwnedBy(player).and(Matches.unitCanProduceUnits());
     return Matches.isTerritoryOwnedBy(player)
@@ -529,9 +529,10 @@ public final class ProMatches {
                 player.getData().getMap(), Matches.territoryIsWater()));
   }
 
-  public static Predicate<Territory> territoryHasNoInfraFactoryAndIsNotConqueredOwnedLand(
+  public static Predicate<Territory> territoryHasNoInfraFactoryAndIsOwnedLand(
       final GamePlayer player) {
-    return territoryIsNotConqueredOwnedLand(player)
+    return Matches.isTerritoryOwnedBy(player)
+        .and(Matches.territoryIsLand())
         .and(territoryHasInfraFactoryAndIsOwnedLand(player).negate());
   }
 
@@ -622,6 +623,19 @@ public final class ProMatches {
     return t ->
         !AbstractMoveDelegate.getBattleTracker(player.getData()).wasConquered(t)
             && Matches.isTerritoryOwnedBy(player).and(Matches.territoryIsLand()).test(t);
+  }
+
+  /**
+   * Reads conquests from the territory's own {@code GameData}, not {@code player.getData()}, so it
+   * also sees those in the copy the purchase simulates on.
+   */
+  public static Predicate<Territory> territoryIsNotConqueredUnlessPlacementCapturedAllowed(
+      final GamePlayer player) {
+    final RulesAttachment ra = player.getRulesAttachment();
+    if (ra != null && ra.getPlacementCapturedTerritory()) {
+      return t -> true;
+    }
+    return t -> !AbstractMoveDelegate.getBattleTracker(t.getData()).wasConquered(t);
   }
 
   public static Predicate<Territory> territoryIsWaterAndAdjacentToOwnedFactory(

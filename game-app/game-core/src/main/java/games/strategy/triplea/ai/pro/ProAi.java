@@ -6,13 +6,31 @@ import games.strategy.triplea.odds.calculator.ConcurrentBattleCalculator;
 public class ProAi extends AbstractProAi {
   private final ConcurrentBattleCalculator concurrentCalc;
 
+  /** The default Pro AI. {@code beta} is false, so this is not Hard Beta. */
   public ProAi(final String name, final String playerLabel) {
-    this(name, playerLabel, new ConcurrentBattleCalculator());
+    this(name, playerLabel, false);
   }
 
+  /**
+   * @param beta upstream's Hard Beta mode. The headed "Hard (AI)" player type passes true. The
+   *     sidecar keeps the two-argument constructor, so its default stays the normal Pro AI.
+   */
+  public ProAi(final String name, final String playerLabel, final boolean beta) {
+    this(name, playerLabel, beta, new ConcurrentBattleCalculator());
+  }
+
+  /**
+   * Per-instance calculator, not upstream's static one (map-room#64). A static calculator shared
+   * across ProAi instances breaks sidecar seeding: each request needs its own {@link
+   * ConcurrentBattleCalculator#setSeed}. {@link #stopGame()} already drops this instance's
+   * calculator, so the static shutdown hook is unnecessary.
+   */
   private ProAi(
-      final String name, final String playerLabel, final ConcurrentBattleCalculator calc) {
-    super(name, calc, new ProData(), playerLabel);
+      final String name,
+      final String playerLabel,
+      final boolean beta,
+      final ConcurrentBattleCalculator calc) {
+    super(name, calc, new ProData(beta), playerLabel);
     this.concurrentCalc = calc;
   }
 

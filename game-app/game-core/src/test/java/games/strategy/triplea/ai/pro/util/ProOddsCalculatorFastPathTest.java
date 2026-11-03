@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
+import games.strategy.engine.data.TerritoryEffect;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.ai.pro.ProData;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
@@ -14,6 +15,7 @@ import games.strategy.triplea.odds.calculator.AggregateResults;
 import games.strategy.triplea.odds.calculator.IBattleCalculator;
 import games.strategy.triplea.xml.TestMapGameData;
 import java.lang.reflect.Field;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -118,17 +120,24 @@ class ProOddsCalculatorFastPathTest {
 
   /** Returns an {@link IBattleCalculator} that increments {@code counter} on each call. */
   private static IBattleCalculator countingCalc(final AtomicInteger counter) {
-    return (attacker,
-        defender,
-        location,
-        attacking,
-        defending,
-        bombarding,
-        territoryEffects,
-        retreatWhenOnlyAirLeft,
-        runCount) -> {
-      counter.incrementAndGet();
-      return new AggregateResults(0);
+    return new IBattleCalculator() {
+      @Override
+      public AggregateResults calculate(
+          final GamePlayer attacker,
+          final GamePlayer defender,
+          final Territory location,
+          final Collection<Unit> attacking,
+          final Collection<Unit> defending,
+          final Collection<Unit> bombarding,
+          final Collection<TerritoryEffect> territoryEffects,
+          final boolean retreatWhenOnlyAirLeft,
+          final int runCount) {
+        counter.incrementAndGet();
+        return new AggregateResults(0);
+      }
+
+      @Override
+      public void setRetreatAfterRound(final int value) {}
     };
   }
 }
