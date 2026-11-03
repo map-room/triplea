@@ -1768,6 +1768,16 @@ class ProPurchaseAi {
     return Math.min(0, ProTransportUtils.getUnusedCarrierCapacity(player, t, List.of()));
   }
 
+  /**
+   * True if we own units in {@code t} on the board the turn started with, but none on the board the
+   * purchase simulates on: the simulated moves sailed them away. Package-private for tests.
+   */
+  boolean emptiedBySimulation(final Territory t) {
+    final Predicate<Unit> owned = Matches.unitIsOwnedBy(player);
+    return !t.anyUnitsMatch(owned)
+        && startOfTurnData.getMap().getTerritoryOrThrow(t.getName()).anyUnitsMatch(owned);
+  }
+
   // Returns true if we should try to save up resources for a fleet next turn.
   private boolean purchaseSeaAndAmphibUnits(
       final Map<Territory, ProPurchaseTerritory> purchaseTerritories,
@@ -1972,7 +1982,12 @@ class ProPurchaseAi {
                   summarizeUnits(attackers),
                   summarizeUnits(defendingUnits)));
           // Choosing not to buy warships is no reason to save up for a fleet.
-          wantedToBuyUnitsButCouldNotDefendThem |= !skippedWarships;
+          // Fork-local deviation from upstream (map-room#4509): since upstream #15127 (9e8dbf4dca)
+          // restored the non-combat sea zone values, the purchase sim can sail our fleet out of a
+          // zone it holds on the real board. A bare carrier + fighter then "can't defend" that
+          // emptied zone, and saving up for a fleet vetoed every other buy (Japan R1 banked 26
+          // IPCs). The zone is only empty on the sim's guess, so it is no reason to save.
+          wantedToBuyUnitsButCouldNotDefendThem |= !skippedWarships && !emptiedBySimulation(t);
           continue;
         }
       }
