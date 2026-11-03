@@ -71,6 +71,25 @@ class RequestProfileJsonTest {
   }
 
   @Test
+  void strafeRetreatsRoundTripAsTerritoryRoundsObjects() throws Exception {
+    final PurchasePlan some =
+        new PurchasePlan(
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(new StrafeRetreat("Karelia", 1)));
+    final String json = mapper.writeValueAsString((DecisionPlan) some);
+    assertTrue(json.contains("\"strafeRetreats\":[{\"territory\":\"Karelia\",\"rounds\":1}]"));
+    assertFalse(json.contains("strafingTerritories"));
+    final PurchasePlan back = (PurchasePlan) mapper.readValue(json, DecisionPlan.class);
+    assertEquals(List.of(new StrafeRetreat("Karelia", 1)), back.strafeRetreats());
+  }
+
+  @Test
   void oldPlanJsonWithoutStrafingTerritoriesDeserialisesToEmpty() throws Exception {
     final PurchasePlan back =
         (PurchasePlan)
@@ -78,6 +97,7 @@ class RequestProfileJsonTest {
                 "{\"kind\":\"purchase\",\"buys\":[],\"repairs\":[],\"placements\":[]}",
                 DecisionPlan.class);
     assertEquals(List.of(), back.strafingTerritories());
+    assertEquals(List.of(), back.strafeRetreats());
   }
 
   private DecisionRequest read(final String json) throws Exception {

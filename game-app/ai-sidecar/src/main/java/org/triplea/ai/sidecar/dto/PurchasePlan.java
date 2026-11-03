@@ -18,6 +18,8 @@ import java.util.List;
  * strategic-bombing-raid moves; absent or {@code null} is treated as an empty list on the TS side.
  * {@code strafingTerritories} names the territories the AI planned to attack that it will not
  * retreat from (ProAi's {@code storedStrafingTerritories}); omitted from the JSON when empty.
+ * {@code strafeRetreats} carries ProAi's {@code storedStrafeRetreats} as {@code {territory,
+ * rounds}} entries, air attacks included; omitted from the JSON when empty.
  */
 public record PurchasePlan(
     List<PurchaseOrder> buys,
@@ -26,7 +28,8 @@ public record PurchasePlan(
     List<WarDeclaration> politicalActions,
     List<WireMoveDescription> combatMoves,
     List<WireMoveDescription> sbrMoves,
-    @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> strafingTerritories)
+    @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> strafingTerritories,
+    @JsonInclude(JsonInclude.Include.NON_EMPTY) List<StrafeRetreat> strafeRetreats)
     implements DecisionPlan {
 
   @JsonCreator
@@ -37,7 +40,8 @@ public record PurchasePlan(
       @JsonProperty("politicalActions") final List<WarDeclaration> politicalActions,
       @JsonProperty("combatMoves") final List<WireMoveDescription> combatMoves,
       @JsonProperty("sbrMoves") final List<WireMoveDescription> sbrMoves,
-      @JsonProperty("strafingTerritories") final List<String> strafingTerritories) {
+      @JsonProperty("strafingTerritories") final List<String> strafingTerritories,
+      @JsonProperty("strafeRetreats") final List<StrafeRetreat> strafeRetreats) {
     this.buys = buys;
     this.repairs = repairs;
     this.placements = placements;
@@ -45,6 +49,27 @@ public record PurchasePlan(
     this.combatMoves = combatMoves != null ? combatMoves : List.of();
     this.sbrMoves = sbrMoves != null ? sbrMoves : List.of();
     this.strafingTerritories = strafingTerritories != null ? strafingTerritories : List.of();
+    this.strafeRetreats = strafeRetreats != null ? strafeRetreats : List.of();
+  }
+
+  /** Convenience constructor for callsites that do not populate strafeRetreats. */
+  public PurchasePlan(
+      final List<PurchaseOrder> buys,
+      final List<RepairOrder> repairs,
+      final List<PlacementGroup> placements,
+      final List<WarDeclaration> politicalActions,
+      final List<WireMoveDescription> combatMoves,
+      final List<WireMoveDescription> sbrMoves,
+      final List<String> strafingTerritories) {
+    this(
+        buys,
+        repairs,
+        placements,
+        politicalActions,
+        combatMoves,
+        sbrMoves,
+        strafingTerritories,
+        List.of());
   }
 
   /** Convenience constructor for callsites that do not populate strafingTerritories. */

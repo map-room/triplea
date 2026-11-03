@@ -1,5 +1,7 @@
 package org.triplea.ai.sidecar.exec;
 
+import static java.util.stream.Collectors.toSet;
+
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.NamedAttachable;
@@ -23,6 +25,7 @@ import games.strategy.triplea.delegate.MoveDelegate;
 import games.strategy.triplea.delegate.PlaceDelegate;
 import games.strategy.triplea.delegate.PoliticsDelegate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +41,7 @@ import org.triplea.ai.sidecar.dto.PurchaseOrder;
 import org.triplea.ai.sidecar.dto.PurchasePlan;
 import org.triplea.ai.sidecar.dto.PurchaseRequest;
 import org.triplea.ai.sidecar.dto.RepairOrder;
+import org.triplea.ai.sidecar.dto.StrafeRetreat;
 import org.triplea.ai.sidecar.dto.WarDeclaration;
 import org.triplea.ai.sidecar.dto.WireMoveDescription;
 import org.triplea.ai.sidecar.wire.WirePlayer;
@@ -262,6 +266,9 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     // projection itself) records the list, and neither path clears it. Names, not Territory
     // references: the simulation GameData is discarded with this call.
     final List<String> strafingTerritories = strafingTerritoryNames(proAi);
+    final List<StrafeRetreat> strafeRetreats =
+        strafeRetreatEntries(
+            proAi, nonBombingMoves.stream().map(WireMoveDescription::to).collect(toSet()));
 
     return new PurchasePlan(
         buys,
@@ -270,7 +277,24 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
         politicalActions,
         nonBombingMoves,
         bombingMoves,
-        strafingTerritories);
+        strafingTerritories,
+        strafeRetreats);
+  }
+
+  /**
+   * ProAi's strafe retreats as wire entries, sorted by territory for a stable response. Air attacks
+   * are included: the map is copied as ProAi recorded it. The only drop is an entry whose territory
+   * is not the destination of a projected non-bombing combat move. That cannot happen on the two
+   * registered XMLs (one non-airborne combat-move step per nation); it fails closed if a later XML
+   * adds a second step that overwrites the map out of step with {@code storedCombatMoveMap}.
+   */
+  static List<StrafeRetreat> strafeRetreatEntries(
+      final ProAi proAi, final Set<String> combatMoveDestinations) {
+    return proAi.getStoredStrafeRetreats().entrySet().stream()
+        .filter(e -> combatMoveDestinations.contains(e.getKey()))
+        .map(e -> new StrafeRetreat(e.getKey(), e.getValue()))
+        .sorted(Comparator.comparing(StrafeRetreat::territory))
+        .toList();
   }
 
   /** Names of the territories ProAi recorded as strafing attacks; empty when none. */

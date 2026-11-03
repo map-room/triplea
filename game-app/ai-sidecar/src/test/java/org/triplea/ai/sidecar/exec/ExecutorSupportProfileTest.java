@@ -8,10 +8,13 @@ import games.strategy.engine.data.Territory;
 import games.strategy.triplea.ai.pro.ProAi;
 import games.strategy.triplea.settings.ClientSetting;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 import org.triplea.ai.sidecar.CanonicalGameData;
+import org.triplea.ai.sidecar.dto.StrafeRetreat;
 
 class ExecutorSupportProfileTest {
   private static CanonicalGameData canonical;
@@ -56,5 +59,29 @@ class ExecutorSupportProfileTest {
 
     proAi.setStoredStrafingTerritories(List.of());
     assertThat(PurchaseExecutor.strafingTerritoryNames(proAi)).isEmpty();
+  }
+
+  @Test
+  void strafeRetreatEntriesCopyTheMapSortedAndDropOnlyNonDestinations() {
+    final ProAi proAi = ExecutorSupport.newProAi("n", "Germans", "hard-beta");
+    assertThat(PurchaseExecutor.strafeRetreatEntries(proAi, Set.of("Karelia"))).isEmpty();
+
+    proAi.setStoredStrafeRetreats(Map.of("Karelia", 1, "Baltic States", 3, "Ukraine S.S.R.", 2));
+
+    // Every key is a projected combat-move destination: all copied unchanged, sorted by name.
+    // Nothing here knows whether the attack includes air, and nothing filters on it.
+    assertThat(
+            PurchaseExecutor.strafeRetreatEntries(
+                proAi, Set.of("Karelia", "Baltic States", "Ukraine S.S.R.", "Egypt")))
+        .containsExactly(
+            new StrafeRetreat("Baltic States", 3),
+            new StrafeRetreat("Karelia", 1),
+            new StrafeRetreat("Ukraine S.S.R.", 2));
+
+    // Emitted territories are a subset of the destinations: a key with no projected move fails
+    // closed (a later XML with a second non-airborne combat-move step).
+    assertThat(PurchaseExecutor.strafeRetreatEntries(proAi, Set.of("Karelia")))
+        .containsExactly(new StrafeRetreat("Karelia", 1));
+    assertThat(PurchaseExecutor.strafeRetreatEntries(proAi, Set.of())).isEmpty();
   }
 }
