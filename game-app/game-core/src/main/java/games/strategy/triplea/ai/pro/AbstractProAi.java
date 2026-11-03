@@ -150,6 +150,13 @@ public abstract class AbstractProAi extends AbstractAi {
     return storedStrafingTerritories != null ? storedStrafingTerritories : List.of();
   }
 
+  /**
+   * The attacks to retreat from once that many rounds are fought, by territory name. Never null.
+   */
+  public Map<String, Integer> getStoredStrafeRetreats() {
+    return storedStrafeRetreats;
+  }
+
   public List<PoliticalActionAttachment> getStoredPoliticalActions() {
     return storedPoliticalActions;
   }
