@@ -13,6 +13,7 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.Properties;
+import games.strategy.triplea.ai.pro.data.ProSplitResourceTracker.Pool;
 import games.strategy.triplea.attachments.PlayerAttachment;
 import games.strategy.triplea.attachments.TerritoryAttachment;
 import games.strategy.triplea.delegate.Matches;
@@ -152,12 +153,29 @@ public final class ProUtils {
 
   /** Computes PU production amount a given player currently has based on a given game data. */
   public static double getPlayerProduction(final GamePlayer player, final GameState data) {
+    return getPlayerProduction(player, data, t -> true);
+  }
+
+  /**
+   * The UK economy {@code economy}'s income: what the UK player collects from that economy's
+   * territories.
+   */
+  private static double getUkEconomyProduction(
+      final UkEconomySplit split,
+      final Pool economy,
+      final GamePlayer ukPlayer,
+      final GameState data) {
+    return getPlayerProduction(ukPlayer, data, t -> split.isIn(economy, t));
+  }
+
+  private static double getPlayerProduction(
+      final GamePlayer player, final GameState data, final Predicate<Territory> filter) {
     final Predicate<Territory> canCollectIncomeFrom = Matches.territoryCanCollectIncomeFrom(player);
     int production = 0;
     for (final Territory place : data.getMap().getTerritories()) {
       // Match will Check if terr is a Land Convoy Route and check ownership of neighboring Sea
       // Zone, or if contested
-      if (place.isOwnedBy(player) && canCollectIncomeFrom.test(place)) {
+      if (place.isOwnedBy(player) && canCollectIncomeFrom.test(place) && filter.test(place)) {
         production += TerritoryAttachment.getProduction(place);
       }
     }
@@ -211,6 +229,10 @@ public final class ProUtils {
       final ToIntFunction<PlayerAttachment> capitalsNeeded,
       final int capitalsNeededWithoutAttachment) {
     final GamePlayer owner = t.getOwner();
+    // Each UK economy has exactly one capital, so taking one always leaves the economy without.
+    if (UkEconomySplit.heldCapitalEconomy(t).isPresent()) {
+      return true;
+    }
     final boolean ownersCapital =
         TerritoryAttachment.get(t)
             .flatMap(TerritoryAttachment::getCapital)
@@ -231,22 +253,51 @@ public final class ProUtils {
    * owner is left with fewer than {@code retainCapitalProduceNumber} capitals.
    */
   public static double capitalValue(final Territory t, final GameState data) {
-    return captureStopsIncome(t, data.getMap()) ? getPlayerProduction(t.getOwner(), data) : 0;
+    if (!captureStopsIncome(t, data.getMap())) {
+      return 0;
+    }
+    // A UK capital stops only its own economy's income, not both.
+    return UkEconomySplit.of(data)
+        .flatMap(
+            split ->
+                UkEconomySplit.heldCapitalEconomy(t)
+                    .map(economy -> getUkEconomyProduction(split, economy, t.getOwner(), data)))
+        .orElseGet(() -> getPlayerProduction(t.getOwner(), data));
   }
 
   /** The PUs taking {@code t} takes from its owner, the moment it falls. */
   public static int capturedTreasury(final Territory t, final GameState data) {
-    return captureTakesTreasury(t, data.getMap())
-        ? t.getOwner().getResources().getQuantity(Constants.PUS)
-        : 0;
+    if (!captureTakesTreasury(t, data.getMap())) {
+      return 0;
+    }
+    // A UK capital seizes only its own economy's pool, not the merged total the wire sends.
+    return UkEconomySplit.of(data)
+        .flatMap(split -> UkEconomySplit.heldCapitalEconomy(t).map(split::treasury))
+        .orElseGet(() -> t.getOwner().getResources().getQuantity(Constants.PUS));
   }
 
   /** The income of {@code player}, or the ally, whose capital taking {@code t} liberates. */
   public static double liberationValue(
       final Territory t, final GamePlayer player, final GameState data) {
     return liberatedCapitalOwner(t, player, data)
-        .map(capitalOwner -> getPlayerProduction(capitalOwner, data))
+        .map(capitalOwner -> liberatedIncome(t, capitalOwner, data))
         .orElse(0.0);
+  }
+
+  /**
+   * The income restored by liberating capital {@code t}. A UK capital restores its own economy's,
+   * which neither {@code British} (both economies) nor {@code UK_Pacific} (nothing) holds as a
+   * player on the wire.
+   */
+  private static double liberatedIncome(
+      final Territory t, final GamePlayer capitalOwner, final GameState data) {
+    final Optional<Pool> economy = UkEconomySplit.capitalEconomy(t);
+    final Optional<UkEconomySplit> split = UkEconomySplit.of(data);
+    final GamePlayer uk = data.getPlayerList().getPlayerId(UkEconomySplit.UK_PLAYER);
+    if (economy.isPresent() && split.isPresent() && uk != null) {
+      return getUkEconomyProduction(split.get(), economy.get(), uk, data);
+    }
+    return getPlayerProduction(capitalOwner, data);
   }
 
   /** The owner of capital {@code t}, {@code player} or an ally, when someone else holds it. */
