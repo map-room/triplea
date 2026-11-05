@@ -47,7 +47,7 @@ public final class ProData {
   private double minCostPerHitPoint = Double.MAX_VALUE;
 
   /** Seeded RNG for deterministic AI decisions. Seeded via {@link #setSeed(long)}. */
-  @Getter private Random rng = new Random();
+  @Getter private final Random rng = new Random();
 
   private AbstractProAi proAi;
   private GameData data;
@@ -63,7 +63,9 @@ public final class ProData {
 
   /** Seeds the RNG used by AI subsystems for deterministic behaviour. */
   public void setSeed(final long seed) {
-    rng = new Random(seed);
+    // Reseed in place: collaborators (ProPoliticsAi, ...) capture this instance at construction,
+    // so swapping in a new Random would leave them drawing from an unseeded one.
+    rng.setSeed(seed);
   }
 
   public void initialize(final AbstractProAi proAi) {

@@ -69,7 +69,10 @@ public final class ProAirBattleEstimator {
     if (interceptors.isEmpty()) {
       return Outcome.NONE;
     }
-    final Comparator<Unit> cheapestFirst = Comparator.comparingInt(unitValue);
+    // Break value ties by unit id: the input order comes from hash-ordered collections, and the
+    // casualty lists below are prefixes of these sorted lists.
+    final Comparator<Unit> cheapestFirst =
+        Comparator.comparingInt(unitValue).thenComparing(Unit::getId);
     escorts.sort(cheapestFirst);
     interceptors.sort(cheapestFirst);
 
