@@ -11,6 +11,7 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.changefactory.ChangeFactory;
+import games.strategy.triplea.ai.pro.util.UkEconomySplit;
 import games.strategy.triplea.attachments.TechAttachment;
 import games.strategy.triplea.attachments.TerritoryAttachment;
 import games.strategy.triplea.delegate.battle.BattleDelegate;
@@ -83,6 +84,8 @@ public final class WireStateApplier {
       gameData.performChange(changes);
     }
 
+    applyUkEconomySplit(gameData, wire);
+
     // Some techs activate a UnitSupportAttachment via a TriggerAttachment that the stateless
     // sidecar never fires (map-room#2768). After tech flags are live in GameData, apply the
     // support-list changes directly — mirroring what TriggerAttachment.triggerSupportChange()
@@ -110,6 +113,41 @@ public final class WireStateApplier {
     // but keeping it at the tail means nothing downstream can overwrite it.
     applyRoundAndStep(gameData, wire);
     WireStateVerifier.verifyApply(gameData, wire, unitIdMap);
+  }
+
+  /**
+   * Hand ProAI the UK's two economies (map-room#4511). Map Room has one UK player with a Europe and
+   * a Pacific pool; the Global 1940 XML has two (British, UK_Pacific) with a capital each. The wire
+   * keeps every UK territory {@code British}-owned, so ProAI's placement and movement see all of
+   * it, and tags each with its economy. Without this, Calcutta (capital of UK_Pacific) is nobody's
+   * capital to the British owner, and London is worth both economies' income and the merged
+   * treasury. See {@link UkEconomySplit}.
+   *
+   * <p>Needs both pools on the wire and a {@code UK_Pacific} player on the map, so it is inert on
+   * Anniversary, which has one UK economy.
+   */
+  private static void applyUkEconomySplit(final GameData gameData, final WireState wire) {
+    if (gameData.getPlayerList().getPlayerId(UkEconomySplit.PACIFIC_CAPITAL_PLAYER) == null) {
+      return;
+    }
+    wire.players().stream()
+        .filter(p -> UkEconomySplit.UK_PLAYER.equals(p.playerId()))
+        .filter(p -> p.europePus() != null && p.pacificPus() != null)
+        .findFirst()
+        .ifPresent(
+            uk -> {
+              final Set<String> pacific = new HashSet<>();
+              for (final WireTerritory wt : wire.territories()) {
+                if ("pacific".equals(wt.economy())) {
+                  pacific.add(wt.territoryId());
+                }
+              }
+              gameData
+                  .getProperties()
+                  .set(
+                      UkEconomySplit.PROPERTY,
+                      new UkEconomySplit(pacific, uk.europePus(), uk.pacificPus()));
+            });
   }
 
   /**
