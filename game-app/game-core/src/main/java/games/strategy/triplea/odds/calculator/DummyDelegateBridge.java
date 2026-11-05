@@ -14,7 +14,6 @@ import games.strategy.engine.history.IDelegateHistoryWriter;
 import games.strategy.engine.player.Player;
 import games.strategy.engine.random.IRandomSource;
 import games.strategy.engine.random.IRandomStats;
-import games.strategy.engine.random.PlainRandomSource;
 import games.strategy.triplea.ResourceLoader;
 import games.strategy.triplea.delegate.battle.MustFightBattle;
 import games.strategy.triplea.ui.display.HeadlessDisplay;
@@ -41,36 +40,6 @@ public class DummyDelegateBridge implements IDelegateBridge {
   @Getter private MustFightBattle battle = null;
   private final TuvCostsCalculator tuvCalculator;
 
-  public DummyDelegateBridge(
-      final GamePlayer attacker,
-      final GameData data,
-      final CompositeChange allChanges,
-      final List<Unit> attackerOrderOfLosses,
-      final List<Unit> defenderOrderOfLosses,
-      final boolean attackerKeepOneLandUnit,
-      final int retreatAfterRound,
-      final int retreatAfterXUnitsLeft,
-      final boolean retreatWhenOnlyAirLeft,
-      final TuvCostsCalculator tuvCalculator) {
-    this(
-        attacker,
-        data,
-        allChanges,
-        attackerOrderOfLosses,
-        defenderOrderOfLosses,
-        attackerKeepOneLandUnit,
-        retreatAfterRound,
-        retreatAfterXUnitsLeft,
-        retreatWhenOnlyAirLeft,
-        tuvCalculator,
-        new PlainRandomSource());
-  }
-
-  /**
-   * Variant accepting an explicit {@link IRandomSource}. Used by the AI sidecar's deterministic
-   * battle-calculator path to inject a seeded RNG so calc results are reproducible across runs (see
-   * map-room/map-room#2376 / #2377).
-   */
   public DummyDelegateBridge(
       final GamePlayer attacker,
       final GameData data,

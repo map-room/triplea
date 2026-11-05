@@ -34,8 +34,8 @@ public class AggregateResultsTest {
   void averagesAreComputedOncePerClosestToAverageQuery() {
     final int[] attackingCalls = {0};
     final int[] defendingCalls = {0};
-    final AggregateResults results =
-        new AggregateResults(0) {
+    final ListBackedAggregateResults results =
+        new ListBackedAggregateResults(0) {
           @Override
           public double getAverageAttackingUnitsLeft() {
             attackingCalls[0]++;
@@ -63,7 +63,7 @@ public class AggregateResultsTest {
 
   @Test
   void testNoResultsAdded() {
-    final AggregateResults results = new AggregateResults(1);
+    final AggregateResults results = new ListBackedAggregateResults(1);
 
     // The methods for the TUV need some additional objects.  Note that even in an zero-result TUV
     // swing simulation, some pre-computation is done with this objects, i.e. they must be non-null.

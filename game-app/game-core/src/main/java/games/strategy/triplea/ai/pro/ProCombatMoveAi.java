@@ -2,6 +2,7 @@ package games.strategy.triplea.ai.pro;
 
 import static games.strategy.triplea.ai.pro.util.ProUtils.summarizeUnits;
 
+import com.google.common.annotations.VisibleForTesting;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
@@ -14,6 +15,7 @@ import games.strategy.triplea.ai.pro.data.ProTerritory;
 import games.strategy.triplea.ai.pro.data.ProTerritoryManager;
 import games.strategy.triplea.ai.pro.data.ProTransport;
 import games.strategy.triplea.ai.pro.logging.ProLogger;
+import games.strategy.triplea.ai.pro.util.ProAirliftPlanner;
 import games.strategy.triplea.ai.pro.util.ProBattleUtils;
 import games.strategy.triplea.ai.pro.util.ProMatches;
 import games.strategy.triplea.ai.pro.util.ProMoveUtils;
@@ -28,6 +30,7 @@ import games.strategy.triplea.ai.pro.util.ProUtils;
 import games.strategy.triplea.attachments.TerritoryAttachment;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.battle.AirBattle;
+import games.strategy.triplea.delegate.battle.ScrambleLogic;
 import games.strategy.triplea.delegate.remote.IMoveDelegate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -144,9 +147,12 @@ public class ProCombatMoveAi {
     if (proData.canLandBehindSeaBattle()) {
       dropLandingsBehindUnfoughtZones();
     }
+    dropLandingsBlockedByEnemySubs();
     if (proData.isBeta()) {
       releaseSeaBlockersFromAttacks();
     }
+
+    planParadrops();
 
     // Calculate attack routes and perform moves
     doMove(territoryManager.getAttackOptions().getTerritoryMap(), moveDel, data, player);
@@ -166,6 +172,39 @@ public class ProCombatMoveAi {
     return result;
   }
 
+  /** Sends idle air transports to drop paratroopers on undefended enemy land I can hold. */
+  private void planParadrops() {
+    final Map<Territory, ProTerritory> attackMap =
+        territoryManager.getAttackOptions().getTerritoryMap();
+    ProAirliftPlanner.planDrops(
+        data,
+        player,
+        proData,
+        proData.getMyUnitTerritories(),
+        attackMap,
+        proData::getUnitTerritory,
+        (target, paratroopers) -> canHoldParadrop(attackMap, target, paratroopers));
+  }
+
+  private boolean canHoldParadrop(
+      final Map<Territory, ProTerritory> attackMap,
+      final Territory target,
+      final List<Unit> paratroopers) {
+    final List<Territory> cleared = new ArrayList<>(attackMap.keySet());
+    cleared.add(target);
+    territoryManager.populateEnemyAttackOptions(cleared, List.of(target));
+    final ProTerritory enemyAttack = territoryManager.getEnemyAttackOptions().getMax(target);
+    if (enemyAttack == null) {
+      return true;
+    }
+    final Set<Unit> enemyUnits = new HashSet<>(enemyAttack.getMaxUnits());
+    enemyUnits.addAll(enemyAttack.getMaxAmphibUnits());
+    final ProBattleResult counterAttack =
+        calc.calculateBattleResults(
+            proData, target, enemyUnits, paratroopers, enemyAttack.getMaxBombardUnits());
+    return canHoldAgainstCounterAttack(target, counterAttack);
+  }
+
   void doMove(
       final Map<Territory, ProTerritory> attackMap,
       final IMoveDelegate moveDel,
@@ -174,6 +213,11 @@ public class ProCombatMoveAi {
     this.data = data;
     this.player = player;
 
+    // Airlifts go first: an air transport that has already moved can't carry paratroopers.
+    ProMoveUtils.doMove(
+        proData,
+        ProAirliftPlanner.planAirlifts(data, player, attackMap, proData::getUnitTerritory),
+        moveDel);
     ProMoveUtils.doMove(
         proData, ProMoveUtils.calculateMoveRoutes(proData, player, attackMap, true), moveDel);
     ProMoveUtils.doMove(
@@ -541,7 +585,7 @@ public class ProCombatMoveAi {
     final List<ProTerritory> candidates = new ArrayList<>();
     for (final ProTerritory patd : removedBySelection) {
       if (patd.isNeedAmphibUnits()
-          && isValuableLanding(patd)
+          && isValuableLanding(patd, proData.isBeta())
           && !patd.getTerritory().isWater()
           && !dropped.contains(patd)
           && !attackOptions.contains(patd)
@@ -601,14 +645,22 @@ public class ProCombatMoveAi {
 
   /**
    * Whether a landing is worth re-adding after it was removed, or worth fighting a sea battle to
-   * reach: an enemy capital or factory, or a target the combat move expects to hold. A small
-   * landing the enemy retakes next turn costs more than it gains.
+   * reach: a target the combat move expects to hold, or an enemy capital or factory. A small
+   * landing the enemy retakes next turn costs more than it gains. Hard Beta also requires a capital
+   * or factory to pay off in TUV even if retaken.
    */
-  static boolean isValuableLanding(final ProTerritory patd) {
-    final Territory t = patd.getTerritory();
+  static boolean isValuableLanding(final ProTerritory patd, final boolean beta) {
+    return patd.isCanHold()
+        || (isCapitalOrFactory(patd.getTerritory()) && (!beta || paysOffInTuv(patd)));
+  }
+
+  private static boolean isCapitalOrFactory(final Territory t) {
     return TerritoryAttachment.get(t).map(TerritoryAttachment::isCapital).orElse(false)
-        || ProMatches.territoryHasInfraFactoryAndIsLand().test(t)
-        || patd.isCanHold();
+        || ProMatches.territoryHasInfraFactoryAndIsLand().test(t);
+  }
+
+  private static boolean paysOffInTuv(final ProTerritory patd) {
+    return patd.getBattleResult() != null && patd.getBattleResult().getTuvSwing() > 0;
   }
 
   /**
@@ -640,7 +692,7 @@ public class ProCombatMoveAi {
           }
         }
       }
-      if (hasClearZone || blockedZones.isEmpty() || !isValuableLanding(patd)) {
+      if (hasClearZone || blockedZones.isEmpty() || !isValuableLanding(patd, proData.isBeta())) {
         continue;
       }
       for (final Territory z : blockedZones) {
@@ -671,7 +723,8 @@ public class ProCombatMoveAi {
         data.getMap().getNeighbors(patd.getTerritory(), Matches.territoryIsWater())) {
       if (pt.getSeaTransportMap().containsKey(z)
           && (!pt.getBlockedSeaTerritories().contains(z)
-              || (isWinningSeaBattle(z, prioritizedTerritories) && isValuableLanding(patd)))) {
+              || (isWinningSeaBattle(z, prioritizedTerritories)
+                  && isValuableLanding(patd, proData.isBeta())))) {
         return true;
       }
     }
@@ -722,6 +775,75 @@ public class ProCombatMoveAi {
         }
       }
     }
+  }
+
+  /**
+   * Drops a landing whose transports would unload from a sea zone holding enemy subs and none of
+   * our warships: under "Submarines Prevent Unescorted Amphibious Assaults" the move delegate
+   * refuses the unload and the cargo is stranded at sea.
+   */
+  private void dropLandingsBlockedByEnemySubs() {
+    final Map<Territory, ProTerritory> attackMap =
+        territoryManager.getAttackOptions().getTerritoryMap();
+    for (final ProTerritory landing : findLandingsBlockedByEnemySubs(player, attackMap)) {
+      ProLogger.debug(
+          "Dropping landing in "
+              + landing.getTerritory().getName()
+              + ", enemy subs would block the unload");
+      landing.getUnits().clear();
+      landing.getAmphibAttackMap().clear();
+      landing.getBombardTerritoryMap().clear();
+      landing.getTransportTerritoryMap().clear();
+    }
+  }
+
+  /** Returns the planned landings in {@code attackMap} that a sub-blocked unload would strand. */
+  @VisibleForTesting
+  static List<ProTerritory> findLandingsBlockedByEnemySubs(
+      final GamePlayer player, final Map<Territory, ProTerritory> attackMap) {
+    return attackMap.values().stream()
+        .filter(patd -> !patd.getTerritory().isWater() && !patd.getAmphibAttackMap().isEmpty())
+        .filter(
+            patd ->
+                patd.getTransportTerritoryMap().values().stream()
+                    .anyMatch(
+                        z -> {
+                          final ProTerritory zone = attackMap.get(z);
+                          return isUnloadBlockedByEnemySubs(
+                              player,
+                              patd.getTerritory(),
+                              z,
+                              zone == null ? List.of() : zone.getUnits());
+                        }))
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Mirrors the sub check of {@code MoveValidator} for unloading transports in {@code zone} onto
+   * {@code landing} during combat move. Warships of {@code player} that move into the zone first
+   * count as escorts.
+   */
+  static boolean isUnloadBlockedByEnemySubs(
+      final GamePlayer player,
+      final Territory landing,
+      final Territory zone,
+      final Collection<Unit> unitsMovingToZone) {
+    if (!Properties.getSubmarinesPreventUnescortedAmphibiousAssaults(
+        player.getData().getProperties())) {
+      return false;
+    }
+    final boolean isAssault =
+        Matches.territoryHasEnemyUnits(player).test(landing)
+            || Matches.isTerritoryEnemyAndNotUnownedWater(player).test(landing);
+    final Predicate<Unit> escort =
+        Matches.unitIsOwnedBy(player)
+            .and(Matches.unitIsSea())
+            .and(Matches.unitIsNotSeaTransportButCouldBeCombatSeaTransport());
+    return isAssault
+        && zone.anyUnitsMatch(
+            Matches.unitIsEnemyOf(player).and(Matches.unitCanBeMovedThroughByEnemies()))
+        && !zone.anyUnitsMatch(escort)
+        && unitsMovingToZone.stream().noneMatch(escort);
   }
 
   private void determineTerritoriesThatCanBeHeld(
@@ -1075,6 +1197,25 @@ public class ProCombatMoveAi {
           }
         }
 
+        if (proData.isBeta()) {
+          final Optional<Territory> scrambledZone =
+              territoryTransportAndBombardMap.entrySet().stream()
+                  .filter(e -> isLostToScramble(t, e.getKey(), e.getValue()))
+                  .map(Map.Entry::getKey)
+                  .findAny();
+          if (scrambledZone.isPresent()) {
+            ProLogger.debug(
+                "Removing amphib territory: "
+                    + t
+                    + ", scrambled air sinks its transports in "
+                    + scrambledZone.get());
+            patd.getUnits().clear();
+            patd.getAmphibAttackMap().clear();
+            patd.getBombardTerritoryMap().clear();
+            continue;
+          }
+        }
+
         // Determine counter-attack results for each transport territory
         double enemyTuvSwing = 0.0;
         for (final Territory unloadTerritory : territoryTransportAndBombardMap.keySet()) {
@@ -1158,6 +1299,51 @@ public class ProCombatMoveAi {
         }
       }
     }
+  }
+
+  /**
+   * Whether enemy air can scramble into {@code unloadZone} and beat the units there. The engine
+   * reloads the cargo before that sea battle, so a lost battle sinks the transports with their
+   * cargo and the landing in {@code target} never happens.
+   */
+  private boolean isLostToScramble(
+      final Territory target, final Territory unloadZone, final Collection<Unit> unloadingUnits) {
+    final ProTerritory zoneAttack =
+        territoryManager.getAttackOptions().getTerritoryMap().get(unloadZone);
+    if (!unloadZone.isWater()
+        || !Properties.getScrambleRulesInEffect(data.getProperties())
+        || (zoneAttack != null && !zoneAttack.getUnits().isEmpty())) {
+      return false;
+    }
+    // without "Scramble To Any Amphibious Assault" only the landing's target scrambles to the zone
+    final boolean fromAnywhere = Properties.getScrambleToAnyAmphibiousAssault(data.getProperties());
+    final List<Unit> scramblers = new ArrayList<>();
+    new ScrambleLogic(data, player, Set.of(unloadZone))
+        .getUnitsThatCanScrambleByDestination()
+        .getOrDefault(unloadZone, Map.of())
+        .forEach(
+            (from, airbasesAndScramblers) -> {
+              if (fromAnywhere || from.equals(target)) {
+                scramblers.addAll(
+                    ProTerritoryManager.maxScramblers(unloadZone, airbasesAndScramblers));
+              }
+            });
+    if (scramblers.isEmpty()) {
+      return false;
+    }
+    final Set<Unit> attackers = new HashSet<>(unloadingUnits);
+    attackers.addAll(unloadZone.getMatches(Matches.unitIsOwnedBy(player)));
+    final ProBattleResult result =
+        calc.calculateBattleResults(proData, unloadZone, attackers, scramblers, List.of());
+    ProLogger.debug(
+        unloadZone
+            + " scramble check for "
+            + target
+            + ", scramblers="
+            + scramblers.size()
+            + ", win%="
+            + result.getWinPercentage());
+    return result.getWinPercentage() < proData.getWinPercentage();
   }
 
   public static class ProductionAndIsCapital {
@@ -2445,7 +2631,7 @@ public class ProCombatMoveAi {
                       // zone serves
                       if (blockedUnloadZone == null
                           && isWinningSeaBattle(destination, prioritizedTerritories)
-                          && isValuableLanding(patd)) {
+                          && isValuableLanding(patd, proData.isBeta())) {
                         blockedUnloadZone = destination;
                       }
                       continue;

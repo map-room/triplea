@@ -39,12 +39,14 @@ public class GameProperties extends GameDataComponent {
   private final Map<String, IEditableProperty<?>> playerProperties = new HashMap<>();
 
   /**
-   * Resolved {@link #get(String)} results. Map properties do not change during a ProAI decision
-   * (map-room#3695); looking up editable → player → constant on every call was ~3% of a 2026-06
-   * profile and still ~4% stack / 0.6% leaf in the 2026-08 re-measure. Cleared on any {@code set} /
-   * add.
+   * Which source answers each {@link #get(String)} key: the editable or player property object
+   * (read live), or the constant itself. Looking up editable → player → constant on every call was
+   * ~3% of a 2026-06 profile and still ~4% stack / 0.6% leaf in the 2026-08 re-measure
+   * (map-room#3695). Cleared on any {@code set} / add.
    */
-  private transient Map<String, Serializable> resolvedCache;
+  private transient Map<String, Object> resolvedCache;
+
+  private static final Object ABSENT = new Object();
 
   public GameProperties(final GameData data) {
     super(data);
@@ -129,28 +131,39 @@ public class GameProperties extends GameDataComponent {
    * @param key referring key
    */
   public Serializable get(final String key) {
-    final Map<String, Serializable> cache = resolvedCache();
-    if (cache.containsKey(key)) {
-      return cache.get(key);
+    final Map<String, Object> cache = resolvedCache();
+    Object source = cache.get(key);
+    if (source == null) {
+      source = resolveSource(key);
+      cache.put(key, source);
     }
-    IEditableProperty found = editableProperties.get(key);
-    final Serializable value;
-    if (found != null) {
-      value = (Serializable) found.getValue();
-    } else {
-      found = playerProperties.get(key);
-      if (found != null) {
-        value = (Serializable) found.getValue();
-      } else {
-        value = constantProperties.get(key);
-      }
+    if (source == ABSENT) {
+      return null;
     }
-    cache.put(key, value);
-    return value;
+    // An editable property can be changed in place through its own setValue, which this class never
+    // sees, so only *which* property answers is cached; its value is always read live.
+    if (source instanceof IEditableProperty<?> property) {
+      return (Serializable) property.getValue();
+    }
+    return (Serializable) source;
   }
 
-  private Map<String, Serializable> resolvedCache() {
-    Map<String, Serializable> cache = resolvedCache;
+  /** The editable property, else the player property, else the constant, else {@link #ABSENT}. */
+  private Object resolveSource(final String key) {
+    final IEditableProperty<?> editable = editableProperties.get(key);
+    if (editable != null) {
+      return editable;
+    }
+    final IEditableProperty<?> player = playerProperties.get(key);
+    if (player != null) {
+      return player;
+    }
+    final Serializable constant = constantProperties.get(key);
+    return constant != null ? constant : ABSENT;
+  }
+
+  private Map<String, Object> resolvedCache() {
+    Map<String, Object> cache = resolvedCache;
     if (cache == null) {
       cache = new HashMap<>();
       resolvedCache = cache;
