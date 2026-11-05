@@ -47,7 +47,7 @@ public final class ProData {
   private double minCostPerHitPoint = Double.MAX_VALUE;
 
   /** Seeded RNG for deterministic AI decisions. Seeded via {@link #setSeed(long)}. */
-  @Getter private Random rng = new Random();
+  @Getter private final Random rng = new Random();
 
   private AbstractProAi proAi;
   private GameData data;
@@ -63,7 +63,9 @@ public final class ProData {
 
   /** Seeds the RNG used by AI subsystems for deterministic behaviour. */
   public void setSeed(final long seed) {
-    rng = new Random(seed);
+    // Reseed in place: collaborators (ProPoliticsAi, ...) capture this instance at construction,
+    // so swapping in a new Random would leave them drawing from an unseeded one.
+    rng.setSeed(seed);
   }
 
   public void initialize(final AbstractProAi proAi) {
@@ -76,14 +78,11 @@ public final class ProData {
   }
 
   /**
-   * Whether combat move may land behind a sea battle it fights in the same turn. Hard Beta does
-   * this only for players in an alliance named "Axis": on WW2 maps it helped the Axis, while the
-   * Allies' extra landings were retaken and cost TUV.
+   * Whether combat move may land behind a sea battle it fights in the same turn. Only Hard Beta
+   * does this, for every player.
    */
   public boolean canLandBehindSeaBattle() {
-    return beta
-        && player != null
-        && data.getAllianceTracker().getAlliancesPlayerIsIn(player).contains("Axis");
+    return beta;
   }
 
   public Territory getUnitTerritory(final Unit unit) {
@@ -116,7 +115,7 @@ public final class ProData {
             data.getMap().getTerritories(), Matches.territoryHasUnitsOwnedBy(player));
     unitTerritoryMap = newUnitTerritoryMap(data);
     unitValueMap = new TuvCostsCalculator().getCostsForTuv(player);
-    purchaseOptions = new ProPurchaseOptionMap(player, data);
+    purchaseOptions = new ProPurchaseOptionMap(player, data, beta);
     minCostPerHitPoint = getMinCostPerHitPoint(purchaseOptions.getLandOptions());
   }
 

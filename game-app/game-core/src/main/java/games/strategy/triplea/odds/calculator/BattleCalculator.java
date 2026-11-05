@@ -28,7 +28,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import lombok.Setter;
 
-class BattleCalculator implements IBattleCalculator {
+class BattleCalculator {
   @Nonnull private final GameData gameData;
   // Use a single TuvCostsCalculator so its computations are cached.
   private final TuvCostsCalculator tuvCalculator = new TuvCostsCalculator();
@@ -38,26 +38,29 @@ class BattleCalculator implements IBattleCalculator {
   @Setter private int retreatAfterXUnitsLeft = -1;
   @Setter private String attackerOrderOfLosses = null;
   @Setter private String defenderOrderOfLosses = null;
-  private volatile boolean cancelled = false;
-  private final AtomicBoolean isRunning = new AtomicBoolean(false);
+  // Injectable so tests can supply a seeded or scripted source for reproducible simulations.
+  @Setter private IRandomSource randomSource = new PlainRandomSource();
 
   /**
-   * When non-null, every {@link DummyDelegateBridge} created in {@link #calculate} shares a single
-   * {@link PlainRandomSource} seeded with this value, instead of the default per-trial unseeded
-   * {@code MersenneTwister}. Enables deterministic battle calculator output for the AI sidecar (see
-   * map-room/map-room#2376 / #2377).
+   * When non-null, every {@link #calculate} call draws from a fresh {@link PlainRandomSource}
+   * seeded with this value, so the same battle gives the same aggregate every time. Used by the AI
+   * sidecar to make ProAi a pure function of {@code (gamestate, seed)} (map-room#2376 / #2377).
+   * Overrides {@link #randomSource}, which keeps its sequence across calls.
    */
   @Nullable private final Long seed;
+
+  private volatile boolean cancelled = false;
+  private final AtomicBoolean isRunning = new AtomicBoolean(false);
 
   BattleCalculator(GameData data) {
     this(data, null);
   }
 
   BattleCalculator(GameData data, @Nullable Long seed) {
+    this.seed = seed;
     gameData =
         GameDataUtils.cloneGameData(data, GameDataManager.Options.forBattleCalculator())
             .orElseThrow();
-    this.seed = seed;
   }
 
   BattleCalculator(byte[] data) {
@@ -70,7 +73,6 @@ class BattleCalculator implements IBattleCalculator {
     this.seed = seed;
   }
 
-  @Override
   public AggregateResults calculate(
       final GamePlayer attacker,
       final GamePlayer defender,
@@ -105,7 +107,7 @@ class BattleCalculator implements IBattleCalculator {
       gameData.performChange(
           ChangeFactory.addUnits(location2, mergeUnitCollections(attackingUnits, defendingUnits)));
       final long start = System.currentTimeMillis();
-      final AggregateResults aggregateResults = new AggregateResults(runCount);
+      final ListBackedAggregateResults aggregateResults = new ListBackedAggregateResults(runCount);
       final BattleTracker battleTracker = new BattleTracker();
       final List<Unit> attackerOrderOfLosses =
           OrderOfLossesInputPanel.getUnitListByOrderOfLoss(
@@ -113,14 +115,10 @@ class BattleCalculator implements IBattleCalculator {
       final List<Unit> defenderOrderOfLosses =
           OrderOfLossesInputPanel.getUnitListByOrderOfLoss(
               this.defenderOrderOfLosses, defendingUnits, gameData);
-      // When seeded, all trials in this call share a single seeded random source so the
-      // aggregate is reproducible. When unseeded, each trial gets its own unseeded RNG (legacy
-      // behaviour) — see map-room/map-room#2377.
-      final IRandomSource sharedRandomSource = seed != null ? new PlainRandomSource(seed) : null;
+      final IRandomSource trialRandomSource =
+          seed != null ? new PlainRandomSource(seed) : randomSource;
       for (int i = 0; i < runCount && !cancelled; i++) {
         final CompositeChange allChanges = new CompositeChange();
-        final IRandomSource trialRandomSource =
-            sharedRandomSource != null ? sharedRandomSource : new PlainRandomSource();
         final DummyDelegateBridge bridge =
             new DummyDelegateBridge(
                 attacker2,

@@ -33,6 +33,8 @@ project(":ai").projectDir = file("game-app/ai")
 // map-room fork: ProAi decision service consumed by map-room (see game-app/ai-sidecar/README.md).
 include(":ai-sidecar")
 project(":ai-sidecar").projectDir = file("game-app/ai-sidecar")
+include(":battle-calc-core")
+project(":battle-calc-core").projectDir = file("game-app/battle-calc-core")
 include(":domain-data")
 project(":domain-data").projectDir = file("game-app/domain-data")
 include(":game-core")

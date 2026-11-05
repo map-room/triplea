@@ -7,23 +7,26 @@ import static games.strategy.triplea.delegate.GameDataTestUtil.infantry;
 import static games.strategy.triplea.delegate.GameDataTestUtil.territory;
 import static games.strategy.triplea.delegate.GameDataTestUtil.transport;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
-import games.strategy.engine.data.TerritoryEffect;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.triplea.ai.pro.util.ProBattleUtils;
 import games.strategy.triplea.ai.pro.util.ProOddsCalculator;
-import games.strategy.triplea.odds.calculator.AggregateResults;
 import games.strategy.triplea.odds.calculator.IBattleCalculator;
+import games.strategy.triplea.odds.calculator.ListBackedAggregateResults;
 import games.strategy.triplea.util.TuvCostsCalculator;
 import games.strategy.triplea.util.TuvUtils;
 import games.strategy.triplea.xml.TestMapGameData;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -189,23 +192,9 @@ class ProTransportAirExposureTest {
 
   /** A no-op IBattleCalculator that returns empty results; used when calc is never invoked. */
   private static IBattleCalculator noOpCalculator() {
-    return new IBattleCalculator() {
-      @Override
-      public AggregateResults calculate(
-          final GamePlayer attacker,
-          final GamePlayer defender,
-          final Territory location,
-          final Collection<Unit> attacking,
-          final Collection<Unit> defending,
-          final Collection<Unit> bombarding,
-          final Collection<TerritoryEffect> territoryEffects,
-          final boolean retreatWhenOnlyAirLeft,
-          final int runCount) {
-        return new AggregateResults(0);
-      }
-
-      @Override
-      public void setRetreatAfterRound(final int value) {}
-    };
+    final IBattleCalculator calc = mock(IBattleCalculator.class);
+    when(calc.calculate(any(), any(), any(), any(), any(), any(), any(), anyBoolean(), anyInt()))
+        .thenAnswer(invocation -> new ListBackedAggregateResults(0));
+    return calc;
   }
 }

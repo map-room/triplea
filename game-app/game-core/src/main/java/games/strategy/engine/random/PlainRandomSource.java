@@ -2,31 +2,39 @@ package games.strategy.engine.random;
 
 import static com.google.common.base.Preconditions.checkArgument;
 
+import java.util.SplittableRandom;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
-import org.apache.commons.math3.random.MersenneTwister;
-import org.apache.commons.math3.random.RandomGenerator;
 
 /** A source of random numbers that uses a pseudorandom number generator. */
 @ThreadSafe
 public final class PlainRandomSource implements IRandomSource {
   private final Object lock = new Object();
 
+  /// SplittableRandom (AKA splitmix64) is selected for reasons:
+  /// - small state (8 bytes)
+  /// - good cache performance under concurrent simulation
+  /// - passes BigCrush,
+  /// - no LSB quality issues
+  /// Documentation:
+  /// - https://docs.oracle.com/javase/8/docs/api/java/util/SplittableRandom.html
+  ///
+  /// Note: @GuardedBy("lock") remains for correctness. The cost to acquire
+  /// the lock when not under contention is close to free.
+  ///
   @GuardedBy("lock")
-  private final RandomGenerator random;
+  private final SplittableRandom random;
 
-  /** Default constructor: nondeterministic seeding (current behaviour). */
   public PlainRandomSource() {
-    this.random = new MersenneTwister();
+    random = new SplittableRandom();
   }
 
   /**
-   * Seeded constructor: produces a deterministic sequence given the same {@code seed}. Used by the
-   * AI sidecar's deterministic battle-calculator path so {@code (gamestate, seed) → wire-response}
-   * is a pure function (see map-room/map-room#2376 / #2377).
+   * Creates a source seeded for reproducible sequences. Same seed yields the same rolls, which lets
+   * callers (e.g. battle simulations) produce deterministic, comparable results across runs.
    */
   public PlainRandomSource(final long seed) {
-    this.random = new MersenneTwister(seed);
+    random = new SplittableRandom(seed);
   }
 
   @Override

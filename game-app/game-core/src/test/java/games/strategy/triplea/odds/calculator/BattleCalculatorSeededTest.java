@@ -56,15 +56,15 @@ class BattleCalculatorSeededTest extends AbstractClientSettingTestCase {
     assertEquals(a.getAverageAttackingUnitsLeft(), b.getAverageAttackingUnitsLeft());
     assertEquals(a.getAverageDefendingUnitsLeft(), b.getAverageDefendingUnitsLeft());
 
-    // Pinned from a run on this branch *before* the sim-path speedups (getMatches loop,
-    // filterUnits without streams, skip headless BattleSteps rebuild). 200 seeded trials:
-    // 77 attacker wins, 120 defender, 3 draws. Any drift means the change is no longer
-    // behaviour-preserving.
-    assertEquals(0.385, a.getAttackerWinPercent(), 1e-9);
-    assertEquals(0.6, a.getDefenderWinPercent(), 1e-9);
-    assertEquals(0.015, a.getDrawPercent(), 1e-9);
-    assertEquals(1.48, a.getAverageAttackingUnitsLeft(), 1e-9);
-    assertEquals(1.925, a.getAverageDefendingUnitsLeft(), 1e-9);
+    // Pinned from a run after the stage-3 upstream sync, which moved PlainRandomSource from
+    // MersenneTwister to upstream's SplittableRandom; the stream changed, so the old pins (77/120/3
+    // of 200) moved with it. 200 seeded trials: 88 attacker wins, 110 defender, 2 draws. Any drift
+    // from here means the change is no longer behaviour-preserving.
+    assertEquals(0.44, a.getAttackerWinPercent(), 1e-9);
+    assertEquals(0.55, a.getDefenderWinPercent(), 1e-9);
+    assertEquals(0.01, a.getDrawPercent(), 1e-9);
+    assertEquals(1.715, a.getAverageAttackingUnitsLeft(), 1e-9);
+    assertEquals(1.88, a.getAverageDefendingUnitsLeft(), 1e-9);
 
     // Pinned the same way, added in map-room#3698. getAverage*UnitsRemaining() picks the single
     // simulated result closest to the average — it is the observable output of
@@ -76,8 +76,8 @@ class BattleCalculatorSeededTest extends AbstractClientSettingTestCase {
         a.getAverageAttackingUnitsRemaining().size(), b.getAverageAttackingUnitsRemaining().size());
     assertEquals(
         a.getAverageDefendingUnitsRemaining().size(), b.getAverageDefendingUnitsRemaining().size());
-    assertEquals(5.425, a.getAverageBattleRoundsFought(), 1e-9);
-    assertEquals(3.844_155_844_155_844, a.getAverageAttackingUnitsLeftWhenAttackerWon(), 1e-9);
-    assertEquals(3.208_333_333_333_333_5, a.getAverageDefendingUnitsLeftWhenDefenderWon(), 1e-9);
+    assertEquals(5.16, a.getAverageBattleRoundsFought(), 1e-9);
+    assertEquals(3.897_727_272_727_272_5, a.getAverageAttackingUnitsLeftWhenAttackerWon(), 1e-9);
+    assertEquals(3.418_181_818_181_818, a.getAverageDefendingUnitsLeftWhenDefenderWon(), 1e-9);
   }
 }

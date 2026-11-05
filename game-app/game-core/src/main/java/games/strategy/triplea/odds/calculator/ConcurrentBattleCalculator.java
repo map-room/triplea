@@ -168,7 +168,8 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
       if (cancelCurrentOperation.get() >= 0) {
         if (seed != null) {
           // Deterministic mode: exactly one seeded worker, no parallelism. The seed propagates
-          // into every per-trial PlainRandomSource via BattleCalculator. See seed-field javadoc.
+          // into a fresh PlainRandomSource per calculate() call in BattleCalculator. See seed-field
+          // javadoc.
           workers.add(new BattleCalculator(serializedData, seed));
         } else {
           // Create the first battle calc on the current thread to measure the end-to-end copy
@@ -216,11 +217,11 @@ public class ConcurrentBattleCalculator implements IBattleCalculator {
       if (!isDataSet || workers.isEmpty()) {
         // we could have attempted to set a new game data, while the old one was still being set,
         // causing it to abort with null data
-        return new AggregateResults(0);
+        return new ListBackedAggregateResults(0);
       }
       final var runCountDistributor = new RunCountDistributor(runCount, workers.size());
-      final AggregateResults results =
-          new AggregateResults(
+      final ListBackedAggregateResults results =
+          new ListBackedAggregateResults(
               workers.parallelStream()
                   .map(
                       worker ->

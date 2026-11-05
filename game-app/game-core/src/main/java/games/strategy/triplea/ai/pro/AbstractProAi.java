@@ -20,6 +20,7 @@ import games.strategy.triplea.ai.pro.data.ProResourceTracker;
 import games.strategy.triplea.ai.pro.data.ProSessionSnapshot;
 import games.strategy.triplea.ai.pro.data.ProSplitResourceTracker;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
+import games.strategy.triplea.ai.pro.data.ProTerritoryManager;
 import games.strategy.triplea.ai.pro.data.ProTerritorySnapshot;
 import games.strategy.triplea.ai.pro.data.PurchaseTerritorySnapshot;
 import games.strategy.triplea.ai.pro.logging.ProLogUi;
@@ -36,6 +37,7 @@ import games.strategy.triplea.attachments.PoliticalActionAttachment;
 import games.strategy.triplea.delegate.DiceRoll;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.PoliticsDelegate;
+import games.strategy.triplea.delegate.battle.AirBattle;
 import games.strategy.triplea.delegate.battle.BattleDelegate;
 import games.strategy.triplea.delegate.battle.IBattle;
 import games.strategy.triplea.delegate.battle.IBattle.BattleType;
@@ -53,10 +55,14 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import lombok.Getter;
 import org.triplea.java.collections.CollectionUtils;
@@ -64,6 +70,9 @@ import org.triplea.util.Tuple;
 
 /** Pro AI. */
 public abstract class AbstractProAi extends AbstractAi {
+
+  /** Enemy win percentage at or above which a landing territory counts as lost. */
+  private static final double AIR_DECIDES_THRESHOLD = 50;
 
   @Getter private final ProOddsCalculator calc;
   @Getter private final ProData proData;
@@ -129,6 +138,11 @@ public abstract class AbstractProAi extends AbstractAi {
     storedPoliticalActions = null;
     storedStrafingTerritories = new ArrayList<>();
     simulatePoliticsInPurchase = true;
+  }
+
+  @Override
+  protected boolean choosesBombingTargetsByValue() {
+    return proData.isBeta();
   }
 
   @Override
@@ -918,6 +932,90 @@ public abstract class AbstractProAi extends AbstractAi {
     return combatMoveAi.isBombing();
   }
 
+  @Override
+  public Territory selectTerritoryForAirToLand(
+      final Collection<Territory> candidates,
+      final Territory currentTerritory,
+      final String unitMessage) {
+    initializeData();
+    prepareData(getGameData());
+    final GamePlayer player = getGamePlayer();
+    final ProTerritoryManager territoryManager = new ProTerritoryManager(calc, proData);
+    territoryManager.populateEnemyAttackOptions(List.of(), candidates);
+    // The query does not name the landing units, so the air in the current territory stands in.
+    final Collection<Unit> landingAir =
+        currentTerritory.getMatches(Matches.unitIsOwnedBy(player).and(Matches.unitIsAir()));
+    return chooseAirLanding(
+        candidates,
+        t -> assessLanding(t, landingAir, territoryManager.getEnemyAttackOptions().getMax(t)));
+  }
+
+  /** What an air landing at one candidate faces; loss chances are the enemy's win percentage. */
+  record LandingAssessment(
+      double lossChanceWithout, double lossChanceWith, double groundStrength) {}
+
+  private LandingAssessment assessLanding(
+      final Territory t, final Collection<Unit> landingAir, @Nullable final ProTerritory enemy) {
+    final GamePlayer player = getGamePlayer();
+    final Collection<Unit> defenders = t.getMatches(Matches.isUnitAllied(player));
+    final double groundStrength =
+        ProBattleUtils.estimateStrength(
+            t,
+            CollectionUtils.getMatches(defenders, Matches.unitIsAir().negate()),
+            new ArrayList<>(),
+            false);
+    if (enemy == null || enemy.getMaxUnits().isEmpty()) {
+      return new LandingAssessment(0, 0, groundStrength);
+    }
+    final List<Unit> attackers = new ArrayList<>(enemy.getMaxUnits());
+    // The landing air may already be in the candidate (eg: the current territory).
+    final Set<Unit> defendersWithAir = new HashSet<>(defenders);
+    defendersWithAir.addAll(landingAir);
+    return new LandingAssessment(
+        calc.calculateBattleResults(proData, t, attackers, defenders, new HashSet<>())
+            .getWinPercentage(),
+        calc.calculateBattleResults(proData, t, attackers, defendersWithAir, new HashSet<>())
+            .getWinPercentage(),
+        groundStrength);
+  }
+
+  /**
+   * Picks where air should land: a territory the air is the deciding factor in holding, otherwise
+   * the one least likely to be lost to an attack next turn, then the one with the most allied
+   * ground. Remaining ties go to the first candidate in iteration order.
+   */
+  static Territory chooseAirLanding(
+      final Collection<Territory> candidates, final Function<Territory, LandingAssessment> assess) {
+    final Map<Territory, LandingAssessment> assessments = new LinkedHashMap<>();
+    candidates.forEach(t -> assessments.put(t, assess.apply(t)));
+    final Comparator<Territory> safest =
+        Comparator.comparingDouble((Territory t) -> assessments.get(t).lossChanceWith())
+            .thenComparing(t -> -assessments.get(t).groundStrength());
+    return assessments.keySet().stream()
+        .filter(t -> assessments.get(t).lossChanceWithout() >= AIR_DECIDES_THRESHOLD)
+        .filter(t -> assessments.get(t).lossChanceWith() < AIR_DECIDES_THRESHOLD)
+        .min(safest)
+        .or(() -> assessments.keySet().stream().min(safest))
+        .orElse(null);
+  }
+
+  @Override
+  public Collection<Unit> selectUnitsQuery(
+      final Territory current, final Collection<Unit> possible, final String message) {
+    if (!proData.isBeta()) {
+      return super.selectUnitsQuery(current, possible, message);
+    }
+    // Only asked which defending air units launch to intercept; null launches none and, when
+    // defenders may withdraw, also keeps them out of the battle that follows.
+    final int maxInterceptors = AirBattle.getMaxInterceptionCount(current, possible);
+    return possible.stream()
+        .sorted(
+            Comparator.comparingInt((Unit u) -> u.getUnitAttachment().getAirDefense(u.getOwner()))
+                .reversed())
+        .limit(maxInterceptors)
+        .collect(Collectors.toList());
+  }
+
   // TODO: Consider supporting this functionality
   @Override
   public Collection<Unit> getNumberOfFightersToMoveToNewCarrier(
@@ -1130,28 +1228,10 @@ public abstract class AbstractProAi extends AbstractAi {
       final Territory scrambleTo,
       final Map<Territory, Tuple<Collection<Unit>, Collection<Unit>>> possibleScramblers) {
     initializeData();
-
-    // Get battle data
-    final GameData data = getGameData();
-    final GamePlayer player = this.getGamePlayer();
-    final BattleDelegate delegate = data.getBattleDelegate();
-    final IBattle battle =
-        delegate.getBattleTracker().getPendingBattle(scrambleTo, BattleType.NORMAL);
-
-    // If battle is null then don't scramble
-    if (battle == null) {
-      return null;
-    }
-    final Collection<Unit> attackers = battle.getAttackingUnits();
-    final Collection<Unit> defenders = battle.getDefendingUnits();
     ProLogger.info(
-        player.getName()
+        getGamePlayer().getName()
             + " checking scramble to "
             + scrambleTo
-            + ", attackers="
-            + attackers.size()
-            + ", defenders="
-            + defenders.size()
             + ", possibleScramblers="
             + possibleScramblers);
     prepareData(getGameData());

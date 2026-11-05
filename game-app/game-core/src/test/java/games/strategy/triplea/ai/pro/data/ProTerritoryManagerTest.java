@@ -1,157 +1,132 @@
 package games.strategy.triplea.ai.pro.data;
 
-import static games.strategy.triplea.delegate.MockDelegateBridge.newDelegateBridge;
+import static games.strategy.triplea.delegate.GameDataTestUtil.addTo;
+import static games.strategy.triplea.delegate.GameDataTestUtil.british;
+import static games.strategy.triplea.delegate.GameDataTestUtil.fighter;
+import static games.strategy.triplea.delegate.GameDataTestUtil.germans;
+import static games.strategy.triplea.delegate.GameDataTestUtil.infantry;
+import static games.strategy.triplea.delegate.GameDataTestUtil.territory;
+import static games.strategy.triplea.delegate.GameDataTestUtil.transport;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
+import games.strategy.engine.data.MutableProperty;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
-import games.strategy.engine.data.UnitType;
-import games.strategy.engine.data.changefactory.ChangeFactory;
-import games.strategy.engine.player.PlayerBridge;
-import games.strategy.triplea.ai.pro.ProAi;
-import games.strategy.triplea.delegate.Matches;
-import games.strategy.triplea.settings.ClientSetting;
+import games.strategy.triplea.ai.pro.ProData;
+import games.strategy.triplea.attachments.TerritoryEffectAttachment;
+import games.strategy.triplea.delegate.GameDataTestUtil;
+import games.strategy.triplea.delegate.TerritoryEffectHelper;
 import games.strategy.triplea.xml.TestMapGameData;
-import java.util.ArrayList;
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
-import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 
-/**
- * Tests for {@link ProTerritoryManager} NCM destination expansion for Friendly_Neutral territories.
- *
- * <p>Related to map-room#2195. The actual fix for that issue was adding {@link
- * games.strategy.triplea.ai.pro.ProNonCombatMoveAi#claimFriendlyNeutralTerritories} so the AI
- * proactively sends a unit to each accessible Friendly_Neutral territory during NCM. This class
- * tests the prerequisite: that {@code findDefendOptions} correctly includes Friendly_Neutral
- * territories (e.g. Bulgaria) in its expansion, so {@code claimFriendlyNeutralTerritories} has
- * those territories available to claim.
- *
- * <p>Note: {@code Friendly_Neutral} relationship types use {@code archeType="allied"} in the XML,
- * so {@code Matches.isTerritoryAllied} already accepts them — no change to that predicate was
- * needed.
- */
 class ProTerritoryManagerTest {
 
-  private GameData gameData;
-  private GamePlayer germans;
-  private ProAi proAi;
+  @Test
+  void airUnitIsNotPlannedIntoTerritoryThatBarsItsType() throws Exception {
+    final GameData data = TestMapGameData.DELEGATE_TEST.getGameData();
+    final GamePlayer british = british(data);
+    final Territory eastCanada = data.getMap().getTerritoryOrThrow("East Canada");
+    final Territory westCanada = data.getMap().getTerritoryOrThrow("West Canada");
+    final Unit plane = fighter(data).create(1, british).get(0);
+    addTo(eastCanada, List.of(plane));
+    final var marsh =
+        TerritoryEffectAttachment.get(
+            TerritoryEffectHelper.getEffects(westCanada).iterator().next());
+    marsh.getPropertyOrThrow("unitsNotAllowed").setValue(List.of(fighter(data)));
 
-  @BeforeEach
-  void setUp() {
-    ClientSetting.setPreferences(new MemoryPreferences());
-    gameData = TestMapGameData.GLOBAL1940.getGameData();
-    germans = gameData.getPlayerList().getPlayerId("Germans");
+    final ProTerritoryManager manager = planDefense(data, british);
 
-    final PlayerBridge playerBridge = mock(PlayerBridge.class);
-    when(playerBridge.getGameData()).thenReturn(gameData);
-    newDelegateBridge(germans); // registers the bridge; result unused here
-
-    proAi = new ProAi("test-Germans", "Germans");
-    proAi.initialize(playerBridge, germans);
+    assertThat(manager.getDefendOptions().getUnitMoveMap().get(plane)).doesNotContain(westCanada);
+    assertThat(manager.getDefendOptions().getUnitMoveMap().get(plane)).contains(eastCanada);
   }
 
-  /**
-   * Bulgaria (Friendly_Neutral) must appear in the defend options after {@link
-   * ProTerritoryManager#populateDefenseOptions} when a German unit is in an adjacent territory.
-   *
-   * <p>This tests the prerequisite for {@link
-   * games.strategy.triplea.ai.pro.ProNonCombatMoveAi#claimFriendlyNeutralTerritories}: that
-   * Bulgaria is reachable from Romania so the claim step can dispatch a unit there. The
-   * Friendly_Neutral relationship already uses {@code archeType="allied"}, so {@code
-   * isTerritoryAllied(player)} correctly returns {@code true} — Bulgaria is included in defend
-   * options without any change to that predicate.
-   */
   @Test
-  void defendOptionsIncludeFriendlyNeutralBulgariaWhenGermanUnitIsInAdjacentRomania() {
-    final Territory romania = gameData.getMap().getTerritoryOrThrow("Romania");
-    final Territory bulgaria = gameData.getMap().getTerritoryOrThrow("Bulgaria");
+  void airUnitIsPlannedIntoTerritoryThatBarsOtherTypes() {
+    final GameData data = TestMapGameData.DELEGATE_TEST.getGameData();
+    final GamePlayer british = british(data);
+    final Territory eastCanada = data.getMap().getTerritoryOrThrow("East Canada");
+    final Territory westCanada = data.getMap().getTerritoryOrThrow("West Canada");
+    final Unit plane = fighter(data).create(1, british).get(0);
+    addTo(eastCanada, List.of(plane));
 
-    // Precondition: Romania must be adjacent to Bulgaria on the Global 1940 map.
-    assertThat(gameData.getMap().getNeighbors(romania))
-        .as("Romania must be adjacent to Bulgaria in Global 1940")
-        .contains(bulgaria);
+    final ProTerritoryManager manager = planDefense(data, british);
 
-    // Place a German infantry in Romania so ProData sees Romania as a unit territory.
-    final UnitType infantry = gameData.getUnitTypeList().getUnitTypeOrThrow("infantry");
-    final Unit germanInfantry = infantry.create(1, germans).get(0);
-    gameData.performChange(ChangeFactory.addUnits(romania, List.of(germanInfantry)));
-
-    proAi.getProData().initialize(proAi);
-    final ProTerritoryManager manager =
-        new ProTerritoryManager(proAi.getCalc(), proAi.getProData());
-    manager.populateDefenseOptions(new ArrayList<>());
-
-    assertThat(manager.getDefendOptions().getTerritoryMap())
-        .as(
-            "Bulgaria (Friendly_Neutral) must be a defend-option destination when a German unit"
-                + " can reach it from Romania (regression: map-room#2195)")
-        .containsKey(bulgaria);
+    assertThat(manager.getDefendOptions().getUnitMoveMap().get(plane)).contains(westCanada);
   }
 
-  /**
-   * Regression test for #2615: a transport that was pre-loaded with cargo in an earlier round must
-   * still appear in amphibAttackOptions so the planner can emit an unloadFromTransport step.
-   *
-   * <p>Without the fix, {@code findAmphibMoveOptions} builds {@code transportMap} entries like
-   * {@code {Japan → {}}} (empty loadFromTerritories for pre-loaded transports), which are then
-   * pruned by {@code transportMap.values().removeIf(Collection::isEmpty)}. Japan never enters
-   * {@code amphibAttackOptions} and {@code amphibChainsValid=0}.
-   *
-   * <p>With the fix, the current sea zone ({@code from}) is added to {@code loadFromTerritories} as
-   * a sentinel, keeping the entry alive. {@link
-   * games.strategy.triplea.ai.pro.util.ProTransportUtils#getUnitsToTransportFromTerritories}
-   * short-circuits for pre-loaded transports and ignores the sentinel value.
-   */
   @Test
-  void preLoadedTransportInAdjacentSeaZoneIsIncludedInAmphibAttackOptions() {
-    // Germans start at War with British in G40 turn 1 — Scotland is a valid enemy target.
-    // 109 Sea Zone is adjacent to Scotland (British) and is a plausible staging sea zone.
-    final Territory sz109 = gameData.getMap().getTerritoryOrThrow("109 Sea Zone");
-    final Territory scotland = gameData.getMap().getTerritoryOrThrow("Scotland");
+  void trainIsNotPlannedAlongTrackThatLacksRail() {
+    final GameData tww = TestMapGameData.TWW.getGameData();
+    final GamePlayer germans = GameDataTestUtil.germany(tww);
+    final Territory berlin = tww.getMap().getTerritoryOrThrow("Berlin");
+    final Territory easternGermany = tww.getMap().getTerritoryOrThrow("Eastern Germany");
+    final Unit train = GameDataTestUtil.germanTrain(tww).create(1, germans).get(0);
+    addTo(berlin, List.of(train));
 
-    // Precondition: 109 Sea Zone must be adjacent to Scotland on the Global 1940 map.
-    assertThat(gameData.getMap().getNeighbors(sz109))
-        .as("109 Sea Zone must be adjacent to Scotland in Global 1940")
-        .contains(scotland);
+    final Set<Territory> moves =
+        planDefense(tww, germans).getDefendOptions().getUnitMoveMap().get(train);
 
-    // 109 Sea Zone starts with British ships — clear them so the German transport can operate.
-    final List<Unit> britishShips = sz109.getMatches(Matches.unitIsEnemyOf(germans));
-    gameData.performChange(ChangeFactory.removeUnits(sz109, britishShips));
+    assertThat(moves).doesNotContain(easternGermany);
+  }
 
-    // Pre-load a German transport with infantry: place both in 109 Sea Zone and mark the
-    // infantry as transported (simulating a unit loaded in a prior round and not yet unloaded).
-    final UnitType transportType = gameData.getUnitTypeList().getUnitTypeOrThrow("transport");
-    final UnitType infantryType = gameData.getUnitTypeList().getUnitTypeOrThrow("infantry");
-    final Unit germanTransport = transportType.create(1, germans).get(0);
-    final Unit germanInfantry2 = infantryType.create(1, germans).get(0);
-    gameData.performChange(
-        ChangeFactory.addUnits(sz109, List.of(germanTransport, germanInfantry2)));
-    germanInfantry2.setTransportedBy(germanTransport);
+  @Test
+  void trainIsPlannedAlongTrackThatHoldsRailAtBothEnds() {
+    final GameData tww = TestMapGameData.TWW.getGameData();
+    final GamePlayer germans = GameDataTestUtil.germany(tww);
+    final Territory berlin = tww.getMap().getTerritoryOrThrow("Berlin");
+    final Territory easternGermany = tww.getMap().getTerritoryOrThrow("Eastern Germany");
+    final Unit train = GameDataTestUtil.germanTrain(tww).create(1, germans).get(0);
+    addTo(berlin, List.of(train));
+    addTo(berlin, GameDataTestUtil.germanRail(tww).create(1, germans));
+    addTo(easternGermany, GameDataTestUtil.germanRail(tww).create(1, germans));
 
-    // Re-initialize the Germans ProAi so proData picks up the unit changes above.
-    proAi.getProData().initialize(proAi);
+    final Set<Territory> moves =
+        planDefense(tww, germans).getDefendOptions().getUnitMoveMap().get(train);
 
-    final ProTerritoryManager manager =
-        new ProTerritoryManager(proAi.getCalc(), proAi.getProData());
-    manager.populateAttackOptions();
+    assertThat(moves).contains(easternGermany);
+  }
 
-    // The pre-loaded transport must contribute Scotland to the attack territory map.
-    // maxAmphibUnits non-empty means findAmphibMoveOptions recognised the pre-loaded
-    // transport as a valid amphib option (regression: map-room#2615).
-    final ProTerritory scotlandOptions = manager.getAttackOptions().getTerritoryMap().get(scotland);
-    assertThat(scotlandOptions)
-        .as(
-            "Scotland must appear in attack options when a pre-loaded German transport is in"
-                + " 109 Sea Zone (Germans at war with British from G40 turn 1)")
-        .isNotNull();
-    assertThat(scotlandOptions.getMaxAmphibUnits())
-        .as("maxAmphibUnits for Scotland must contain the pre-loaded infantry (regression: #2615)")
-        .contains(germanInfantry2);
+  private static ProTerritoryManager planDefense(final GameData data, final GamePlayer player) {
+    final ProData proData = new ProData();
+    proData.initializeSimulation(null, data, player);
+    final ProTerritoryManager manager = new ProTerritoryManager(null, proData);
+    manager.populateDefenseOptions(List.of());
+    return manager;
+  }
+
+  private final GameData transportData = TestMapGameData.WW2V3_1941.getGameData();
+  private final Territory baltic = territory("5 Sea Zone", transportData);
+  private final Unit transport = transport(transportData).create(germans(transportData));
+
+  private ProTerritoryManager nonCombatDefendOptions() {
+    transportData.getSequence().setRoundAndStep(1, "Non Combat Move", germans(transportData));
+    addTo(baltic, List.of(transport));
+    addTo(
+        territory("Germany", transportData),
+        infantry(transportData).create(1, germans(transportData)));
+    return planDefense(transportData, germans(transportData));
+  }
+
+  private boolean plansToLoad(final ProTerritoryManager manager) {
+    return manager.getDefendOptions().getTransportList().stream()
+        .filter(t -> t.getTransport().equals(transport))
+        .anyMatch(t -> !t.getSeaTransportMap().isEmpty());
+  }
+
+  @Test
+  void transportPlansToLoadAfterCombatWhenNotBarred() {
+    assertThat(plansToLoad(nonCombatDefendOptions())).isTrue();
+  }
+
+  @Test
+  void transportThatFoughtDoesNotPlanToLoadInNonCombat()
+      throws MutableProperty.InvalidValueException {
+    transport.getProperty(Unit.PropertyName.WAS_IN_COMBAT).orElseThrow().setValue(true);
+
+    assertThat(plansToLoad(nonCombatDefendOptions())).isFalse();
   }
 }

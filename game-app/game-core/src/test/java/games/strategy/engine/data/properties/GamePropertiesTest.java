@@ -28,6 +28,20 @@ final class GamePropertiesTest {
       properties.set("missing", Boolean.FALSE);
       assertThat(properties.get("missing", true)).isFalse();
     }
+
+    @Test
+    void getSeesAnEditablePropertyChangedInPlace() {
+      final GameProperties properties = new GameProperties(new GameData());
+      final BooleanProperty editable = new BooleanProperty("Total Victory", "", false);
+      properties.addEditableProperty(editable);
+      assertThat(properties.get("Total Victory", true)).isFalse();
+
+      // The options UI and tests change an editable through its own setValue, which GameProperties
+      // never sees; the resolved cache must not hand back the value from before.
+      editable.setValue(true);
+
+      assertThat(properties.get("Total Victory", false)).isTrue();
+    }
   }
 
   @Nested
