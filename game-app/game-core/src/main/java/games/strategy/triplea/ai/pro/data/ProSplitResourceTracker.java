@@ -73,6 +73,11 @@ public class ProSplitResourceTracker extends ProResourceTracker {
     }
   }
 
+  @Override
+  public boolean samePool(final Territory a, final Territory b) {
+    return poolFor(a) == poolFor(b);
+  }
+
   // --- No-territory API (inherited; overridden to span both pools) ---
 
   @Override

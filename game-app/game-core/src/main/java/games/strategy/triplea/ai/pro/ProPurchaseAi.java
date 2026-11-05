@@ -151,17 +151,27 @@ class ProPurchaseAi {
               .test(fixTerr)) {
             continue;
           }
-          final int diff = fixUnit.getUnitDamage();
+          // Repair no more than the treasury can pay (map-room#4616: Russia held 18 IPCs and
+          // planned
+          // a 20-point repair, which the engine refused on every retry). A partial repair is legal.
+          final int costPerPoint =
+              Math.max(
+                  1,
+                  repairRule
+                      .getCosts()
+                      .getInt(data.getResourceList().getResourceOrThrow(Constants.PUS)));
+          final int diff =
+              Math.min(fixUnit.getUnitDamage(), Math.max(0, pusRemaining) / costPerPoint);
           if (diff > 0) {
             final IntegerMap<RepairRule> repairMap = new IntegerMap<>();
             repairMap.add(repairRule, diff);
             final Map<Unit, IntegerMap<RepairRule>> repair = new HashMap<>();
             repair.put(fixUnit, repairMap);
-            pusRemaining -= diff;
+            pusRemaining -= diff * costPerPoint;
             ProLogger.debug(
                 "Repairing factory=" + fixUnit + ", damage=" + diff + ", repairRule=" + repairRule);
             purchaseDelegate.purchaseRepair(repair);
-            repairCostByTerritory.merge(fixTerr, diff, Integer::sum);
+            repairCostByTerritory.merge(fixTerr, diff * costPerPoint, Integer::sum);
           }
         }
       }
@@ -3058,9 +3068,15 @@ class ProPurchaseAi {
       return;
     }
     // Collect attack-unit allocations only; defender allocations in other territories are
-    // untouched.
+    // untouched. Remember where each unit was bought: the resource tracker charged it to that
+    // territory's pool, so it may only move within that pool (map-room#4617: a Quebec buy placed in
+    // India was paid from the Europe pool and spent from the Pacific one).
     final List<Unit> allUnits = new ArrayList<>();
+    final Map<Unit, ProPlaceTerritory> boughtFor = new HashMap<>();
     for (final ProPlaceTerritory ppt : prioritizedLandTerritories) {
+      for (final Unit unit : ppt.getPlaceUnits()) {
+        boughtFor.put(unit, ppt);
+      }
       allUnits.addAll(ppt.getPlaceUnits());
       ppt.getPlaceUnits().clear();
     }
@@ -3079,18 +3095,19 @@ class ProPurchaseAi {
       }
     }
     destinations.sort(Comparator.comparingDouble(ProPlaceTerritory::getStrategicValue).reversed());
-    if (destinations.isEmpty()) {
-      prioritizedLandTerritories.get(0).getPlaceUnits().addAll(allUnits);
-      return;
-    }
     final int n = destinations.size();
     final Map<Territory, Integer> allocatedCounts = new HashMap<>();
     for (final Unit unit : allUnits) {
+      final ProPlaceTerritory origin = boughtFor.get(unit);
       ProPlaceTerritory best = null;
       double bestScore = Double.NEGATIVE_INFINITY;
       for (int i = 0; i < n; i++) {
         final ProPlaceTerritory dest = destinations.get(i);
         final Territory t = dest.getTerritory();
+        // No tracker yet (called outside a purchase pass) means there is no split to respect.
+        if (resourceTracker != null && !resourceTracker.samePool(origin.getTerritory(), t)) {
+          continue;
+        }
         final ProPurchaseTerritory purchTerritory = purchaseTerritories.get(t);
         if (purchTerritory == null) {
           continue;
@@ -3106,8 +3123,9 @@ class ProPurchaseAi {
           best = dest;
         }
       }
+      // Nothing in the unit's pool has room: leave it where it was bought and paid for.
       if (best == null) {
-        best = destinations.get(0);
+        best = origin;
       }
       best.getPlaceUnits().add(unit);
       allocatedCounts.merge(best.getTerritory(), 1, Integer::sum);

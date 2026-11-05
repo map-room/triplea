@@ -31,6 +31,14 @@ public class ProResourceTracker {
   }
 
   /**
+   * Whether a unit bought for {@code a} is paid from the same pool as one placed in {@code b}. The
+   * unified tracker has one pool, so always true; a split tracker compares the pools.
+   */
+  public boolean samePool(final Territory a, final Territory b) {
+    return true;
+  }
+
+  /**
    * Territory-aware overload. Default implementation ignores the territory and delegates to the
    * unified {@link #hasEnough(ProPurchaseOption)}. Subclasses that split resources by territory
    * (see {@code ProSplitResourceTracker}) should override to route the check to the correct pool.
