@@ -36,3 +36,20 @@ War II Global 1940 2nd Edition"/>`, no author attribution embedded in the file
 and no upstream source recorded anywhere in this repo or map-room's. Same
 unresolved-provenance status as the file above — not addressed by this change,
 called out here only so this NOTICE doesn't imply otherwise.
+
+## WW2v3-1942.xml (Anniversary 1942 setup / `gameDataKey: ww2v3_1942`)
+
+- **Source:** `triplea-maps/world_war_ii_v3`, file `map/games/WW2v3-1942.xml`.
+  Same package, same provenance and licence status as `WW2v3-1941.xml` above.
+- **Why it ships:** the 1942 setup moves Japan, Russia and Germany to the front
+  of the turn order and sets `originalOwner` on the territories the Axis holds
+  at start. `ProAi` reads both from the XML; the wire cannot carry them
+  (map-room#4676).
+
+## ww2global42_2nd_edition.xml (Global 1940's 1942 setup / `gameDataKey: ww2global42_2nd_edition`)
+
+- **Source:** `triplea-maps/world_war_ii_global`, file
+  `map/games/ww2global42_2nd_edition.xml`. Same package as
+  `ww2global40_2nd_edition.xml`, same unresolved-provenance status.
+- **Why it ships:** its turn order starts with the Russians and puts the
+  Germans fifth, and it sets `originalOwner` on 32 territories (map-room#4676).

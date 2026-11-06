@@ -19,7 +19,9 @@ public final class CanonicalGameDataRegistry {
   private static final Map<String, String> RESOURCES =
       Map.of(
           "ww2global40_2nd_edition", "ww2global40_2nd_edition.xml",
-          "ww2v3_1941", "WW2v3-1941.xml");
+          "ww2global42_2nd_edition", "ww2global42_2nd_edition.xml",
+          "ww2v3_1941", "WW2v3-1941.xml",
+          "ww2v3_1942", "WW2v3-1942.xml");
 
   private final Map<String, CanonicalGameData> loaded;
 
