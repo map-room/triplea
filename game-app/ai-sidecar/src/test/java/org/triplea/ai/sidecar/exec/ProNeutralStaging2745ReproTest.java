@@ -2,8 +2,13 @@ package org.triplea.ai.sidecar.exec;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import games.strategy.triplea.ai.pro.logging.ProLogUi;
 import games.strategy.triplea.settings.ClientSetting;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,6 +39,24 @@ class ProNeutralStaging2745ReproTest {
     canonical = CanonicalGameData.load("ww2global40_2nd_edition.xml");
   }
 
+  /**
+   * The real round-1 board as Map Room serializes it, moved to the Americans' noncombat step. The
+   * wire carries each unit's naval/air-base bonus (map-room#4648); the planner no longer adds it a
+   * second time, so an empty wire (canonical units, no bonus) would under-reach.
+   */
+  private static WireState americansRound1Noncombat() {
+    try (InputStream in =
+        ProNeutralStaging2745ReproTest.class
+            .getClassLoader()
+            .getResourceAsStream("wire-contract/wire-state-g1940-uk-economies.json")) {
+      final ObjectNode tree = (ObjectNode) new ObjectMapper().readTree(in);
+      tree.put("phase", "nonCombatMove").put("currentPlayer", "Americans");
+      return new ObjectMapper().treeToValue(tree, WireState.class);
+    } catch (final IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
   @Test
   void seededAmericansRound1DoesNotStageOnTheNeutralCoast() {
     final List<String> threatLines = new ArrayList<>();
@@ -55,18 +78,7 @@ class ProNeutralStaging2745ReproTest {
     try {
       moves =
           new NoncombatMoveExecutor()
-              .execute(
-                  canonical,
-                  new NoncombatMoveRequest(
-                      new WireState(
-                          List.of(),
-                          List.of(),
-                          1,
-                          "nonCombatMove",
-                          "Americans",
-                          List.of(),
-                          "ww2global40_2nd_edition"),
-                      SEED))
+              .execute(canonical, new NoncombatMoveRequest(americansRound1Noncombat(), SEED))
               .moves();
     } finally {
       ProLogUi.setExternalHandler(previous);

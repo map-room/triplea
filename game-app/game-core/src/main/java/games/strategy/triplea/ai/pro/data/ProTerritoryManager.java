@@ -1,5 +1,6 @@
 package games.strategy.triplea.ai.pro.data;
 
+import com.google.common.annotations.VisibleForTesting;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GameMap;
 import games.strategy.engine.data.GamePlayer;
@@ -1418,15 +1419,23 @@ public class ProTerritoryManager {
     }
   }
 
-  private static BigDecimal getUnitRange(
+  /**
+   * A unit's reach. Own units read {@code getMovementLeft()}, which already includes any naval/air
+   * base bonus: TripleA's MoveDelegate grants it at the start of each move phase, and the sidecar's
+   * wire sends it as {@code bonusMovement}. Enemy attacks are estimated from the attachment's base
+   * movement, where no bonus has been granted, so they add the facility +1 here. Adding it on the
+   * own-unit path too counts the bonus twice (map-room#4648).
+   */
+  @VisibleForTesting
+  public static BigDecimal getUnitRange(
       final Unit unit,
       final Territory unitTerritory,
       final GamePlayer player,
       final boolean isCheckingEnemyAttacks) {
-    final BigDecimal range =
-        isCheckingEnemyAttacks
-            ? new BigDecimal(unit.getUnitAttachment().getMovement(player))
-            : unit.getMovementLeft();
+    if (!isCheckingEnemyAttacks) {
+      return unit.getMovementLeft();
+    }
+    final BigDecimal range = new BigDecimal(unit.getUnitAttachment().getMovement(player));
     if (Matches.unitCanBeGivenBonusMovementByFacilitiesInItsTerritory(unitTerritory, player)
         .test(unit)) {
       return range.add(BigDecimal.ONE); // assumes bonus of +1 for now
