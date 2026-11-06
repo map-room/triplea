@@ -212,4 +212,40 @@ class ProPurchaseAiPlacementSpreadTest {
     final int total = prioritized.stream().mapToInt(pt -> pt.getPlaceUnits().size()).sum();
     assertThat(total).as("Total unit count must be preserved after redistribution").isEqualTo(9);
   }
+
+  // ── Capacity guard: the fallback to the buy territory must not exceed unitProduction ─────────
+
+  @Test
+  void redistribute_totalWithinCapacity_neverExceedsAnyFactoryCap() {
+    // Two cap-10 factories hold 16 units between them (A 10, B 6), so a legal placement exists.
+    // Every territory must end at or under its own unitProduction.
+    final ProPurchaseAi purchaseAi = proAi.getPurchaseAi();
+    final Territory wg = gameData.getMap().getTerritoryOrThrow("Western Germany");
+    final Territory romania = gameData.getMap().getTerritoryOrThrow("Romania");
+    final ProPurchaseTerritory wgPpt = new ProPurchaseTerritory(wg, gameData, german, 10);
+    final ProPurchaseTerritory romaniaPpt = new ProPurchaseTerritory(romania, gameData, german, 10);
+    final Map<Territory, ProPurchaseTerritory> purchaseTerritories = new HashMap<>();
+    purchaseTerritories.put(wg, wgPpt);
+    purchaseTerritories.put(romania, romaniaPpt);
+    final ProPlaceTerritory wgPlace = wgPpt.getCanPlaceTerritories().get(0);
+    final ProPlaceTerritory romaniaPlace = romaniaPpt.getCanPlaceTerritories().get(0);
+    wgPlace.setStrategicValue(50.0);
+    romaniaPlace.setStrategicValue(25.0);
+    final var infantry = gameData.getUnitTypeList().getUnitType("infantry").orElseThrow();
+    for (int i = 0; i < 10; i++) {
+      wgPlace.getPlaceUnits().add(infantry.createTemp(1, german).get(0));
+    }
+    for (int i = 0; i < 6; i++) {
+      romaniaPlace.getPlaceUnits().add(infantry.createTemp(1, german).get(0));
+    }
+
+    purchaseAi.redistributeLandPlacementUnits(
+        purchaseTerritories, new ArrayList<>(List.of(wgPlace, romaniaPlace)));
+
+    assertThat(wgPlace.getPlaceUnits().size()).as("Western Germany cap 10").isLessThanOrEqualTo(10);
+    assertThat(romaniaPlace.getPlaceUnits().size()).as("Romania cap 10").isLessThanOrEqualTo(10);
+    assertThat(wgPlace.getPlaceUnits().size() + romaniaPlace.getPlaceUnits().size())
+        .as("no unit lost")
+        .isEqualTo(16);
+  }
 }

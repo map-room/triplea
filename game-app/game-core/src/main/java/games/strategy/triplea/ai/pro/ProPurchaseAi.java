@@ -3113,7 +3113,9 @@ class ProPurchaseAi {
           continue;
         }
         final int allocated = allocatedCounts.getOrDefault(t, 0);
-        final int remaining = purchTerritory.getRemainingUnitProduction() - allocated;
+        // getRemainingUnitProduction() already counts the units added to placeUnits below, so
+        // subtracting `allocated` again would halve every factory's capacity.
+        final int remaining = purchTerritory.getRemainingUnitProduction();
         if (remaining <= 0) {
           continue;
         }
