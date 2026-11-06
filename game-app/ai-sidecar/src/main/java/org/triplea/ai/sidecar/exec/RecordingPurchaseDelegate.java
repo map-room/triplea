@@ -4,7 +4,6 @@ import games.strategy.engine.data.ProductionRule;
 import games.strategy.engine.data.RepairRule;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.delegate.PurchaseDelegate;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -34,7 +33,7 @@ public final class RecordingPurchaseDelegate extends PurchaseDelegate {
   }
 
   public Map<Unit, IntegerMap<RepairRule>> capturedRepair() {
-    return Collections.unmodifiableMap(capturedRepair);
+    return Map.copyOf(capturedRepair);
   }
 
   /**
