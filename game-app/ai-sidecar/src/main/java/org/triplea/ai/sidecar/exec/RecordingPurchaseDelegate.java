@@ -4,6 +4,8 @@ import games.strategy.engine.data.ProductionRule;
 import games.strategy.engine.data.RepairRule;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.delegate.PurchaseDelegate;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
 import org.triplea.java.collections.IntegerMap;
@@ -25,14 +27,14 @@ import org.triplea.java.collections.IntegerMap;
 public final class RecordingPurchaseDelegate extends PurchaseDelegate {
 
   private IntegerMap<ProductionRule> capturedPurchase = new IntegerMap<>();
-  private Map<Unit, IntegerMap<RepairRule>> capturedRepair = Map.of();
+  private final Map<Unit, IntegerMap<RepairRule>> capturedRepair = new LinkedHashMap<>();
 
   public IntegerMap<ProductionRule> capturedPurchase() {
     return capturedPurchase;
   }
 
   public Map<Unit, IntegerMap<RepairRule>> capturedRepair() {
-    return capturedRepair;
+    return Collections.unmodifiableMap(capturedRepair);
   }
 
   /**
@@ -52,10 +54,15 @@ public final class RecordingPurchaseDelegate extends PurchaseDelegate {
    * real {@link games.strategy.triplea.delegate.PurchaseDelegate} does and is necessary so that the
    * subsequent {@code ProPurchaseAi.purchase()} call initialises its {@link
    * games.strategy.triplea.ai.pro.data.ProResourceTracker} with the correct post-repair budget.
+   *
+   * <p>ProAI calls this once per damaged factory, so each call is merged into the captured map
+   * rather than replacing it. Replacing it kept only the last factory's repair while {@code super}
+   * had repaired them all (map-room#4679).
    */
   @Override
   public @Nullable String purchaseRepair(final Map<Unit, IntegerMap<RepairRule>> productionRules) {
-    this.capturedRepair = Map.copyOf(productionRules);
+    productionRules.forEach(
+        (unit, rules) -> capturedRepair.computeIfAbsent(unit, u -> new IntegerMap<>()).add(rules));
     return super.purchaseRepair(productionRules);
   }
 }
