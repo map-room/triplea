@@ -499,6 +499,11 @@ public final class ProMoveUtils {
   /**
    * Merges non-amphib moves along the same route into one move. Air transports are never merged
    * with air-transportable units, since the move performer would pair them up as paratroopers.
+   *
+   * <p>The merged move takes the slot of whichever of the two can move without jumping over a move
+   * of its own units: the later move is pulled forward unless a move in between carries its units
+   * (an earlier leg of its trip), and otherwise the earlier move is pushed back. When both are
+   * pinned, the two stay apart. Otherwise a transport's first leg would run after its later legs.
    */
   @VisibleForTesting
   static void mergeSameRouteMoves(final List<MoveDescription> moves) {
@@ -509,17 +514,35 @@ public final class ProMoveUtils {
       final Route r = moves.get(i).getRoute();
       for (int j = i + 1; j < moves.size(); j++) {
         final Route r2 = moves.get(j).getRoute();
-        if (r.equals(r2) && canMerge(moves.get(i), moves.get(j))) {
-          final var mergedUnits = new ArrayList<Unit>();
-          mergedUnits.addAll(moves.get(j).getUnits());
-          mergedUnits.addAll(moves.get(i).getUnits());
-          moves.set(j, new MoveDescription(mergedUnits, r));
-          moves.remove(i);
-          i--;
-          break;
+        if (!r.equals(r2) || !canMerge(moves.get(i), moves.get(j))) {
+          continue;
         }
+        final boolean laterIsFree = !anyBetweenSharesUnits(moves, i, j, moves.get(j));
+        if (!laterIsFree && anyBetweenSharesUnits(moves, i, j, moves.get(i))) {
+          continue;
+        }
+        final var mergedUnits = new ArrayList<Unit>();
+        mergedUnits.addAll(moves.get(j).getUnits());
+        mergedUnits.addAll(moves.get(i).getUnits());
+        final var merged = new MoveDescription(mergedUnits, r);
+        if (laterIsFree) {
+          moves.set(i, merged);
+          moves.remove(j);
+        } else {
+          moves.set(j, merged);
+          moves.remove(i);
+        }
+        i--;
+        break;
       }
     }
+  }
+
+  /** Whether a move strictly between {@code from} and {@code to} moves any unit of {@code move}. */
+  private static boolean anyBetweenSharesUnits(
+      final List<MoveDescription> moves, final int from, final int to, final MoveDescription move) {
+    return moves.subList(from + 1, to).stream()
+        .anyMatch(between -> between.getUnits().stream().anyMatch(move.getUnits()::contains));
   }
 
   private static boolean canMerge(final MoveDescription a, final MoveDescription b) {
