@@ -99,6 +99,9 @@ public final class WireStateApplier {
     // Direct setter is used (not ChangeFactory.relationshipChange) to ensure in-memory visibility
     // without relying on change-listener ordering (see map-room#1824 phase-ordering constraint).
     applyRelationships(gameData, wire);
+    // The XML lifts pre-war movement restrictions with triggers the stateless sidecar never fires
+    // (map-room#4709). Needs the relationships above.
+    MovementRestrictionLifter.apply(gameData);
 
     // Phase 3 branches: conquered-this-turn, factory operational damage, and round/step.
     // These run AFTER the main CompositeChange has been performed so that any units the
