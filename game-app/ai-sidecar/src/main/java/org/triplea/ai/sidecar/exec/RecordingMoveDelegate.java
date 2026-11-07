@@ -7,6 +7,7 @@ import games.strategy.triplea.delegate.MoveDelegate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.triplea.ai.sidecar.AiTraceLogger;
 
 /**
  * Validating {@link MoveDelegate} subclass that captures every {@link MoveDescription} that passes
@@ -75,7 +76,10 @@ public final class RecordingMoveDelegate extends MoveDelegate {
     if (!dryRun) {
       final Optional<String> error = super.performMove(move);
       if (error.isPresent()) {
-        // Move failed MoveValidator — do NOT record, propagate error to ProAi.
+        // Move failed MoveValidator — do NOT record, propagate error to ProAi. Say so at WARN:
+        // the dropped leg never reaches the wire (map-room#4709).
+        AiTraceLogger.logMoveDropped(
+            player.getName(), getData().getSequence().getStep().getName(), move, error.get());
         return error;
       }
     }

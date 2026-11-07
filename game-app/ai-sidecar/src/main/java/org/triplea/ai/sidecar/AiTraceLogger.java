@@ -162,6 +162,30 @@ public final class AiTraceLogger {
   }
 
   /**
+   * Log a move that ProAI planned but TripleA's {@code MoveValidator} refused, so it never reaches
+   * the wire (map-room#4709). WARN, because a refused move means the plan Map Room receives is
+   * missing a leg the planner counted on. Grep anchor: {@code kind=sidecar-move-dropped}.
+   *
+   * @param step the game step the move was attempted in (for example {@code
+   *     americansNonCombatMove})
+   * @param reason the validator's error text
+   */
+  public static void logMoveDropped(
+      final String nation, final String step, final MoveDescription move, final String reason) {
+    LOG.log(
+        System.Logger.Level.WARNING,
+        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase={3} kind=sidecar-move-dropped from={4} to={5} types=[{6}] reason=\"{7}\"",
+        currentMatchId(),
+        currentRequestId(),
+        nation,
+        step,
+        maybeQuote(move.getRoute().getStart().getName()),
+        maybeQuote(move.getRoute().getEnd().getName()),
+        unitTypeCounts(move.getUnits()),
+        reason);
+  }
+
+  /**
    * Log the purchase-budget reconciliation summary once per nation per purchase phase (#2576).
    *
    * <p>Grep anchor: {@code PURCHASE-BUDGET}. Paired with the bot-side {@code
