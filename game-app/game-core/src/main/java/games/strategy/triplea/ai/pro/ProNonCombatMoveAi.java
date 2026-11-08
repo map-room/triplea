@@ -53,6 +53,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -1762,16 +1763,31 @@ class ProNonCombatMoveAi {
               ProMatches.territoryIsOrAdjacentToEnemyNotNeutralLand(player);
           ProTerritory unloadToTerritory = null;
           int maxNumSeaNeighbors = 0;
+          final List<Territory> rearUnloads = new ArrayList<>();
           for (final Territory possibleUnloadTerritory : maxValueTerritory.getNeighbors(canMove)) {
             final ProTerritory proTerritory = moveMap.get(possibleUnloadTerritory);
             if (proTerritory != null
                 && (proTerritory.isCanHold() || !isAdjacentToEnemy.test(possibleUnloadTerritory))) {
+              if (!unloadIsCloserToEnemy(possibleUnloadTerritory, maxAmphibUnitsToAdd)) {
+                rearUnloads.add(possibleUnloadTerritory);
+                continue;
+              }
               int numSeaNeighbors = proTerritory.getNeighbors(Matches.territoryIsWater()).size();
               if (numSeaNeighbors > maxNumSeaNeighbors) {
                 unloadToTerritory = proTerritory;
                 maxNumSeaNeighbors = numSeaNeighbors;
               }
             }
+          }
+          if (unloadToTerritory == null && !rearUnloads.isEmpty()) {
+            // Every place to unload is no closer to the enemy than where the cargo stands: a
+            // ferry to the rear spends the transport and moves nothing forward. Leave the cargo
+            // at home; the empty-transport passes below still place the transport. (map-room#4709)
+            ProLogger.trace(
+                String.format(
+                    "%s not ferrying %s to the rear at %s",
+                    transport, maxAmphibUnitsToAdd, rearUnloads));
+            continue;
           }
           if (unloadToTerritory != null) {
             unloadToTerritory.addTempUnits(maxAmphibUnitsToAdd);
@@ -3067,5 +3083,29 @@ class ProNonCombatMoveAi {
       ProLogger.traceUnitCounts(
           "  --- Enemy bombard units ---", proTerritory.getMaxEnemyBombardUnits());
     }
+  }
+
+  /**
+   * Whether unloading {@code cargo} in {@code unloadTo} brings it closer to the enemy than every
+   * territory it is loaded from. Distance is the nearer of the land route and the sea route to an
+   * enemy; a territory with neither within range counts as unreachable. (map-room#4709)
+   */
+  private boolean unloadIsCloserToEnemy(final Territory unloadTo, final Collection<Unit> cargo) {
+    final int to = distanceToEnemy(unloadTo);
+    if (to == Integer.MAX_VALUE) {
+      return false;
+    }
+    return cargo.stream()
+        .map(unitTerritoryMap::get)
+        .filter(Objects::nonNull)
+        .distinct()
+        .allMatch(from -> to < distanceToEnemy(from));
+  }
+
+  private int distanceToEnemy(final Territory t) {
+    final int overLand = ProUtils.getClosestEnemyLandTerritoryDistance(data, player, t);
+    final int overWater = ProUtils.getClosestEnemyLandTerritoryDistanceOverWater(data, player, t);
+    return Math.min(
+        overLand < 0 ? Integer.MAX_VALUE : overLand, overWater < 0 ? Integer.MAX_VALUE : overWater);
   }
 }
