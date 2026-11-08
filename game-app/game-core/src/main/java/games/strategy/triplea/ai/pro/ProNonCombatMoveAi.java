@@ -874,6 +874,17 @@ class ProNonCombatMoveAi {
       // logic and constants shared with findTerritoryAttackValue and findLandValue.
       final double baseBonus = ProTerritoryValueUtils.computeBaseBonus(t);
 
+      // An own transport that cannot move, such as one that unloaded this turn, is worth its own
+      // value to guard. Combat move kept that landing because warships could reach the zone in
+      // non-combat move; without this the zone is worth 0 and they never come. (map-room#4709)
+      final double strandedTransportValue =
+          t.isWater()
+              ? TuvUtils.getTuv(
+                  CollectionUtils.getMatches(
+                      proTerritory.getCantMoveUnits(), ProMatches.unitIsOwnedTransport(player)),
+                  proData.getUnitValueMap())
+              : 0;
+
       // Calculate defense value for prioritization.
       // Note: the old formula included `+ 0.5 * cantMoveUnitValue`, which created a
       // positive-feedback loop (more units → higher value → more units sent) that caused
@@ -884,7 +895,8 @@ class ProNonCombatMoveAi {
               * (2.0 * productionAndIsEnemyOrAlliedCapital.production
                   + 10.0 * isFactory
                   + baseBonus
-                  + 0.5 * neighborValue)
+                  + 0.5 * neighborValue
+                  + strandedTransportValue)
               * (1 + 10.0 * isMyCapital)
               * (1 + 4.0 * isCapital);
       proTerritory.setValue(territoryValue);
