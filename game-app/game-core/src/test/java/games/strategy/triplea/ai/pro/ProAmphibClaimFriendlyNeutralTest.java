@@ -193,4 +193,76 @@ public class ProAmphibClaimFriendlyNeutralTest {
                 + dispatched)
         .isTrue();
   }
+
+  /**
+   * A transport that is already loaded with two units must not sail with only one of them: TripleA
+   * refuses the move ("Transports cannot leave their units"), which stranded ANZAC cargo for four
+   * rounds (map-room#4710). The claim pass must sail with its whole cargo.
+   */
+  @Test
+  void claimPassSailsPreLoadedTransportWithAllItsCargo() {
+    final Territory sz87 = data.getMap().getTerritoryOrThrow("87 Sea Zone");
+    final Territory brazil = data.getMap().getTerritoryOrThrow("Brazil");
+
+    final GamePlayer neutralAllies = data.getPlayerList().getPlayerId("Neutral_Allies");
+    final GamePlayer germans = data.getPlayerList().getPlayerId("Germans");
+    final RelationshipType friendlyNeutral =
+        data.getRelationshipTypeList().getRelationshipType("Friendly_Neutral");
+    final RelationshipType war = data.getRelationshipTypeList().getRelationshipType("War");
+    data.performChange(
+        ChangeFactory.relationshipChange(
+            americans,
+            neutralAllies,
+            data.getRelationshipTracker().getRelationshipType(americans, neutralAllies),
+            friendlyNeutral));
+    data.performChange(
+        ChangeFactory.relationshipChange(
+            americans,
+            germans,
+            data.getRelationshipTracker().getRelationshipType(americans, germans),
+            war));
+
+    // One transport at SZ 87 already carrying two units, as after a previous round's load.
+    final Unit transport =
+        data.getUnitTypeList().getUnitTypeOrThrow("transport").create(1, americans).get(0);
+    final List<Unit> cargo =
+        data.getUnitTypeList().getUnitTypeOrThrow("infantry").create(2, americans);
+    data.performChange(ChangeFactory.addUnits(sz87, List.of(transport)));
+    data.performChange(ChangeFactory.addUnits(sz87, cargo));
+    for (final Unit unit : cargo) {
+      data.performChange(
+          ChangeFactory.unitPropertyChange(unit, transport, Unit.PropertyName.TRANSPORTED_BY));
+    }
+    assertThat(transport.getTransporting()).containsExactlyInAnyOrderElementsOf(cargo);
+
+    newDelegateBridge(americans);
+    final PlayerBridge playerBridgeMock = Mockito.mock(PlayerBridge.class);
+    when(playerBridgeMock.getGameData()).thenReturn(data);
+    final ProAi proAi = new ProAi("test-Americans", "Americans");
+    proAi.initialize(playerBridgeMock, americans);
+
+    final List<MoveDescription> dispatched = new ArrayList<>();
+    final IMoveDelegate moveDelegate = Mockito.mock(IMoveDelegate.class);
+    when(moveDelegate.performMove(any()))
+        .then(
+            inv -> {
+              dispatched.add(inv.getArgument(0));
+              return Optional.empty();
+            });
+
+    data.getSequence().setRoundAndStep(1, "Non Combat Move", americans);
+    proAi.invokeNonCombatMoveForSidecar(moveDelegate, data, americans);
+
+    assertThat(dispatched.stream().anyMatch(m -> m.getRoute().getEnd().equals(brazil)))
+        .as("the claim pass must still reach Brazil. All dispatched moves: " + dispatched)
+        .isTrue();
+    // No move may take the transport away from some of its cargo.
+    for (final MoveDescription move : dispatched) {
+      if (move.getUnits().contains(transport)) {
+        assertThat(move.getUnits())
+            .as("a move carrying the transport must carry all its cargo: " + move)
+            .containsAll(cargo);
+      }
+    }
+  }
 }
