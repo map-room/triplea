@@ -394,10 +394,9 @@ public final class ProMatches {
     }
     final java.util.Collection<Territory> listedTerritories =
         ra.getListedTerritories(restrictionNames, true, true);
-    final boolean isInList = listedTerritories.contains(t);
-    final boolean isAllowedList = ra.isMovementRestrictionTypeAllowed();
-    final boolean blockedByRestriction = isAllowedList ? !isInList : isInList;
-    if (!blockedByRestriction) {
+    // Only a "disallowed" list is lifted by a trigger. An "allowed" list (China's) is permanent:
+    // bypassing it plans moves the engine refuses (map-room#4713).
+    if (!ra.isMovementRestrictionTypeDisallowed() || !listedTerritories.contains(t)) {
       return false;
     }
     if (Matches.territoryIsImpassable().test(t)) {

@@ -174,4 +174,49 @@ class ProMatchesStaleRestrictionTest {
           .isTrue();
     }
   }
+
+  // ── China: a permanent "allowed" list is never lifted (map-room#4713) ───────
+
+  /**
+   * China's rulesAttachment is an {@code allowed} list that no trigger ever clears. The stale-list
+   * bypass exists for the Americans' and Japanese's {@code disallowed} lists, which a trigger
+   * clears on war. China is at war with Japan from the start, so a bypass that ignores the list
+   * type lets ProAI plan Chinese fighters over territories the engine refuses.
+   */
+  @Nested
+  class ChineseAllowedList {
+
+    private static final String LISTED = "Szechwan";
+    private static final String UNLISTED = "French Indo China";
+    private static final String UNLISTED_SEA = "36 Sea Zone";
+
+    private GamePlayer chinese;
+
+    @BeforeEach
+    void chineseAtWar() {
+      chinese = data.getPlayerList().getPlayerId("Chinese");
+      final GamePlayer japanese = data.getPlayerList().getPlayerId("Japanese");
+      assertThat(chinese.isAtWar(japanese)).as("precondition: China at war with Japan").isTrue();
+    }
+
+    @Test
+    void airUnitsMayNotPlanOutsideTheAllowedList() {
+      final Predicate<Territory> canMoveAir =
+          ProMatches.territoryCanMoveAirUnits(data, chinese, true);
+
+      assertThat(canMoveAir.test(data.getMap().getTerritoryOrThrow(LISTED))).isTrue();
+      assertThat(canMoveAir.test(data.getMap().getTerritoryOrThrow(UNLISTED))).isFalse();
+      assertThat(canMoveAir.test(data.getMap().getTerritoryOrThrow(UNLISTED_SEA))).isFalse();
+    }
+
+    @Test
+    void potentialAirUnitsMayNotPlanOutsideTheAllowedList() {
+      final Predicate<Territory> canPotentiallyMoveAir =
+          ProMatches.territoryCanPotentiallyMoveAirUnits(chinese);
+
+      assertThat(canPotentiallyMoveAir.test(data.getMap().getTerritoryOrThrow(UNLISTED))).isFalse();
+      assertThat(canPotentiallyMoveAir.test(data.getMap().getTerritoryOrThrow(UNLISTED_SEA)))
+          .isFalse();
+    }
+  }
 }
