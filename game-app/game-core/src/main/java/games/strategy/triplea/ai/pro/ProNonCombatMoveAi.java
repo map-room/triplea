@@ -489,19 +489,25 @@ class ProNonCombatMoveAi {
         if (amphibUnits.isEmpty()) {
           continue;
         }
-        final List<Unit> claimUnits = List.of(amphibUnits.get(0));
-        moveMap.get(dest).addUnit(claimUnits.get(0));
+        // A transport that is already loaded returns its whole cargo. Sail with all of it:
+        // TripleA refuses to move a transport away from some of its units (map-room#4710).
+        // A transport that is still empty only needs one unit to make the claim.
+        final List<Unit> claimUnits =
+            transport.getTransporting().isEmpty()
+                ? List.of(amphibUnits.get(0))
+                : List.copyOf(amphibUnits);
+        moveMap.get(dest).addUnits(claimUnits);
         moveMap.get(dest).getTransportTerritoryMap().put(transport, seaZone);
         moveMap.get(dest).putAmphibAttackMap(transport, claimUnits);
-        usedUnits.add(claimUnits.get(0));
+        usedUnits.addAll(claimUnits);
         usedTransports.add(transport);
-        unitMoveMap.remove(claimUnits.get(0));
+        claimUnits.forEach(unitMoveMap::remove);
         unitMoveMap.remove(transport);
         committedTransport = transport;
         ProLogger.debug(
             dest
                 + ", claimed sea-isolated Friendly_Neutral via amphib: "
-                + claimUnits.get(0)
+                + claimUnits
                 + " on "
                 + transport
                 + " via "
