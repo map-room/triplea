@@ -1152,6 +1152,11 @@ public class ProCombatMoveAi {
       t.getMaxUnits().removeAll(alreadyAttackedWithUnits);
     }
 
+    // Escorts counted for a landing that is kept, by unload zone. A later landing from the same
+    // zone shares them; no other zone can count them.
+    final Set<Unit> reservedEscorts = new HashSet<>();
+    final Map<Territory, List<Unit>> escortsByZone = new HashMap<>();
+
     // Loop through all prioritized territories
     for (final Map.Entry<Territory, ProTerritory> attackEntry : attackMap.entrySet()) {
       final Territory t = attackEntry.getKey();
@@ -1209,6 +1214,7 @@ public class ProCombatMoveAi {
 
         // Determine counter-attack results for each transport territory
         double enemyTuvSwing = 0.0;
+        final Map<Territory, List<Unit>> escortsForThisLanding = new HashMap<>();
         for (final Territory unloadTerritory : territoryTransportAndBombardMap.keySet()) {
           if (enemyAttackOptions.getMax(unloadTerritory) != null) {
             final Set<Unit> defenders =
@@ -1222,15 +1228,49 @@ public class ProCombatMoveAi {
             final ProBattleResult result =
                 calc.calculateBattleResults(
                     proData, unloadTerritory, enemyAttackers, defenders, List.of());
-            final ProBattleResult minResult =
+            // Committed defenders: the transports and bombarding ships, allied units already in
+            // the zone, and escorts. An escort is a warship of ours that can reach the zone in
+            // non-combat move and is not attacking anywhere. Each one is counted for one landing
+            // only, never for every zone it could reach: that was the optimism #2575 removed.
+            // The rules forbid ending a combat move in an empty sea zone, so an escort cannot
+            // sail with the transports. Non-combat move sends it in ("Move sea units to defend
+            // transports"). (map-room#4709)
+            // A set: a bombarding ship can also be in reach as an escort, and the battle
+            // calculator rejects a unit listed twice.
+            final Set<Unit> committed =
+                new LinkedHashSet<>(territoryTransportAndBombardMap.get(unloadTerritory));
+            committed.addAll(unloadTerritory.getMatches(ProMatches.unitIsAlliedNotOwned(player)));
+            committed.addAll(escortsByZone.getOrDefault(unloadTerritory, List.of()));
+            ProBattleResult minResult =
                 calc.calculateBattleResults(
-                    proData,
-                    unloadTerritory,
-                    enemyAttackOptions.getMax(unloadTerritory).getMaxUnits(),
-                    territoryTransportAndBombardMap.get(unloadTerritory),
-                    List.of());
-            // Use committed-defenders result (transport+bombard only); drop the Math.min
-            // optimism that assumed max defenders would materialize and help. (#2575)
+                    proData, unloadTerritory, enemyAttackers, committed, List.of());
+            final List<Unit> escorts = new ArrayList<>();
+            if (minResult.getTuvSwing() > 0 && defendMap.get(unloadTerritory) != null) {
+              final List<Unit> candidates =
+                  escortCandidates(defendMap.get(unloadTerritory).getMaxUnits(), reservedEscorts);
+              final List<Unit> tried = new ArrayList<>();
+              for (final Unit candidate : candidates) {
+                if (!committed.add(candidate)) {
+                  continue;
+                }
+                tried.add(candidate);
+                final ProBattleResult escorted =
+                    calc.calculateBattleResults(
+                        proData, unloadTerritory, enemyAttackers, committed, List.of());
+                if (escorted.getTuvSwing() < minResult.getTuvSwing()) {
+                  minResult = escorted;
+                  escorts.clear();
+                  escorts.addAll(tried);
+                }
+                if (escorted.getTuvSwing() <= 0) {
+                  break;
+                }
+              }
+            }
+            if (!escorts.isEmpty()) {
+              escortsForThisLanding.put(unloadTerritory, escorts);
+              reservedEscorts.addAll(escorts);
+            }
             final double minTuvSwing = minResult.getTuvSwing();
             if (minTuvSwing > 0) {
               enemyTuvSwing += minTuvSwing;
@@ -1245,8 +1285,10 @@ public class ProCombatMoveAi {
                     + result.getTuvSwing()
                     + ", MinDefenders="
                     + territoryTransportAndBombardMap.get(unloadTerritory).size()
+                    + ", Escorts="
+                    + escorts
                     + ", MinEnemyTUVSwing="
-                    + minResult.getTuvSwing());
+                    + minTuvSwing);
           } else {
             ProLogger.trace("Territory=" + unloadTerritory.getName() + " has no enemy attackers");
           }
@@ -1279,7 +1321,11 @@ public class ProCombatMoveAi {
           patd.getUnits().clear();
           patd.getAmphibAttackMap().clear();
           patd.getBombardTerritoryMap().clear();
+          escortsForThisLanding.values().forEach(reservedEscorts::removeAll);
         } else {
+          escortsForThisLanding.forEach(
+              (zone, escorts) ->
+                  escortsByZone.computeIfAbsent(zone, z -> new ArrayList<>()).addAll(escorts));
           ProLogger.debug(
               "Keeping amphib territory: "
                   + patd.getTerritory()
@@ -1290,6 +1336,24 @@ public class ProCombatMoveAi {
         }
       }
     }
+  }
+
+  /**
+   * Our warships that could escort transports in a zone: owned sea units that are not pure
+   * transports and not yet counted for another landing, strongest defence first.
+   */
+  private List<Unit> escortCandidates(
+      final Collection<Unit> canReachZone, final Set<Unit> reservedEscorts) {
+    return canReachZone.stream()
+        .filter(u -> u.isOwnedBy(player))
+        .filter(Matches.unitIsSea())
+        .filter(Matches.unitIsSeaTransportButNotCombatSeaTransport().negate())
+        .filter(u -> !reservedEscorts.contains(u))
+        .sorted(
+            Comparator.comparingInt((Unit u) -> u.getUnitAttachment().getDefense(player))
+                .thenComparingInt(u -> u.getUnitAttachment().getHitPoints())
+                .reversed())
+        .collect(Collectors.toList());
   }
 
   /**
