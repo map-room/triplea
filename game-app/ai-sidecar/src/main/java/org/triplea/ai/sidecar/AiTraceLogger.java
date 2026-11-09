@@ -306,71 +306,6 @@ public final class AiTraceLogger {
         casualtyReason(picked, defaultCasualties));
   }
 
-  /**
-   * Log the rationale for a retreat-vs-press decision (#2103).
-   *
-   * <p>Captures the candidate retreat territories the AI was offered, where (if anywhere) it
-   * decided to retreat, and a coarse {@code reason} tag: {@code no-options} when the candidate list
-   * was empty (no decision was actually made), {@code press} when the AI chose to fight on, {@code
-   * retreat} when it chose to retreat. ProAi's deeper rationale (per-territory TUL math,
-   * defender-threat estimate) lives inside {@code ProRetreatAi} and is out of scope here.
-   *
-   * @param retreatTo the chosen retreat territory name, or {@code null} if the AI chose to press
-   */
-  public static void logRetreatDecision(
-      final String nation,
-      final String battleId,
-      final String territory,
-      final Collection<String> candidateTerritories,
-      final String retreatTo) {
-    LOG.log(
-        System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase=battle kind=retreat-decision"
-            + " battleId={3} territory={4} candidates=[{5}] retreatTo={6} reason={7}",
-        currentMatchId(),
-        currentRequestId(),
-        nation,
-        battleId,
-        maybeQuote(territory),
-        territoryNamesList(candidateTerritories),
-        retreatTo == null ? "null" : maybeQuote(retreatTo),
-        retreatReason(candidateTerritories, retreatTo));
-  }
-
-  /**
-   * Log the rationale for a scramble-selection decision (#2104).
-   *
-   * <p>Captures the flat list of scramble candidates ProScrambleAi was offered (across all source
-   * territories) and what it picked, plus a coarse {@code reason} tag — {@code no-candidates} when
-   * ProScrambleAi was never invoked (empty live candidate set), {@code none} / {@code partial} /
-   * {@code all} based on pick-vs-candidate cardinality. The per-source breakdown is intentionally
-   * flattened: the bug-stuck question is "why didn't the AI scramble", which only needs the
-   * aggregate.
-   */
-  public static void logScrambleDecision(
-      final String nation,
-      final String territory,
-      final Collection<Unit> candidates,
-      final Collection<Unit> picked,
-      final Map<UUID, String> uuidToWireId) {
-    LOG.log(
-        System.Logger.Level.INFO,
-        "[AI-TRACE] matchID={0} requestId={1} side=sidecar nation={2} phase=battle kind=scramble-decision"
-            + " territory={3}"
-            + " candidatesIds=[{4}] candidatesTypes=[{5}]"
-            + " pickedIds=[{6}] pickedTypes=[{7}]"
-            + " reason={8}",
-        currentMatchId(),
-        currentRequestId(),
-        nation,
-        maybeQuote(territory),
-        unitWireIds(candidates, uuidToWireId),
-        unitTypeCounts(candidates),
-        unitWireIds(picked, uuidToWireId),
-        unitTypeCounts(picked),
-        scrambleReason(candidates, picked));
-  }
-
   // --- package-private for tests ---
 
   /**
@@ -396,34 +331,6 @@ public final class AiTraceLogger {
   }
 
   /**
-   * Coarse rationale tag for {@link #logRetreatDecision}: {@code no-options} when ProRetreatAi was
-   * never invoked (empty candidate list short-circuit), {@code press} when the AI chose to fight
-   * (null retreatTo), {@code retreat} otherwise.
-   */
-  static String retreatReason(
-      final Collection<String> candidateTerritories, final String retreatTo) {
-    if (candidateTerritories.isEmpty()) {
-      return "no-options";
-    }
-    return retreatTo == null ? "press" : "retreat";
-  }
-
-  /**
-   * Coarse rationale tag for {@link #logScrambleDecision}: {@code no-candidates} when ProScrambleAi
-   * was never invoked, otherwise the partition of picked-vs-candidate cardinality ({@code none} /
-   * {@code partial} / {@code all}).
-   */
-  static String scrambleReason(final Collection<Unit> candidates, final Collection<Unit> picked) {
-    if (candidates.isEmpty()) {
-      return "no-candidates";
-    }
-    if (picked.isEmpty()) {
-      return "none";
-    }
-    return picked.size() == candidates.size() ? "all" : "partial";
-  }
-
-  /**
    * Build a comma-separated list of Map Room wire IDs for each unit in the given collection, in
    * iteration order. Falls back to {@code uuid:<java-uuid>} when a unit is not registered in the
    * reverse map (should not happen in live dispatch but keeps the log non-empty if it does).
@@ -439,25 +346,6 @@ public final class AiTraceLogger {
       }
       final String wireId = uuidToWireId.get(u.getId());
       sb.append(wireId != null ? wireId : "uuid:" + u.getId());
-    }
-    return sb.toString();
-  }
-
-  /**
-   * Comma-join territory names, double-quoting any name containing a space. Used for
-   * retreat-decision candidate lists where territory names like {@code "Western Europe"} need to
-   * stay parseable inside a {@code [a,b,c]} bracket form.
-   */
-  static String territoryNamesList(final Collection<String> names) {
-    if (names.isEmpty()) {
-      return "";
-    }
-    final StringBuilder sb = new StringBuilder();
-    for (final String n : names) {
-      if (sb.length() > 0) {
-        sb.append(',');
-      }
-      sb.append(maybeQuote(n));
     }
     return sb.toString();
   }
