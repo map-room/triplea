@@ -9,6 +9,7 @@ import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.changefactory.ChangeFactory;
 import games.strategy.triplea.Constants;
+import games.strategy.triplea.ai.pro.util.MovementRestrictionLifter;
 import games.strategy.triplea.ai.pro.util.ProMatches;
 import games.strategy.triplea.attachments.RulesAttachment;
 import games.strategy.triplea.settings.ClientSetting;
@@ -21,11 +22,15 @@ import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
 
 /**
- * Regression test for map-room#2766: Japan's movementRestrictionTerritories (8 Pacific sea zones
- * near the US mainland) are never cleared by triggerAttachment_Japanese_Unrestricted_Movement
- * because the sidecar never fires triggers. ProMatches.territoryCanMoveSeaUnits must bypass the
- * stale restriction list when Japan is at war with the US, mirroring engine movement-validator.ts
- * JAPAN_US_RESTRICTED_SEA_ZONES which is lifted by the areAtWar check.
+ * Japan's movementRestrictionTerritories (8 Pacific sea zones near the US mainland) are cleared by
+ * triggerAttachment_Japanese_Unrestricted_Movement once Japan is at war with the US. The stateless
+ * sidecar never fires triggers, so {@link MovementRestrictionLifter} fires it (map-room#4709),
+ * after the wire state is applied and after the purchase simulation's politics (map-room#4733).
+ *
+ * <p>map-room#2766 added a hardcoded bypass in ProMatches for this war. It let the planner see the
+ * zones as open while MoveValidator, which reads the list, still refused them, whenever a war was
+ * declared without the lift (map-room#4733). The bypass is gone: the planner and the validator read
+ * the same list, and the lifter is the only thing that clears it.
  */
 public class ProJapanMovementRestrictionTest {
 
@@ -83,17 +88,46 @@ public class ProJapanMovementRestrictionTest {
   }
 
   /**
-   * Core fix: once Japan is at war with the US, Japan's movementRestrictionTerritories must become
-   * reachable. The trigger that would clear movementRestrictionType on war entry
-   * (triggerAttachment_Japanese_Unrestricted_Movement) never fires on the sidecar.
-   *
-   * <p>Before the fix: the predicate returns {@code false} for all restricted zones even at war —
-   * Japan AI cannot plan Pearl Harbor approach, West Coast attacks, or Central Pacific operations.
-   * After the fix: the predicate returns {@code true} for those zones.
+   * Once Japan is at war with the US and the lifting trigger has been fired, Japan's restricted
+   * zones are reachable: Pearl Harbor approach, West Coast attacks, Central Pacific operations.
    */
   @Test
-  void seaUnitPredicateAllowsRestrictedZonesWhenJapanAtWarWithUs() {
-    // Establish war between Japan and the US.
+  void seaUnitPredicateAllowsRestrictedZonesWhenJapanAtWarWithUsAndTheTriggerFired() {
+    declareWarOnUs();
+    MovementRestrictionLifter.apply(data);
+
+    final Predicate<Territory> canMoveSea = ProMatches.territoryCanMoveSeaUnits(japanese, true);
+    for (final Territory sz : japanRestrictedZones) {
+      assertThat(canMoveSea.test(sz))
+          .as(
+              "territoryCanMoveSeaUnits must allow restricted zone '%s' once Japan is at war with"
+                  + " the US and the lifting trigger has fired",
+              sz.getName())
+          .isTrue();
+    }
+  }
+
+  /**
+   * map-room#4733: the planner must not be ahead of the validator. A war with the US that has not
+   * been through the lifting trigger leaves the list binding in MoveValidator, so the predicate
+   * must keep refusing the zones; otherwise ProAI plans a move the engine refuses.
+   */
+  @Test
+  void seaUnitPredicateStillBlocksRestrictedZonesWhenTheWarHasNotLiftedTheList() {
+    declareWarOnUs();
+
+    final Predicate<Territory> canMoveSea = ProMatches.territoryCanMoveSeaUnits(japanese, true);
+    for (final Territory sz : japanRestrictedZones) {
+      assertThat(canMoveSea.test(sz))
+          .as(
+              "territoryCanMoveSeaUnits must agree with MoveValidator on '%s' while the list still"
+                  + " binds",
+              sz.getName())
+          .isFalse();
+    }
+  }
+
+  private void declareWarOnUs() {
     data.performChange(
         ChangeFactory.relationshipChange(
             japanese,
@@ -103,16 +137,6 @@ public class ProJapanMovementRestrictionTest {
     assertThat(japanese.isAtWar(americans))
         .as("Precondition: Japan must be at war with Americans after change")
         .isTrue();
-
-    final Predicate<Territory> canMoveSea = ProMatches.territoryCanMoveSeaUnits(japanese, true);
-    for (final Territory sz : japanRestrictedZones) {
-      assertThat(canMoveSea.test(sz))
-          .as(
-              "territoryCanMoveSeaUnits must allow restricted zone '%s' once Japan is at war with"
-                  + " the US (movementRestrictionType bypass for war entry)",
-              sz.getName())
-          .isTrue();
-    }
   }
 
   /**

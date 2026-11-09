@@ -314,34 +314,6 @@ public final class ProMatches {
           }
         }
       }
-      // Japan Pacific-reach restriction (Global 1940): Japan's RulesAttachment starts with
-      // movementRestrictionType=disallowed listing 8 sea zones near the US mainland.
-      // triggerAttachment_Japanese_Unrestricted_Movement clears movementRestrictionType once Japan
-      // is at war with the US — but the sidecar never fires triggers. Bypass the stale restriction
-      // list explicitly so Japan AI can plan Pacific offensives (Pearl Harbor, West Coast, etc.).
-      // Mirrors engine movement-validator.ts JAPAN_US_RESTRICTED_SEA_ZONES lifted by areAtWar.
-      if (t.isWater() && "Japanese".equals(player.getName())) {
-        final GamePlayer american = player.getData().getPlayerList().getPlayerId("Americans");
-        if (american != null && player.isAtWar(american)) {
-          // Use getRulesAttachment() (null-tolerant), NOT RulesAttachment.get(...,
-          // allowNull=false).
-          // WW2v3-1941 has no rulesAttachment on Japanese (only Chinese has one for placement);
-          // Global 1940 attaches movementRestrictionTerritories here. A missing attachment means
-          // there is nothing to bypass — not a crash (map-room#3535).
-          final RulesAttachment ra = player.getRulesAttachment();
-          if (ra != null && ra.isMovementRestrictionTypeDisallowed()) {
-            final String[] restricted = ra.getMovementRestrictionTerritories();
-            if (restricted != null) {
-              for (final String restrictedName : restricted) {
-                if (t.getName().equals(restrictedName)) {
-                  // At war with the US: this zone was restricted only during neutrality. Allow it.
-                  return true;
-                }
-              }
-            }
-          }
-        }
-      }
       final Predicate<Territory> match =
           Matches.territoryDoesNotCostMoneyToEnter(properties)
               .and(

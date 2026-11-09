@@ -1,4 +1,4 @@
-package org.triplea.ai.sidecar.wire;
+package games.strategy.triplea.ai.pro.util;
 
 import games.strategy.engine.data.Change;
 import games.strategy.engine.data.CompositeChange;
@@ -37,8 +37,14 @@ import org.triplea.util.Tuple;
  * <p>The XML triggers are single-use ({@code uses=1}): in TripleA the lift outlasts a later peace.
  * Here it is re-derived from each request's relationships. That only differs if a nation returns to
  * peace with every Axis power, which Map Room's politics never does.
+ *
+ * <p>It runs wherever relationships come from: when the sidecar applies a request's wire state, and
+ * on the purchase simulation's copy of the game right after the copy's politics step
+ * (map-room#4733). Hard Beta's politics declares war on the Allies there, so the copy's war with
+ * the Americans has to lift Japan's restriction before the copy's combat move, as the trigger would
+ * in a real game.
  */
-final class MovementRestrictionLifter {
+public final class MovementRestrictionLifter {
 
   private static final Logger LOG = System.getLogger(MovementRestrictionLifter.class.getName());
 
@@ -51,7 +57,7 @@ final class MovementRestrictionLifter {
   private MovementRestrictionLifter() {}
 
   /** Applies every satisfied restriction-lifting trigger to {@code gameData}. */
-  static void apply(final GameData gameData) {
+  public static void apply(final GameData gameData) {
     final Set<TriggerAttachment> lifting =
         TriggerAttachment.collectForAllTriggersMatching(
             new HashSet<>(gameData.getPlayerList().getPlayers()),
