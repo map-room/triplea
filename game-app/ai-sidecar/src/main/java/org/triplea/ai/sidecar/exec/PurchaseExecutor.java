@@ -13,6 +13,7 @@ import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.delegate.IDelegate;
 import games.strategy.triplea.Constants;
+import games.strategy.triplea.ai.AiRandom;
 import games.strategy.triplea.ai.pro.ProAi;
 import games.strategy.triplea.ai.pro.data.ProPlaceTerritory;
 import games.strategy.triplea.ai.pro.data.ProPurchaseTerritory;
@@ -141,144 +142,154 @@ public final class PurchaseExecutor implements DecisionExecutor<PurchaseRequest,
     final Resource pus = data.getResourceList().getResourceOrThrow(Constants.PUS);
     final int pusToSpend = player.getResources().getQuantity(pus);
 
-    // Reseed proData.getRng() and the battle calculator from the per-call wire seed so the
-    // (gamestate, seed) → wire-response mapping is a pure function (#2384, #2376 audit gate).
-    // Applied before dispatching invokePurchaseForSidecar AND before the combat-move projection
-    // below (the projection consumes the same proAi instance and must see the same seed).
-    proAi.getProData().setSeed(request.seed());
-    proAi.seedBattleCalc(request.seed());
+    // Reseed every RNG this call draws on from the per-call wire seed (#2384, #2376, triplea#186).
+    // AiRandom is a process-wide supplier, so bind a per-thread Random instead of setSource:
+    // /decision runs on a worker pool and a global swap would leak between matches. The binding
+    // covers ProDummyDelegateBridge (it draws AiRandom.get().nextLong() at construction) and
+    // AbstractAi.acceptAction during politics simulation. Cleared in finally so this worker's next
+    // request cannot inherit it. ProData and the battle calculator keep their own streams, seeded
+    // with the same number. Applied before both dummy bridges and before the combat-move
+    // projection below (that projection uses the same proAi and must see the same seed).
+    AiRandom.bindRequest(request.seed());
+    try {
+      proAi.getProData().setSeed(request.seed());
+      proAi.seedBattleCalc(request.seed());
 
-    final RecordingPurchaseDelegate recorder = new RecordingPurchaseDelegate();
-    recorder.initialize("purchase", "Purchase");
-    recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
+      final RecordingPurchaseDelegate recorder = new RecordingPurchaseDelegate();
+      recorder.initialize("purchase", "Purchase");
+      recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
 
-    // British dual-economy: if the wire state has split IPCs for British plus
-    // per-territory economy tags, prime the ProAi instance with a split-aware
-    // ProResourceTracker for this purchase pass.
-    maybeApplyBritishSplitEconomy(request.state(), proAi, data);
+      // British dual-economy: if the wire state has split IPCs for British plus
+      // per-territory economy tags, prime the ProAi instance with a split-aware
+      // ProResourceTracker for this purchase pass.
+      maybeApplyBritishSplitEconomy(request.state(), proAi, data);
 
-    proAi.invokePurchaseForSidecar(/* purchaseForBid */ false, pusToSpend, recorder, data, player);
+      proAi.invokePurchaseForSidecar(
+          /* purchaseForBid */ false, pusToSpend, recorder, data, player);
 
-    // Prefer per-territory PurchaseOrders from proAi.storedPurchaseTerritories — they carry the
-    // real placement target that Map Room's dual-economy dispatch (British split) needs.
-    // Fall back to the aggregated IntegerMap when storedPurchaseTerritories is unavailable
-    // (rare — would indicate purchase ran with no target territories, typical of empty plans).
-    final Map<Territory, ProPurchaseTerritory> stored = proAi.getStoredPurchaseTerritories();
-    final List<PurchaseOrder> buys;
-    final List<PlacementGroup> placements;
-    if (stored != null && !stored.isEmpty()) {
-      buys = toPurchaseOrdersFromStored(stored);
-      placements = toPlacementGroups(stored);
-    } else {
-      final IntegerMap<ProductionRule> captured = recorder.capturedPurchase();
-      final IntegerMap<ProductionRule> trimmed = trimToFit(captured, pusToSpend, pus);
-      buys = toPurchaseOrders(trimmed);
-      placements = List.of();
+      // Prefer per-territory PurchaseOrders from proAi.storedPurchaseTerritories — they carry the
+      // real placement target that Map Room's dual-economy dispatch (British split) needs.
+      // Fall back to the aggregated IntegerMap when storedPurchaseTerritories is unavailable
+      // (rare — would indicate purchase ran with no target territories, typical of empty plans).
+      final Map<Territory, ProPurchaseTerritory> stored = proAi.getStoredPurchaseTerritories();
+      final List<PurchaseOrder> buys;
+      final List<PlacementGroup> placements;
+      if (stored != null && !stored.isEmpty()) {
+        buys = toPurchaseOrdersFromStored(stored);
+        placements = toPlacementGroups(stored);
+      } else {
+        final IntegerMap<ProductionRule> captured = recorder.capturedPurchase();
+        final IntegerMap<ProductionRule> trimmed = trimToFit(captured, pusToSpend, pus);
+        buys = toPurchaseOrders(trimmed);
+        placements = List.of();
+      }
+      for (final PurchaseOrder order : buys) {
+        AiTraceLogger.logPurchaseOrder(player.getName(), order.unitType(), order.count());
+      }
+      final List<RepairOrder> repairs = toRepairOrders(recorder.capturedRepair(), data);
+
+      // Emit PURCHASE-BUDGET reconciliation line (#2576). Uses pre-trim capturedPurchase so
+      // plannedSpend reflects ProAI's actual plan, not the trim-to-fit backstop output.
+      final int repairCost = totalRepairCost(recorder.capturedRepair(), pus);
+      final int availableAfterRepair = pusToSpend - repairCost;
+      final int plannedSpend = totalPuCost(recorder.capturedPurchase(), pus);
+      final int overBy = Math.max(0, plannedSpend - availableAfterRepair);
+      AiTraceLogger.logPurchaseBudget(
+          player.getName(),
+          pusToSpend,
+          repairCost,
+          availableAfterRepair,
+          plannedSpend,
+          overBy > 0,
+          overBy);
+
+      final List<PoliticalActionAttachment> storedActions = proAi.getStoredPoliticalActions();
+      final List<WarDeclaration> politicalActions;
+      if (storedActions != null && !storedActions.isEmpty()) {
+        politicalActions = toWarDeclarations(storedActions, player);
+        proAi.clearStoredPoliticalActions();
+      } else {
+        politicalActions = List.of();
+      }
+
+      // Project storedCombatMoveMap to WireMoveDescription[] (mirror CombatMoveExecutor.execute).
+      // invokeCombatMoveForSidecar takes the doMove branch because storedCombatMoveMap was
+      // populated by invokePurchaseForSidecar above: zero re-planning, pure translation.
+      //
+      // Two setup steps mirror CombatMoveExecutor exactly:
+      //
+      // 1. Restore the combat move map from an in-memory snapshot so that territory/unit references
+      //    inside storedCombatMoveMap point to the live GameData (not the dataCopy used during
+      //    purchase simulation). Without this, WireMoveDescriptionBuilder cannot resolve unit UUIDs
+      //    in uuidToWireId and produces empty unitIds lists. The in-memory snapshot mirrors the
+      //    name-based round-trip the disk store used to perform — there is no longer disk
+      //    persistence in the sidecar.
+      //
+      // 2. Advance the game sequence to "combatMove" so MoveDelegate.performMove can resolve
+      //    GameStepPropertiesHelper.isCombatMove. The sequence is still at "germansPurchase"; the
+      //    minimal WireState (empty territories/players) only updates the step.
+      final Map<String, String> wireToUuid = new HashMap<>();
+      unitIdMap.forEach((wireId, uuid) -> wireToUuid.put(wireId, uuid.toString()));
+      final ProSessionSnapshot snap = proAi.snapshotForSidecar(wireToUuid);
+      proAi.restoreCombatMoveMapFromSnapshot(snap, data);
+
+      WireStateApplier.apply(
+          data,
+          new WireState(
+              List.of(),
+              List.of(),
+              request.state().round(),
+              "combatMove",
+              request.state().currentPlayer(),
+              List.of(),
+              request.state().gameDataKey()),
+          unitIdMap);
+
+      final Map<UUID, String> uuidToWireId = new HashMap<>();
+      unitIdMap.forEach((wireId, uuid) -> uuidToWireId.put(uuid, wireId));
+
+      // dryRun=true: capture moves WITHOUT executing them. The bot dispatches the resulting
+      // WireMoveDescription[] back through map-room's combat-move handler, which performs the
+      // actual moves; sidecar must not mutate live unit positions during the projection or the
+      // bot would double-execute.
+      final RecordingMoveDelegate combatRecorder =
+          new RecordingMoveDelegate(proAi, /* dryRun= */ true);
+      combatRecorder.initialize("move", "Move");
+      combatRecorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
+      proAi.reinitializeProDataForSidecar();
+      proAi.invokeCombatMoveForSidecar(combatRecorder, data, player);
+
+      final List<WireMoveDescription> nonBombingMoves =
+          combatRecorder.captured().stream()
+              .filter(c -> !c.isBombing())
+              .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
+              .toList();
+      final List<WireMoveDescription> bombingMoves =
+          combatRecorder.captured().stream()
+              .filter(RecordingMoveDelegate.CapturedMove::isBombing)
+              .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
+              .toList();
+
+      // Read after the projection: doCombatMove (run by the purchase simulation or by the
+      // projection itself) records the list, and neither path clears it. Names, not Territory
+      // references: the simulation GameData is discarded with this call.
+      final List<String> strafingTerritories = strafingTerritoryNames(proAi);
+      final List<StrafeRetreat> strafeRetreats =
+          strafeRetreatEntries(
+              proAi, nonBombingMoves.stream().map(WireMoveDescription::to).collect(toSet()));
+
+      return new PurchasePlan(
+          buys,
+          repairs,
+          placements,
+          politicalActions,
+          nonBombingMoves,
+          bombingMoves,
+          strafingTerritories,
+          strafeRetreats);
+    } finally {
+      AiRandom.clearRequest();
     }
-    for (final PurchaseOrder order : buys) {
-      AiTraceLogger.logPurchaseOrder(player.getName(), order.unitType(), order.count());
-    }
-    final List<RepairOrder> repairs = toRepairOrders(recorder.capturedRepair(), data);
-
-    // Emit PURCHASE-BUDGET reconciliation line (#2576). Uses pre-trim capturedPurchase so
-    // plannedSpend reflects ProAI's actual plan, not the trim-to-fit backstop output.
-    final int repairCost = totalRepairCost(recorder.capturedRepair(), pus);
-    final int availableAfterRepair = pusToSpend - repairCost;
-    final int plannedSpend = totalPuCost(recorder.capturedPurchase(), pus);
-    final int overBy = Math.max(0, plannedSpend - availableAfterRepair);
-    AiTraceLogger.logPurchaseBudget(
-        player.getName(),
-        pusToSpend,
-        repairCost,
-        availableAfterRepair,
-        plannedSpend,
-        overBy > 0,
-        overBy);
-
-    final List<PoliticalActionAttachment> storedActions = proAi.getStoredPoliticalActions();
-    final List<WarDeclaration> politicalActions;
-    if (storedActions != null && !storedActions.isEmpty()) {
-      politicalActions = toWarDeclarations(storedActions, player);
-      proAi.clearStoredPoliticalActions();
-    } else {
-      politicalActions = List.of();
-    }
-
-    // Project storedCombatMoveMap to WireMoveDescription[] (mirror CombatMoveExecutor.execute).
-    // invokeCombatMoveForSidecar takes the doMove branch because storedCombatMoveMap was populated
-    // by invokePurchaseForSidecar above — zero re-planning, pure translation.
-    //
-    // Two setup steps mirror CombatMoveExecutor exactly:
-    //
-    // 1. Restore the combat move map from an in-memory snapshot so that territory/unit references
-    //    inside storedCombatMoveMap point to the live GameData (not the dataCopy used during
-    //    purchase simulation). Without this, WireMoveDescriptionBuilder cannot resolve unit UUIDs
-    //    in uuidToWireId and produces empty unitIds lists. The in-memory snapshot mirrors the
-    //    name-based round-trip the disk store used to perform — there is no longer disk
-    //    persistence in the sidecar.
-    //
-    // 2. Advance the game sequence to "combatMove" so MoveDelegate.performMove can resolve
-    //    GameStepPropertiesHelper.isCombatMove. The sequence is still at "germansPurchase"; the
-    //    minimal WireState (empty territories/players) only updates the step.
-    final Map<String, String> wireToUuid = new HashMap<>();
-    unitIdMap.forEach((wireId, uuid) -> wireToUuid.put(wireId, uuid.toString()));
-    final ProSessionSnapshot snap = proAi.snapshotForSidecar(wireToUuid);
-    proAi.restoreCombatMoveMapFromSnapshot(snap, data);
-
-    WireStateApplier.apply(
-        data,
-        new WireState(
-            List.of(),
-            List.of(),
-            request.state().round(),
-            "combatMove",
-            request.state().currentPlayer(),
-            List.of(),
-            request.state().gameDataKey()),
-        unitIdMap);
-
-    final Map<UUID, String> uuidToWireId = new HashMap<>();
-    unitIdMap.forEach((wireId, uuid) -> uuidToWireId.put(uuid, wireId));
-
-    // dryRun=true: capture moves WITHOUT executing them. The bot dispatches the resulting
-    // WireMoveDescription[] back through map-room's combat-move handler, which performs the
-    // actual moves; sidecar must not mutate live unit positions during the projection or the
-    // bot would double-execute.
-    final RecordingMoveDelegate combatRecorder =
-        new RecordingMoveDelegate(proAi, /* dryRun= */ true);
-    combatRecorder.initialize("move", "Move");
-    combatRecorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
-    proAi.reinitializeProDataForSidecar();
-    proAi.invokeCombatMoveForSidecar(combatRecorder, data, player);
-
-    final List<WireMoveDescription> nonBombingMoves =
-        combatRecorder.captured().stream()
-            .filter(c -> !c.isBombing())
-            .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
-            .toList();
-    final List<WireMoveDescription> bombingMoves =
-        combatRecorder.captured().stream()
-            .filter(RecordingMoveDelegate.CapturedMove::isBombing)
-            .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
-            .toList();
-
-    // Read after the projection: doCombatMove (run by the purchase simulation or by the
-    // projection itself) records the list, and neither path clears it. Names, not Territory
-    // references: the simulation GameData is discarded with this call.
-    final List<String> strafingTerritories = strafingTerritoryNames(proAi);
-    final List<StrafeRetreat> strafeRetreats =
-        strafeRetreatEntries(
-            proAi, nonBombingMoves.stream().map(WireMoveDescription::to).collect(toSet()));
-
-    return new PurchasePlan(
-        buys,
-        repairs,
-        placements,
-        politicalActions,
-        nonBombingMoves,
-        bombingMoves,
-        strafingTerritories,
-        strafeRetreats);
   }
 
   /**

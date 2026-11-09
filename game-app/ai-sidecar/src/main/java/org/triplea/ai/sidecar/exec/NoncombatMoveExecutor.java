@@ -2,6 +2,7 @@ package org.triplea.ai.sidecar.exec;
 
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
+import games.strategy.triplea.ai.AiRandom;
 import games.strategy.triplea.ai.pro.ProAi;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import java.util.HashMap;
@@ -44,7 +45,8 @@ import org.triplea.ai.sidecar.wire.WireStateApplier;
  * <ol>
  *   <li>Clone {@link GameData} from {@link CanonicalGameData}; build fresh {@link ProAi}.
  *   <li>{@link WireStateApplier#apply}.
- *   <li>Reseed proData RNG and battle calculator from the per-call wire seed.
+ *   <li>Bind {@code AiRandom} on this thread, and reseed proData's RNG and the battle calculator,
+ *       from the per-call wire seed. Clear the binding when the call returns.
  *   <li>Dispatch {@code invokeNonCombatMoveForSidecar} inline.
  * </ol>
  */
@@ -86,38 +88,43 @@ public final class NoncombatMoveExecutor
     // "place delegate not found".
     ExecutorSupport.ensurePlaceDelegate(data);
 
-    // Reseed proData.getRng() and the battle calculator from the per-call wire seed so the
-    // (gamestate, seed) → wire-response mapping is a pure function (#2384, #2376 audit gate).
-    proAi.getProData().setSeed(request.seed());
-    proAi.seedBattleCalc(request.seed());
+    // Same binding as PurchaseExecutor: per-thread AiRandom, plus ProData and the battle
+    // calculator, all from the wire seed (triplea#186). Covers the dummy bridge constructed below.
+    AiRandom.bindRequest(request.seed());
+    try {
+      proAi.getProData().setSeed(request.seed());
+      proAi.seedBattleCalc(request.seed());
 
-    // reinitializeProDataForSidecar() re-binds proData.getData() to the fresh GameData before
-    // planning — same defensive pattern as PurchaseExecutor.
-    final RecordingMoveDelegate recorder = new RecordingMoveDelegate(proAi);
-    recorder.initialize("move", "Move");
-    recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
-    proAi.reinitializeProDataForSidecar();
-    proAi.invokeNonCombatMoveForSidecar(recorder, data, player);
+      // reinitializeProDataForSidecar() re-binds proData.getData() to the fresh GameData before
+      // planning — same defensive pattern as PurchaseExecutor.
+      final RecordingMoveDelegate recorder = new RecordingMoveDelegate(proAi);
+      recorder.initialize("move", "Move");
+      recorder.setDelegateBridgeAndPlayer(new ProDummyDelegateBridge(proAi, player, data));
+      proAi.reinitializeProDataForSidecar();
+      proAi.invokeNonCombatMoveForSidecar(recorder, data, player);
 
-    // Build reverse map: UUID → wireId
-    final Map<UUID, String> uuidToWireId = new HashMap<>();
-    unitIdMap.forEach((wireId, uuid) -> uuidToWireId.put(uuid, wireId));
+      // Build reverse map: UUID → wireId
+      final Map<UUID, String> uuidToWireId = new HashMap<>();
+      unitIdMap.forEach((wireId, uuid) -> uuidToWireId.put(uuid, wireId));
 
-    final List<WireMoveDescription> moves =
-        recorder.captured().stream()
-            .peek(
-                c -> {
-                  // Invariant: noncombat phase must never issue a bombing move
-                  if (c.isBombing()) {
-                    throw new AssertionError(
-                        "isBombing == true in noncombat-move phase — ProAI invariant violated");
-                  }
-                  AiTraceLogger.logCapturedMove(
-                      player.getName(), "noncombat-move", c.move(), false, uuidToWireId);
-                })
-            .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
-            .toList();
+      final List<WireMoveDescription> moves =
+          recorder.captured().stream()
+              .peek(
+                  c -> {
+                    // Invariant: noncombat phase must never issue a bombing move
+                    if (c.isBombing()) {
+                      throw new AssertionError(
+                          "isBombing == true in noncombat-move phase — ProAI invariant violated");
+                    }
+                    AiTraceLogger.logCapturedMove(
+                        player.getName(), "noncombat-move", c.move(), false, uuidToWireId);
+                  })
+              .map(c -> WireMoveDescriptionBuilder.build(c.move(), uuidToWireId))
+              .toList();
 
-    return new NoncombatMovePlan(moves);
+      return new NoncombatMovePlan(moves);
+    } finally {
+      AiRandom.clearRequest();
+    }
   }
 }
