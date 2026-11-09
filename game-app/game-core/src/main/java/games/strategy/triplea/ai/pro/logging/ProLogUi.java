@@ -7,6 +7,7 @@ import games.strategy.ui.Util;
 import java.awt.Frame;
 import java.util.List;
 import java.util.function.Consumer;
+import javax.annotation.Nullable;
 import javax.swing.SwingUtilities;
 import lombok.experimental.UtilityClass;
 import org.triplea.swing.key.binding.KeyCode;
@@ -17,6 +18,12 @@ public final class ProLogUi {
   private static ProLogWindow settingsWindow = null;
   private static String currentName = "";
   private static int currentRound = 0;
+  private static volatile Consumer<String> logSink = null;
+
+  /** Sends AI log messages to {@code sink} instead of the log window; null restores the window. */
+  public static void setLogSink(final @Nullable Consumer<String> sink) {
+    logSink = sink;
+  }
 
   /**
    * Optional external sink for AI log messages. Set by headless consumers (the AI sidecar) that
@@ -71,6 +78,11 @@ public final class ProLogUi {
     if (handler != null) {
       // Direct delivery — no Swing indirection. Safe to call from any thread.
       handler.accept(message);
+    }
+    final Consumer<String> sink = logSink;
+    if (sink != null) {
+      sink.accept(message);
+      return;
     }
     SwingUtilities.invokeLater(
         () -> {

@@ -7,6 +7,7 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.triplea.Properties;
+import games.strategy.triplea.ai.AiRandom;
 import games.strategy.triplea.ai.pro.data.ProPurchaseOption;
 import games.strategy.triplea.ai.pro.data.ProPurchaseOptionMap;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
@@ -46,8 +47,11 @@ public final class ProData {
   private final Set<Unit> unitsToBeConsumed = new HashSet<>();
   private double minCostPerHitPoint = Double.MAX_VALUE;
 
-  /** Seeded RNG for deterministic AI decisions. Seeded via {@link #setSeed(long)}. */
-  @Getter private final Random rng = new Random();
+  /**
+   * Seeded RNG for deterministic AI decisions. Seeded via {@link #setSeed(long)}; until then it
+   * starts from {@link AiRandom}, so a replay that replaces AiRandom's source covers it too.
+   */
+  @Getter private final Random rng = new Random(AiRandom.get().nextLong());
 
   private AbstractProAi proAi;
   private GameData data;

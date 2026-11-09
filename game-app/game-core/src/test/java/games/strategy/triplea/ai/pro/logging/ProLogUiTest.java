@@ -10,8 +10,9 @@ import org.junit.jupiter.api.Test;
 class ProLogUiTest {
 
   @AfterEach
-  void clearHandler() {
+  void clearHandlers() {
     ProLogUi.setExternalHandler(null);
+    ProLogUi.setLogSink(null);
   }
 
   @Test
@@ -48,5 +49,26 @@ class ProLogUiTest {
     ProLogger.info("should not appear");
 
     assertThat(captured).isEmpty();
+  }
+
+  @Test
+  void logSinkReceivesAiLogMessages() {
+    final List<String> sink = new ArrayList<>();
+    ProLogUi.setLogSink(sink::add);
+
+    ProLogUi.notifyAiLogMessage("Starting combat move phase");
+
+    assertThat(sink).containsExactly("Starting combat move phase");
+  }
+
+  @Test
+  void clearingLogSinkStopsRoutingToIt() {
+    final List<String> sink = new ArrayList<>();
+    ProLogUi.setLogSink(sink::add);
+    ProLogUi.setLogSink(null);
+
+    ProLogUi.notifyAiLogMessage("Starting combat move phase");
+
+    assertThat(sink).isEmpty();
   }
 }
