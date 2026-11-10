@@ -20,7 +20,7 @@ import java.util.logging.Logger;
  * <pre>{@code
  * final AiTraceCapture cap = AiTraceCapture.attach();
  * try {
- *   AiTraceLogger.logRetreatDecision(...);
+ *   AiTraceLogger.logPurchaseBudget(...);
  * } finally {
  *   cap.detach();
  * }
