@@ -27,6 +27,7 @@ import games.strategy.triplea.ai.pro.logging.ProLogUi;
 import games.strategy.triplea.ai.pro.logging.ProLogger;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import games.strategy.triplea.ai.pro.simulate.ProSimulateTurnUtils;
+import games.strategy.triplea.ai.pro.util.MovementRestrictionLifter;
 import games.strategy.triplea.ai.pro.util.ProBattleUtils;
 import games.strategy.triplea.ai.pro.util.ProCasualtyUtils;
 import games.strategy.triplea.ai.pro.util.ProMatches;
@@ -454,6 +455,10 @@ public abstract class AbstractProAi extends AbstractAi {
             if (storedPoliticalActions == null) {
               storedPoliticalActions = actions;
             }
+            // The wars just declared on the copy lift movement restrictions that the XML lifts
+            // with a trigger ("before:<nation>CombatMove"); the copy's combat move is next, and
+            // no trigger fires in a simulation (map-room#4733).
+            MovementRestrictionLifter.apply(dataCopy);
           }
         }
       }

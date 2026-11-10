@@ -11,6 +11,7 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.changefactory.ChangeFactory;
+import games.strategy.triplea.ai.pro.util.MovementRestrictionLifter;
 import games.strategy.triplea.ai.pro.util.UkEconomySplit;
 import games.strategy.triplea.attachments.TechAttachment;
 import games.strategy.triplea.attachments.TerritoryAttachment;
