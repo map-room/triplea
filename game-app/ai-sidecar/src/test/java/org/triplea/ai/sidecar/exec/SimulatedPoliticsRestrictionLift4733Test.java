@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import games.strategy.triplea.ai.pro.logging.ProLogUi;
+import games.strategy.triplea.ai.pro.util.MovementRestrictionLifter;
 import games.strategy.triplea.settings.ClientSetting;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
@@ -50,16 +54,41 @@ class SimulatedPoliticsRestrictionLift4733Test {
   void japanDeclaringWarOnTheUsInSimulatedPoliticsIsNotRefusedItsOwnPacificMoves() {
     for (final long seed : new long[] {4609L, 1L, 2L}) {
       final List<String> refusals = new ArrayList<>();
-      final PurchasePlan plan = plan(seed, refusals);
+      final List<String> lifts = new ArrayList<>();
+      final PurchasePlan plan = plan(seed, refusals, lifts);
 
       assertThat(plan.politicalActions())
           .as("seed %d: the scenario needs Japan to declare war on the Americans", seed)
           .contains(new WarDeclaration("Americans"));
       assertThat(refusals).as("seed %d: moves refused by the restriction", seed).isEmpty();
+      // Without the lift on the simulation copy the planner and validator agree again, on the
+      // still-closed list: no refusal, but Japan plans the war round as if the Pacific were shut.
+      // The wire state has no Japan-US war in round 1, so only the simulation's lift can fire.
+      assertThat(lifts)
+          .as("seed %d: the simulation copy must lift Japan's restriction after its politics", seed)
+          .anyMatch(m -> m.contains("triggerAttachment_Japanese_Unrestricted_Movement"));
     }
   }
 
-  private static PurchasePlan plan(final long seed, final List<String> refusals) {
+  private static PurchasePlan plan(
+      final long seed, final List<String> refusals, final List<String> lifts) {
+    final Logger lifterLog = Logger.getLogger(MovementRestrictionLifter.class.getName());
+    final Handler capture =
+        new Handler() {
+          @Override
+          public void publish(final LogRecord record) {
+            synchronized (lifts) {
+              lifts.add(record.getMessage());
+            }
+          }
+
+          @Override
+          public void flush() {}
+
+          @Override
+          public void close() {}
+        };
+    lifterLog.addHandler(capture);
     final var previous = ProLogUi.getExternalHandler();
     ProLogUi.setExternalHandler(
         msg -> {
@@ -75,6 +104,7 @@ class SimulatedPoliticsRestrictionLift4733Test {
               canonical,
               new PurchaseRequest(japaneseRound1Purchase(), seed, "restr-4733", "hard-beta"));
     } finally {
+      lifterLog.removeHandler(capture);
       ProLogUi.setExternalHandler(previous);
     }
   }
