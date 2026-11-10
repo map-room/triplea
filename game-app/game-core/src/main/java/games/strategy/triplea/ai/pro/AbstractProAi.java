@@ -34,6 +34,7 @@ import games.strategy.triplea.ai.pro.util.ProMatches;
 import games.strategy.triplea.ai.pro.util.ProOddsCalculator;
 import games.strategy.triplea.ai.pro.util.ProPurchaseUtils;
 import games.strategy.triplea.ai.pro.util.ProTransportUtils;
+import games.strategy.triplea.ai.pro.util.WarProductionApplier;
 import games.strategy.triplea.attachments.PoliticalActionAttachment;
 import games.strategy.triplea.delegate.DiceRoll;
 import games.strategy.triplea.delegate.Matches;
@@ -460,6 +461,11 @@ public abstract class AbstractProAi extends AbstractAi {
             // no trigger fires in a simulation (map-room#4733).
             MovementRestrictionLifter.apply(dataCopy);
           }
+          // This player's wars just declared on the copy upgrade that player's minor ICs that
+          // the XML upgrades after its politics step. purchase() reads this copy's factory
+          // capacity. No trigger fires in a simulation (map-room#4754). Deleting this call
+          // fails WarProductionStandIn4754Test.seed1UsAtWarBuysForThirtyCapacity.
+          WarProductionApplier.apply(dataCopy, playerCopy);
         }
       }
     }
