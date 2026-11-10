@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -681,25 +682,32 @@ public final class WireStateApplier {
         .orElse(null);
   }
 
-  // Map Room tech-flag name -> TechAttachment property name. Keep in sync with
-  // TechAttachment's private setters: the set of supported flags is intentionally narrow; any
-  // unknown flag throws so callers can't silently drift.
-  private static final Map<String, String> TECH_PROPERTY_NAMES =
-      Map.ofEntries(
-          Map.entry("heavyBomber", "heavyBomber"),
-          Map.entry("longRangeAir", "longRangeAir"),
-          Map.entry("jetPower", "jetPower"),
-          Map.entry("rocket", "rocket"),
-          Map.entry("industrialTechnology", "industrialTechnology"),
-          Map.entry("superSub", "superSub"),
-          Map.entry("destroyerBombard", "destroyerBombard"),
-          Map.entry("improvedArtillerySupport", "improvedArtillerySupport"),
-          Map.entry("paratroopers", "paratroopers"),
-          Map.entry("increasedFactoryProduction", "increasedFactoryProduction"),
-          Map.entry("warBonds", "warBonds"),
-          Map.entry("mechanizedInfantry", "mechanizedInfantry"),
-          Map.entry("aaRadar", "aaRadar"),
-          Map.entry("shipyards", "shipyards"));
+  // Map Room tech-flag name -> TechAttachment property name. Insertion order is the order
+  // WireStateVerifier probes. The set of supported flags is intentionally narrow; any unknown
+  // flag throws so callers can't silently drift.
+  private static final Map<String, String> TECH_PROPERTY_NAMES = techPropertyNames();
+
+  /** Wire-side tech flag names, in {@link #TECH_PROPERTY_NAMES} insertion order. */
+  static final List<String> WIRE_TECH_NAMES = List.copyOf(TECH_PROPERTY_NAMES.keySet());
+
+  private static Map<String, String> techPropertyNames() {
+    final Map<String, String> names = new LinkedHashMap<>();
+    names.put("heavyBomber", "heavyBomber");
+    names.put("longRangeAir", "longRangeAir");
+    names.put("jetPower", "jetPower");
+    names.put("rocket", "rocket");
+    names.put("industrialTechnology", "industrialTechnology");
+    names.put("superSub", "superSub");
+    names.put("destroyerBombard", "destroyerBombard");
+    names.put("improvedArtillerySupport", "improvedArtillerySupport");
+    names.put("paratroopers", "paratroopers");
+    names.put("increasedFactoryProduction", "increasedFactoryProduction");
+    names.put("warBonds", "warBonds");
+    names.put("mechanizedInfantry", "mechanizedInfantry");
+    names.put("aaRadar", "aaRadar");
+    names.put("shipyards", "shipyards");
+    return Collections.unmodifiableMap(names);
+  }
 
   // TechAttachment property name -> UnitSupportAttachment name.
   // Each entry here is a tech whose activation fires a TriggerAttachment that adds the player
