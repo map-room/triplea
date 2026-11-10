@@ -672,8 +672,47 @@ class WireStateVerifierTest {
                     && w.contains("actual=Russians"));
   }
 
+  /**
+   * The wire flags Map Room sends. A literal, not {@link WireStateApplier#WIRE_TECH_NAMES}: a list
+   * derived from the map stays green when a name is dropped from both.
+   */
+  private static final List<String> WIRE_TECH_NAMES =
+      List.of(
+          "heavyBomber",
+          "longRangeAir",
+          "jetPower",
+          "rocket",
+          "industrialTechnology",
+          "superSub",
+          "destroyerBombard",
+          "improvedArtillerySupport",
+          "paratroopers",
+          "increasedFactoryProduction",
+          "warBonds",
+          "mechanizedInfantry",
+          "aaRadar",
+          "shipyards");
+
   @Test
-  void playerTechDrift_detectedAfterGrantingATech() {
+  void wireTechNames_areTheFourteenWireFlags() {
+    assertThat(WireStateApplier.WIRE_TECH_NAMES)
+        .containsExactlyInAnyOrderElementsOf(WIRE_TECH_NAMES);
+  }
+
+  @Test
+  void wireTechNames_resolveOnTechAttachment() {
+    final GameData gd = fresh();
+    final TechAttachment tech = gd.getPlayerList().getPlayerId("Germans").getTechAttachment();
+    assertThat(tech).isNotNull();
+    for (final String name : WIRE_TECH_NAMES) {
+      assertThat(tech.getPropertyOrEmpty(WireStateApplier.techPropertyName(name)))
+          .as(name)
+          .isPresent();
+    }
+  }
+
+  @Test
+  void playerTechDrift_detectedForEveryWireTechName() {
     final GameData gd = fresh();
     final ConcurrentMap<String, UUID> idMap = freshIdMap();
     final WireState wire =
@@ -687,22 +726,25 @@ class WireStateVerifierTest {
             "ww2global40_2nd_edition");
     WireStateApplier.apply(gd, wire, idMap);
     assertThat(warnings().stream().filter(w -> w.contains("apply-drift")).count()).isZero();
-    captured.clear();
 
     final GamePlayer germans = gd.getPlayerList().getPlayerId("Germans");
     final TechAttachment tech = germans.getTechAttachment();
-    gd.performChange(ChangeFactory.attachmentPropertyChange(tech, Boolean.TRUE, "heavyBomber"));
-
-    WireStateVerifier.verifyApply(gd, wire, idMap);
-
-    assertThat(warnings())
-        .anyMatch(
-            w ->
-                w.contains("apply-drift")
-                    && w.contains("kind=player-tech")
-                    && w.contains("player=Germans")
-                    && w.contains("expected=[]")
-                    && w.contains("actual=[heavyBomber]"));
+    for (final String name : WIRE_TECH_NAMES) {
+      captured.clear();
+      final String property = WireStateApplier.techPropertyName(name);
+      gd.performChange(ChangeFactory.attachmentPropertyChange(tech, Boolean.TRUE, property));
+      WireStateVerifier.verifyApply(gd, wire, idMap);
+      assertThat(warnings())
+          .as(name)
+          .anyMatch(
+              w ->
+                  w.contains("apply-drift")
+                      && w.contains("kind=player-tech")
+                      && w.contains("player=Germans")
+                      && w.contains("expected=[]")
+                      && w.contains("actual=[" + name + "]"));
+      gd.performChange(ChangeFactory.attachmentPropertyChange(tech, Boolean.FALSE, property));
+    }
   }
 
   @Test

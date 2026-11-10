@@ -417,7 +417,7 @@ public final class WireStateVerifier {
   private static Set<String> getActivatedTechNames(final TechAttachment ta) {
     final Set<String> result = new HashSet<>();
     for (final String name : WireStateApplier.WIRE_TECH_NAMES) {
-      final var prop = ta.getPropertyOrEmpty(name);
+      final var prop = ta.getPropertyOrEmpty(WireStateApplier.techPropertyName(name));
       if (prop.isPresent() && Boolean.TRUE.equals(prop.get().getValue())) {
         result.add(name);
       }
