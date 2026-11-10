@@ -3,6 +3,7 @@ package games.strategy.triplea.ai.pro.util;
 import games.strategy.engine.data.Change;
 import games.strategy.engine.data.CompositeChange;
 import games.strategy.engine.data.GameData;
+import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.MutableProperty;
 import games.strategy.engine.data.UnitType;
 import games.strategy.triplea.attachments.FireTriggerParams;
@@ -11,7 +12,6 @@ import games.strategy.triplea.attachments.TriggerAttachment;
 import games.strategy.triplea.ui.ObjectiveDummyDelegateBridge;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -28,7 +28,9 @@ import org.triplea.java.collections.IntegerMap;
  *
  * <p>Mirrors {@code MovementRestrictionLifter}: collect the XML triggers by their effect, test
  * their conditions against the copy's relationships, and apply TripleA's own unit removal and
- * placement. The XML already no-ops when a major (or upgrade) factory is present ({@code
+ * placement. Only {@code player}'s triggers are considered, so Japan's purchase simulation does not
+ * upgrade US ICs after declaring war on the Americans ({@code after:americansPolitics} is a US-turn
+ * trigger). The XML already no-ops when a major (or upgrade) factory is present ({@code
  * conditionAttachment_Americans_Major_Factory_*} is inverted unit presence), so a second call or a
  * wire that already carries {@code factory_major} is a no-op. {@code uses=1} is re-derived each
  * request from a fresh canonical clone, the same way the restriction lifter re-derives a single-use
@@ -47,12 +49,14 @@ public final class WarProductionApplier {
 
   private WarProductionApplier() {}
 
-  /** Applies every satisfied US war-production factory swap to {@code gameData}. */
-  public static void apply(final GameData gameData) {
+  /**
+   * Applies every satisfied war-production factory swap attached to {@code player} on {@code
+   * gameData}. {@code player} must belong to {@code gameData}.
+   */
+  public static void apply(final GameData gameData, final GamePlayer player) {
     final Set<TriggerAttachment> upgrading =
         TriggerAttachment.collectForAllTriggersMatching(
-            new HashSet<>(gameData.getPlayerList().getPlayers()),
-            WarProductionApplier::isWarProductionSwap);
+            Set.of(player), WarProductionApplier::isWarProductionSwap);
     if (upgrading.isEmpty()) {
       return;
     }
