@@ -599,11 +599,9 @@ public final class WireStateApplier {
       final TechAttachment techAttachment = player.getTechAttachment();
       if (techAttachment != null) {
         for (final String techName : wp.tech()) {
-          final String property = TECH_PROPERTY_NAMES.get(techName);
-          if (property == null) {
-            throw new IllegalArgumentException("Unknown tech flag in WireState: " + techName);
-          }
-          out.add(ChangeFactory.attachmentPropertyChange(techAttachment, Boolean.TRUE, property));
+          out.add(
+              ChangeFactory.attachmentPropertyChange(
+                  techAttachment, Boolean.TRUE, techPropertyName(techName)));
         }
       }
     }
@@ -682,9 +680,10 @@ public final class WireStateApplier {
         .orElse(null);
   }
 
-  // Map Room tech-flag name -> TechAttachment property name. Keep in sync with
-  // TechAttachment's private setters: the set of supported flags is intentionally narrow; any
-  // unknown flag throws so callers can't silently drift.
+  // Map Room tech-flag name -> TechAttachment property name. The set of supported flags is
+  // intentionally narrow; any unknown flag throws so callers can't silently drift. Lookups are by
+  // name. WireStateVerifier folds the keys into a set and sorts the log line, so key order is
+  // unused. Map.ofEntries does not keep insertion order.
   private static final Map<String, String> TECH_PROPERTY_NAMES =
       Map.ofEntries(
           Map.entry("heavyBomber", "heavyBomber"),
@@ -699,8 +698,23 @@ public final class WireStateApplier {
           Map.entry("increasedFactoryProduction", "increasedFactoryProduction"),
           Map.entry("warBonds", "warBonds"),
           Map.entry("mechanizedInfantry", "mechanizedInfantry"),
-          Map.entry("aaRadar", "aaRadar"),
+          Map.entry("aaRadar", "aARadar"),
           Map.entry("shipyards", "shipyards"));
+
+  /** Wire-side tech flag names: the keys of {@link #TECH_PROPERTY_NAMES}. */
+  static final List<String> WIRE_TECH_NAMES = List.copyOf(TECH_PROPERTY_NAMES.keySet());
+
+  /**
+   * TechAttachment property for a wire tech flag. Map Room sends {@code aaRadar}; the attachment
+   * property is {@code aARadar}.
+   */
+  static String techPropertyName(final String wireName) {
+    final String property = TECH_PROPERTY_NAMES.get(wireName);
+    if (property == null) {
+      throw new IllegalArgumentException("Unknown tech flag in WireState: " + wireName);
+    }
+    return property;
+  }
 
   // TechAttachment property name -> UnitSupportAttachment name.
   // Each entry here is a tech whose activation fires a TriggerAttachment that adds the player

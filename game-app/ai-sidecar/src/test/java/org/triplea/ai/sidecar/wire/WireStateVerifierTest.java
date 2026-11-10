@@ -3,9 +3,12 @@ package org.triplea.ai.sidecar.wire;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import games.strategy.engine.data.GameData;
+import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.engine.data.UnitType;
 import games.strategy.engine.data.changefactory.ChangeFactory;
+import games.strategy.triplea.attachments.TechAttachment;
 import games.strategy.triplea.settings.ClientSetting;
 import java.util.ArrayList;
 import java.util.List;
@@ -70,14 +73,7 @@ class WireStateVerifierTest {
   private List<String> warnings() {
     return captured.stream()
         .filter(r -> r.getLevel().intValue() >= Level.WARNING.intValue())
-        .map(
-            r ->
-                r.getMessage() != null
-                    ? r.getMessage()
-                    : r.getParameters() != null
-                        ? String.format(
-                            r.getMessage() == null ? "%s" : r.getMessage(), r.getParameters())
-                        : "(null)")
+        .map(LogRecord::getMessage)
         .collect(Collectors.toList());
   }
 
@@ -565,5 +561,232 @@ class WireStateVerifierTest {
             List.of(), List.of(), 1, "purchase", "Germans", List.of(), "ww2global40_2nd_edition");
     WireStateVerifier.verifyApply(gd, wire, freshIdMap());
     assertThat(infos()).anyMatch(m -> m.contains("apply-verify"));
+  }
+
+  @Test
+  void unitCountDrift_detectedAfterAddingAUnit() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final WireState wire =
+        new WireState(
+            List.of(
+                new WireTerritory(
+                    "Germany",
+                    "Germans",
+                    List.of(
+                        new WireUnit("u-inf-1", "infantry", 0, 0),
+                        new WireUnit("u-inf-2", "infantry", 0, 0)))),
+            List.of(),
+            1,
+            "purchase",
+            "Germans",
+            List.of(),
+            "ww2global40_2nd_edition");
+    WireStateApplier.apply(gd, wire, idMap);
+    assertThat(warnings().stream().filter(w -> w.contains("apply-drift")).count()).isZero();
+    captured.clear();
+
+    final Territory germany = gd.getMap().getTerritoryOrThrow("Germany");
+    final GamePlayer germans = gd.getPlayerList().getPlayerId("Germans");
+    final UnitType infantry = gd.getUnitTypeList().getUnitTypeOrThrow("infantry");
+    final Unit extra = infantry.create(1, germans).get(0);
+    gd.performChange(ChangeFactory.addUnits(germany, List.of(extra)));
+
+    WireStateVerifier.verifyApply(gd, wire, idMap);
+
+    assertThat(warnings())
+        .anyMatch(
+            w ->
+                w.contains("apply-drift")
+                    && w.contains("kind=unit-count")
+                    && w.contains("territory=Germany")
+                    && w.contains("expected=2")
+                    && w.contains("actual=3"));
+  }
+
+  @Test
+  void unitOwnerDrift_detectedAfterMutatingExplicitOwner() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final String uid = "u-inf-1";
+    final WireState wire =
+        new WireState(
+            List.of(
+                new WireTerritory(
+                    "Germany",
+                    "Germans",
+                    List.of(new WireUnit(uid, "infantry", 0, 0, 0, "Germans")))),
+            List.of(),
+            1,
+            "purchase",
+            "Germans",
+            List.of(),
+            "ww2global40_2nd_edition");
+    WireStateApplier.apply(gd, wire, idMap);
+    captured.clear();
+
+    changeUnitOwner(gd, "Germany", idMap.get(uid), "Russians");
+    WireStateVerifier.verifyApply(gd, wire, idMap);
+
+    assertThat(warnings())
+        .anyMatch(
+            w ->
+                w.contains("apply-drift")
+                    && w.contains("kind=unit-owner")
+                    && w.contains("territory=Germany")
+                    && w.contains("unitId=" + uid)
+                    && w.contains("expected=Germans")
+                    && w.contains("actual=Russians"));
+  }
+
+  @Test
+  void unitOwnerDrift_blankWireOwnerFallsBackToTerritoryOwner() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final String uid = "u-inf-1";
+    final WireState wire =
+        new WireState(
+            List.of(
+                new WireTerritory(
+                    "Germany", "Germans", List.of(new WireUnit(uid, "infantry", 0, 0, 0, "")))),
+            List.of(),
+            1,
+            "purchase",
+            "Germans",
+            List.of(),
+            "ww2global40_2nd_edition");
+    WireStateApplier.apply(gd, wire, idMap);
+    captured.clear();
+
+    changeUnitOwner(gd, "Germany", idMap.get(uid), "Russians");
+    WireStateVerifier.verifyApply(gd, wire, idMap);
+
+    assertThat(warnings())
+        .anyMatch(
+            w ->
+                w.contains("apply-drift")
+                    && w.contains("kind=unit-owner")
+                    && w.contains("territory=Germany")
+                    && w.contains("unitId=" + uid)
+                    && w.contains("expected=Germans")
+                    && w.contains("actual=Russians"));
+  }
+
+  /**
+   * The wire flags Map Room sends. A literal, not {@link WireStateApplier#WIRE_TECH_NAMES}: a list
+   * derived from the map stays green when a name is dropped from both.
+   */
+  private static final List<String> WIRE_TECH_NAMES =
+      List.of(
+          "heavyBomber",
+          "longRangeAir",
+          "jetPower",
+          "rocket",
+          "industrialTechnology",
+          "superSub",
+          "destroyerBombard",
+          "improvedArtillerySupport",
+          "paratroopers",
+          "increasedFactoryProduction",
+          "warBonds",
+          "mechanizedInfantry",
+          "aaRadar",
+          "shipyards");
+
+  @Test
+  void wireTechNames_areTheFourteenWireFlags() {
+    assertThat(WireStateApplier.WIRE_TECH_NAMES)
+        .containsExactlyInAnyOrderElementsOf(WIRE_TECH_NAMES);
+  }
+
+  @Test
+  void wireTechNames_resolveOnTechAttachment() {
+    final GameData gd = fresh();
+    final TechAttachment tech = gd.getPlayerList().getPlayerId("Germans").getTechAttachment();
+    assertThat(tech).isNotNull();
+    for (final String name : WIRE_TECH_NAMES) {
+      assertThat(tech.getPropertyOrEmpty(WireStateApplier.techPropertyName(name)))
+          .as(name)
+          .isPresent();
+    }
+  }
+
+  @Test
+  void playerTechDrift_detectedForEveryWireTechName() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final WireState wire =
+        new WireState(
+            List.of(),
+            List.of(new WirePlayer("Germans", 40, List.of(), false)),
+            1,
+            "purchase",
+            "Germans",
+            List.of(),
+            "ww2global40_2nd_edition");
+    WireStateApplier.apply(gd, wire, idMap);
+    assertThat(warnings().stream().filter(w -> w.contains("apply-drift")).count()).isZero();
+
+    final GamePlayer germans = gd.getPlayerList().getPlayerId("Germans");
+    final TechAttachment tech = germans.getTechAttachment();
+    for (final String name : WIRE_TECH_NAMES) {
+      captured.clear();
+      final String property = WireStateApplier.techPropertyName(name);
+      gd.performChange(ChangeFactory.attachmentPropertyChange(tech, Boolean.TRUE, property));
+      WireStateVerifier.verifyApply(gd, wire, idMap);
+      assertThat(warnings())
+          .as(name)
+          .anyMatch(
+              w ->
+                  w.contains("apply-drift")
+                      && w.contains("kind=player-tech")
+                      && w.contains("player=Germans")
+                      && w.contains("expected=[]")
+                      && w.contains("actual=[" + name + "]"));
+      gd.performChange(ChangeFactory.attachmentPropertyChange(tech, Boolean.FALSE, property));
+    }
+  }
+
+  @Test
+  void summaryLine_reportsNonzeroMismatchCount() {
+    final GameData gd = fresh();
+    final ConcurrentMap<String, UUID> idMap = freshIdMap();
+    final WireState wire =
+        new WireState(
+            List.of(new WireTerritory("Germany", "Russians", List.of())),
+            List.of(),
+            1,
+            "purchase",
+            "Germans",
+            List.of(),
+            "ww2global40_2nd_edition");
+    WireStateApplier.apply(gd, wire, idMap);
+    captured.clear();
+    gd.performChange(
+        ChangeFactory.changeOwner(
+            gd.getMap().getTerritoryOrThrow("Germany"), gd.getPlayerList().getPlayerId("Germans")));
+
+    WireStateVerifier.verifyApply(gd, wire, idMap);
+
+    assertThat(infos())
+        .anyMatch(
+            m ->
+                m.contains("apply-verify")
+                    && m.contains("territories=1")
+                    && m.contains("mismatches=1"));
+    assertThat(warnings().stream().filter(w -> w.contains("apply-drift")).count()).isEqualTo(1);
+  }
+
+  private static void changeUnitOwner(
+      final GameData gd, final String territoryName, final UUID unitId, final String ownerName) {
+    final Territory territory = gd.getMap().getTerritoryOrThrow(territoryName);
+    final Unit unit =
+        territory.getUnits().stream()
+            .filter(u -> u.getId().equals(unitId))
+            .findFirst()
+            .orElseThrow();
+    gd.performChange(
+        ChangeFactory.changeOwner(
+            List.of(unit), gd.getPlayerList().getPlayerId(ownerName), territory));
   }
 }

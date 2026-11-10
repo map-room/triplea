@@ -34,24 +34,6 @@ public final class WireStateVerifier {
 
   private static final Logger LOG = System.getLogger(WireStateVerifier.class.getName());
 
-  // Ordered list of wire-side tech names (matches WireStateApplier.TECH_PROPERTY_NAMES keys).
-  private static final List<String> TECH_NAMES =
-      List.of(
-          "heavyBomber",
-          "longRangeAir",
-          "jetPower",
-          "rocket",
-          "industrialTechnology",
-          "superSub",
-          "destroyerBombard",
-          "improvedArtillerySupport",
-          "paratroopers",
-          "increasedFactoryProduction",
-          "warBonds",
-          "mechanizedInfantry",
-          "aaRadar",
-          "shipyards");
-
   private WireStateVerifier() {}
 
   /**
@@ -434,8 +416,8 @@ public final class WireStateVerifier {
 
   private static Set<String> getActivatedTechNames(final TechAttachment ta) {
     final Set<String> result = new HashSet<>();
-    for (final String name : TECH_NAMES) {
-      final var prop = ta.getPropertyOrEmpty(name);
+    for (final String name : WireStateApplier.WIRE_TECH_NAMES) {
+      final var prop = ta.getPropertyOrEmpty(WireStateApplier.techPropertyName(name));
       if (prop.isPresent() && Boolean.TRUE.equals(prop.get().getValue())) {
         result.add(name);
       }
