@@ -34,6 +34,7 @@ import games.strategy.triplea.ai.pro.util.ProMatches;
 import games.strategy.triplea.ai.pro.util.ProOddsCalculator;
 import games.strategy.triplea.ai.pro.util.ProPurchaseUtils;
 import games.strategy.triplea.ai.pro.util.ProTransportUtils;
+import games.strategy.triplea.ai.pro.util.WarProductionApplier;
 import games.strategy.triplea.attachments.PoliticalActionAttachment;
 import games.strategy.triplea.delegate.DiceRoll;
 import games.strategy.triplea.delegate.Matches;
@@ -444,6 +445,7 @@ public abstract class AbstractProAi extends AbstractAi {
             // Sidecar mode: real politics already executed on the session's GameData before this
             // purchase call. dataCopy inherits the post-politics relationships. Re-rolling politics
             // in simulation would speculate additional wars, inflating attack-option scoring.
+            WarProductionApplier.apply(dataCopy);
             continue;
           }
           proData.initializeSimulation(this, dataCopy, player);
@@ -460,6 +462,11 @@ public abstract class AbstractProAi extends AbstractAi {
             // no trigger fires in a simulation (map-room#4733).
             MovementRestrictionLifter.apply(dataCopy);
           }
+          // Wars just declared on the copy (or already on the wire) upgrade US minor ICs that
+          // the XML upgrades after:americansPolitics. purchase() reads this copy's factory
+          // capacity. No trigger fires in a simulation (map-room#4754). Deleting this call
+          // fails WarProductionStandIn4754Test.seed1UsAtWarBuysForThirtyCapacity.
+          WarProductionApplier.apply(dataCopy);
         }
       }
     }
