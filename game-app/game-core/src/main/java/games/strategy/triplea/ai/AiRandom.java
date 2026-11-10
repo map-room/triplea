@@ -40,7 +40,10 @@ public final class AiRandom {
     requestRandom.set(new Random(seed));
   }
 
-  /** Drops this thread's {@link #bindRequest} binding. Other threads are unchanged. */
+  /**
+   * Drops this thread's {@link #bindRequest} binding. Other threads are unchanged. A binding
+   * installed earlier on this same thread is dropped too.
+   */
   public static void clearRequest() {
     requestRandom.remove();
   }
